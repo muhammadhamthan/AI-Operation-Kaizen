@@ -1,0 +1,122 @@
+// Call Logs Mock Data - 2-4 call attempts per assignment
+export const callLogs = [
+  // Assignment 1 calls
+  {
+    id: 1,
+    assignment_id: 1,
+    solver_id: 6,
+    attempt_number: 1,
+    initiated_at: '2025-06-14T09:05:00Z',
+    answered_at: null,
+    ended_at: '2025-06-14T09:05:30Z',
+    status: 'MISSED',
+    created_at: '2025-06-14T09:05:00Z',
+    updated_at: '2025-06-14T09:05:30Z',
+  },
+  {
+    id: 2,
+    assignment_id: 1,
+    solver_id: 6,
+    attempt_number: 2,
+    initiated_at: '2025-06-14T09:15:00Z',
+    answered_at: '2025-06-14T09:15:05Z',
+    ended_at: '2025-06-14T09:17:30Z',
+    status: 'ANSWERED',
+    created_at: '2025-06-14T09:15:00Z',
+    updated_at: '2025-06-14T09:17:30Z',
+  },
+  // Assignment 2 calls
+  {
+    id: 3,
+    assignment_id: 2,
+    solver_id: 7,
+    attempt_number: 1,
+    initiated_at: '2025-06-18T09:10:00Z',
+    answered_at: '2025-06-18T09:10:03Z',
+    ended_at: '2025-06-18T09:12:00Z',
+    status: 'ANSWERED',
+    created_at: '2025-06-18T09:10:00Z',
+    updated_at: '2025-06-18T09:12:00Z',
+  },
+  // Assignment 6 calls (in progress)
+  {
+    id: 4,
+    assignment_id: 6,
+    solver_id: 8,
+    attempt_number: 1,
+    initiated_at: new Date(Date.now() - 3 * 86400000 + 3600000).toISOString(),
+    answered_at: null,
+    ended_at: new Date(Date.now() - 3 * 86400000 + 3630000).toISOString(),
+    status: 'MISSED',
+    created_at: new Date(Date.now() - 3 * 86400000 + 3600000).toISOString(),
+    updated_at: new Date(Date.now() - 3 * 86400000 + 3630000).toISOString(),
+  },
+  {
+    id: 5,
+    assignment_id: 6,
+    solver_id: 8,
+    attempt_number: 2,
+    initiated_at: new Date(Date.now() - 3 * 86400000 + 4200000).toISOString(),
+    answered_at: null,
+    ended_at: new Date(Date.now() - 3 * 86400000 + 4230000).toISOString(),
+    status: 'MISSED',
+    created_at: new Date(Date.now() - 3 * 86400000 + 4200000).toISOString(),
+    updated_at: new Date(Date.now() - 3 * 86400000 + 4230000).toISOString(),
+  },
+  {
+    id: 6,
+    assignment_id: 6,
+    solver_id: 8,
+    attempt_number: 3,
+    initiated_at: new Date(Date.now() - 3 * 86400000 + 4800000).toISOString(),
+    answered_at: new Date(Date.now() - 3 * 86400000 + 4805000).toISOString(),
+    ended_at: new Date(Date.now() - 3 * 86400000 + 4920000).toISOString(),
+    status: 'ANSWERED',
+    created_at: new Date(Date.now() - 3 * 86400000 + 4800000).toISOString(),
+    updated_at: new Date(Date.now() - 3 * 86400000 + 4920000).toISOString(),
+  },
+  // Assignment 7 calls
+  {
+    id: 7,
+    assignment_id: 7,
+    solver_id: 6,
+    attempt_number: 1,
+    initiated_at: new Date(Date.now() - 2 * 86400000 + 3600000).toISOString(),
+    answered_at: new Date(Date.now() - 2 * 86400000 + 3605000).toISOString(),
+    ended_at: new Date(Date.now() - 2 * 86400000 + 3780000).toISOString(),
+    status: 'ANSWERED',
+    created_at: new Date(Date.now() - 2 * 86400000 + 3600000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 86400000 + 3780000).toISOString(),
+  },
+  // Assignment 10 calls
+  {
+    id: 8,
+    assignment_id: 10,
+    solver_id: 9,
+    attempt_number: 1,
+    initiated_at: new Date(Date.now() - 86400000 + 3600000).toISOString(),
+    answered_at: null,
+    ended_at: new Date(Date.now() - 86400000 + 3630000).toISOString(),
+    status: 'MISSED',
+    created_at: new Date(Date.now() - 86400000 + 3600000).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 + 3630000).toISOString(),
+  },
+  {
+    id: 9,
+    assignment_id: 10,
+    solver_id: 9,
+    attempt_number: 2,
+    initiated_at: new Date(Date.now() - 86400000 + 4200000).toISOString(),
+    answered_at: new Date(Date.now() - 86400000 + 4205000).toISOString(),
+    ended_at: new Date(Date.now() - 86400000 + 4380000).toISOString(),
+    status: 'ANSWERED',
+    created_at: new Date(Date.now() - 86400000 + 4200000).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 + 4380000).toISOString(),
+  },
+];
+
+export const getCallLogsByAssignmentId = (assignmentId) => 
+  callLogs.filter(log => log.assignment_id === assignmentId);
+
+export const getCallLogsBySolverId = (solverId) => 
+  callLogs.filter(log => log.solver_id === solverId);
