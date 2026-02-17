@@ -6,10 +6,21 @@
 
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { withRetry } from '../utils/networkRetry';
 
 // API Base URL - uses the proxy which routes /api/* to backend
-const API_BASE_URL = '/api';
+// For web, use relative URL; for native, use full URL
+const getBaseUrl = () => {
+  if (Platform.OS === 'web') {
+    // Web uses the proxy
+    return '/api';
+  }
+  // Native apps need full URL
+  return process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001/api';
+};
+
+const API_BASE_URL = getBaseUrl();
 
 // Create axios instance
 const api = axios.create({
