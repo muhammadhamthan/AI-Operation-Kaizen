@@ -241,6 +241,8 @@ export default function DashboardScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
