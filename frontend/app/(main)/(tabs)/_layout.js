@@ -35,6 +35,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="issues"
+        options={{
+          title: 'Issues',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="document-text" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="dashboard"
         options={{
           title: 'Dashboard',
