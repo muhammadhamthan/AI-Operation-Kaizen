@@ -43,8 +43,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     if payload is None:
         raise credentials_exception
     
-    user_id: int = payload.get("sub")
-    if user_id is None:
+    user_id_str: str = payload.get("sub")
+    if user_id_str is None:
+        raise credentials_exception
+    
+    try:
+        user_id = int(user_id_str)
+    except ValueError:
         raise credentials_exception
     
     from ..models.user import User
