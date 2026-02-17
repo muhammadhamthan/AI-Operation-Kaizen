@@ -91,16 +91,16 @@ export default function IssueDetailScreen() {
           <Card style={styles.card}>
             <Text style={[styles.issueTitle, { color: theme.text }]}>{issue.title}</Text>
             <View style={styles.badgeRow}>
-              <Badge 
+              <StatusBadge 
                 label={issue.status.replace('_', ' ')} 
                 color={getStatusColor(issue.status)} 
               />
-              <Badge 
+              <StatusBadge 
                 label={issue.priority.toUpperCase()} 
                 color={getPriorityColor(issue.priority)} 
               />
               {isOverdue && (
-                <Badge label={`${overdueDays}d overdue`} color="#ef4444" />
+                <StatusBadge label={`${overdueDays}d overdue`} color="#ef4444" />
               )}
             </View>
           </Card>
