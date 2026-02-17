@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,11 +16,13 @@ import { LineChart, PieChart, BarChart } from 'react-native-chart-kit';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { fetchDashboardData, selectStats, selectCharts, selectDashboardLoading } from '../../../../src/store/slices/dashboardSlice';
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import DashboardCard from '../../../../src/components/dashboard/DashboardCard';
 import ChartDownloadButton from '../../../../src/components/dashboard/ChartDownloadButton';
 import Card from '../../../../src/components/common/Card';
 import Loader from '../../../../src/components/common/Loader';
 import Avatar from '../../../../src/components/common/Avatar';
+import Toast from '../../../../src/components/common/Toast';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -31,12 +34,38 @@ export default function DashboardScreen() {
   const stats = useSelector(selectStats);
   const charts = useSelector(selectCharts);
   const loading = useSelector(selectDashboardLoading);
+  const isOnline = useSelector(selectIsOnline);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     if (user) {
       dispatch(fetchDashboardData(user));
     }
   }, [user]);
+
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    const now = Date.now();
+    if (lastRefresh && now - lastRefresh < 5000) {
+      setToastMessage('Just refreshed. Wait a moment.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    setRefreshing(true);
+    if (user) {
+      await dispatch(fetchDashboardData(user));
+    }
+    setLastRefresh(Date.now());
+    setRefreshing(false);
+  }, [user, isOnline, lastRefresh]);
 
   if (loading) {
     return <Loader message="Loading dashboard..." />;
