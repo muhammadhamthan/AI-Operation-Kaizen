@@ -106,6 +106,8 @@ export const selectCurrentIssue = (state) => state.issues.currentIssue;
 export const selectIssuesLoading = (state) => state.issues.loading;
 export const selectIssuesError = (state) => state.issues.error;
 export const selectFilters = (state) => state.issues.filters;
+export const selectIssueById = (state, issueId) => 
+  state.issues.issues.find(issue => issue.id === issueId) || state.issues.currentIssue;
 
 // Filtered issues selector
 export const selectFilteredIssues = (state) => {
