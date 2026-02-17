@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -7,9 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { fetchIssues, selectNotFixedIssues, selectIssuesLoading, setFilters } from '../../../../src/store/slices/issuesSlice';
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import IssueCard from '../../../../src/components/issue/IssueCard';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
+import Toast from '../../../../src/components/common/Toast';
 
 export default function NotFixedIssuesScreen() {
   const { theme } = useTheme();
@@ -18,7 +20,11 @@ export default function NotFixedIssuesScreen() {
   const user = useSelector(selectCurrentUser);
   const issues = useSelector(selectNotFixedIssues);
   const loading = useSelector(selectIssuesLoading);
+  const isOnline = useSelector(selectIsOnline);
   const [searchText, setSearchText] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -29,6 +35,30 @@ export default function NotFixedIssuesScreen() {
   useEffect(() => {
     dispatch(setFilters({ search: searchText }));
   }, [searchText]);
+
+  const onRefresh = useCallback(async () => {
+    // Check if offline
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    // Cooldown check (5 seconds)
+    const now = Date.now();
+    if (lastRefresh && now - lastRefresh < 5000) {
+      setToastMessage('Just refreshed. Wait a moment.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    setRefreshing(true);
+    if (user) {
+      await dispatch(fetchIssues(user));
+    }
+    setLastRefresh(Date.now());
+    setRefreshing(false);
+  }, [user, isOnline, lastRefresh]);
 
   const handleIssuePress = (issue) => {
     router.push({ pathname: '/(main)/(tabs)/dashboard/not-fixed-detail', params: { id: issue.id } });
@@ -58,7 +88,18 @@ export default function NotFixedIssuesScreen() {
             value={searchText}
             onChangeText={setSearchText}
           />
+          {searchText !== '' && (
+            <TouchableOpacity onPress={() => setSearchText('')}>
+              <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
+      </View>
+
+      <View style={styles.resultsHeader}>
+        <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
+          {issues.length} issue{issues.length !== 1 ? 's' : ''} found
+        </Text>
       </View>
 
       <FlatList
@@ -68,7 +109,17 @@ export default function NotFixedIssuesScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={<EmptyState icon="checkmark-circle-outline" title="All Clear!" message="No pending issues at the moment." />}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#f97316']}
+            tintColor="#f97316"
+          />
+        }
       />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -79,8 +130,10 @@ const styles = StyleSheet.create({
   backButton: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: '600', color: '#fff' },
   placeholder: { width: 32 },
-  searchContainer: { padding: 16 },
+  searchContainer: { padding: 16, paddingBottom: 8 },
   searchInput: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, gap: 8 },
   searchTextInput: { flex: 1, fontSize: 16 },
-  listContent: { padding: 16, paddingTop: 8 },
+  resultsHeader: { paddingHorizontal: 16, paddingBottom: 8 },
+  resultsCount: { fontSize: 13 },
+  listContent: { padding: 16, paddingTop: 0 },
 });
