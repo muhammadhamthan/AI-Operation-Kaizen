@@ -235,6 +235,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 8,
   },
+  fullWidthCard: {
+    flex: 1,
+    marginRight: 0,
+  },
   chartCard: {
     marginBottom: 16,
   },
