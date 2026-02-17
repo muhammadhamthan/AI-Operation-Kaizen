@@ -49,11 +49,35 @@ export default function ChatScreen() {
 
   useEffect(() => {
     dispatch(loadChatHistory());
-    // Set some initial notifications for demo
+    // Set some initial notifications for demo with proper navigation data
     dispatch(setNotifications([
-      { id: 1, message: 'New issue assigned', read: false },
-      { id: 2, message: 'Issue #15 reopened', read: false },
-      { id: 3, message: 'Complaint raised', read: false },
+      { 
+        id: 1, 
+        type: 'issue_assigned',
+        title: 'New issue assigned',
+        body: 'Issue #8 has been assigned to you',
+        message: 'New issue assigned', 
+        data: { issueId: 8 },
+        read: false 
+      },
+      { 
+        id: 2, 
+        type: 'issue_reopened',
+        title: 'Issue reopened',
+        body: 'Issue #15 was reopened by supervisor',
+        message: 'Issue #15 reopened', 
+        data: { issueId: 15 },
+        read: false 
+      },
+      { 
+        id: 3, 
+        type: 'complaint_created',
+        title: 'Complaint raised',
+        body: 'A new complaint has been filed',
+        message: 'Complaint raised', 
+        data: { complaintId: 1 },
+        read: false 
+      },
     ]));
   }, []);
 
