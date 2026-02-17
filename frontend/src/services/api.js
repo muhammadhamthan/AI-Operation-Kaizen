@@ -7,20 +7,32 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
 
-// API Base URL - uses the proxy which routes /api/* to backend
-// For web, use relative URL; for native, use full URL
+// API Base URL - Backend is on port 8001
 const getBaseUrl = () => {
-  if (Platform.OS === 'web') {
-    // Web uses the proxy
-    return '/api';
+  // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
+  const backendUrl = Constants.expoConfig?.extra?.backendUrl || 
+                     process.env.EXPO_PUBLIC_BACKEND_URL;
+  
+  if (backendUrl) {
+    return `${backendUrl}/api`;
   }
+  
+  // For local development
+  if (Platform.OS === 'web') {
+    // Use relative URL which will be proxied
+    return 'http://localhost:8001/api';
+  }
+  
   // Native apps need full URL
-  return process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001/api';
+  return 'http://localhost:8001/api';
 };
 
 const API_BASE_URL = getBaseUrl();
+
+console.log('API Base URL:', API_BASE_URL);
 
 // Create axios instance
 const api = axios.create({
