@@ -128,7 +128,18 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.primary]}
+            tintColor={theme.primary}
+          />
+        }
+      >
         {/* Stats Cards - 3 Cards: Not Fixed, Fixed, Complaints */}
         {/* Total Issues moved to Issues tab */}
         <View style={styles.statsContainer}>
