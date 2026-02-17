@@ -252,7 +252,7 @@ export default function IssueDetailScreen() {
                   <Text style={[styles.callAttempt, { color: theme.text }]}>
                     Attempt #{log.attempt_number}
                   </Text>
-                  <Badge 
+                  <StatusBadge 
                     label={log.status} 
                     color={log.status === 'ANSWERED' ? '#16a34a' : '#ef4444'} 
                   />
