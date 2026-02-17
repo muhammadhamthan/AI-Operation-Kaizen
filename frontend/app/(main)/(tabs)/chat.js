@@ -23,7 +23,7 @@ import {
   loadConversation,
   startNewConversation,
 } from '../../../src/store/slices/chatSlice';
-import { selectUnreadCount, markAllAsRead, setNotifications } from '../../../src/store/slices/notificationsSlice';
+import { selectUnreadCount, selectNotifications, markAllAsRead, markAsRead, setNotifications } from '../../../src/store/slices/notificationsSlice';
 import NotificationBanner from '../../../src/components/chat/NotificationBanner';
 import ChatMessage from '../../../src/components/chat/ChatMessage';
 import ChatInput from '../../../src/components/chat/ChatInput';
@@ -41,6 +41,7 @@ export default function ChatScreen() {
   const messages = useSelector(selectAllMessages);
   const chatHistory = useSelector(selectChatHistory);
   const unreadCount = useSelector(selectUnreadCount);
+  const notifications = useSelector(selectNotifications);
   const scrollViewRef = useRef(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
