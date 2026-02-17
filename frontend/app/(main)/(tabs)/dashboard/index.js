@@ -100,16 +100,10 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Stats Cards - 2x2 Grid */}
+        {/* Stats Cards - 3 Cards: Not Fixed, Fixed, Complaints */}
+        {/* Total Issues moved to Issues tab */}
         <View style={styles.statsContainer}>
           <View style={styles.statsRow}>
-            <DashboardCard
-              title="Total Issues"
-              count={stats.totalIssues}
-              icon="document-text"
-              color="#3b82f6"
-              onPress={() => router.push('/(main)/(tabs)/dashboard/issues')}
-            />
             <DashboardCard
               title="Not Fixed"
               count={stats.notFixedIssues}
@@ -117,8 +111,6 @@ export default function DashboardScreen() {
               color="#f97316"
               onPress={() => router.push('/(main)/(tabs)/dashboard/not-fixed')}
             />
-          </View>
-          <View style={styles.statsRow}>
             <DashboardCard
               title="Fixed"
               count={stats.fixedIssues}
@@ -126,12 +118,15 @@ export default function DashboardScreen() {
               color="#16a34a"
               onPress={() => router.push('/(main)/(tabs)/dashboard/fixed')}
             />
+          </View>
+          <View style={styles.statsRow}>
             <DashboardCard
               title="Complaints"
               count={stats.complaints}
               icon="alert-circle"
               color="#ef4444"
               onPress={() => router.push('/(main)/(tabs)/dashboard/complaints')}
+              style={styles.fullWidthCard}
             />
           </View>
         </View>
