@@ -3,12 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 
-const DashboardCard = ({ title, count, icon, color, onPress }) => {
+const DashboardCard = ({ title, count, icon, color, onPress, style }) => {
   const { theme } = useTheme();
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
+      style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, style]}
       onPress={onPress}
       activeOpacity={0.7}
     >
