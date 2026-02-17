@@ -17,7 +17,7 @@ import { selectIssueById } from '../../../../src/store/slices/issuesSlice';
 import { formatDate, formatDateTime } from '../../../../src/utils/formatters';
 import { calculateOverdueDays } from '../../../../src/utils/overdue';
 import Card from '../../../../src/components/common/Card';
-import Badge from '../../../../src/components/common/Badge';
+import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Loader from '../../../../src/components/common/Loader';
 
 export default function IssueDetailScreen() {
