@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi, fetchNotFixedIssues as fetchNotFixedIssuesApi, fetchFixedIssues as fetchFixedIssuesApi } from '../../mocks/apiService';
-import { NOT_FIXED_STATUSES, FIXED_STATUSES } from '../../utils/constants';
+import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi } from '../../services/api';
 
 const initialState = {
   issues: [],
@@ -8,10 +7,10 @@ const initialState = {
   loading: false,
   error: null,
   filters: {
+    search: '',
     status: null,
     priority: null,
     site: null,
-    search: '',
   },
 };
 
@@ -19,22 +18,28 @@ export const fetchIssues = createAsyncThunk(
   'issues/fetchAll',
   async (user, { rejectWithValue }) => {
     try {
-      const issues = await fetchIssuesApi(user);
-      return issues;
+      const result = await fetchIssuesApi();
+      if (!result.success) {
+        return rejectWithValue(result.error);
+      }
+      return result.issues;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || 'Failed to fetch issues');
     }
   }
 );
 
 export const fetchIssueById = createAsyncThunk(
   'issues/fetchById',
-  async (id, { rejectWithValue }) => {
+  async (issueId, { rejectWithValue }) => {
     try {
-      const issue = await fetchIssueByIdApi(id);
-      return issue;
+      const result = await fetchIssueByIdApi(issueId);
+      if (!result.success) {
+        return rejectWithValue(result.error);
+      }
+      return result.issue;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || 'Failed to fetch issue');
     }
   }
 );
@@ -43,27 +48,14 @@ const issuesSlice = createSlice({
   name: 'issues',
   initialState,
   reducers: {
-    setIssues: (state, action) => {
-      state.issues = action.payload;
-    },
-    setCurrentIssue: (state, action) => {
-      state.currentIssue = action.payload;
-    },
-    updateIssueStatus: (state, action) => {
-      const { id, status } = action.payload;
-      const issue = state.issues.find(i => i.id === id);
-      if (issue) {
-        issue.status = status;
-      }
-      if (state.currentIssue?.id === id) {
-        state.currentIssue.status = status;
-      }
-    },
     setFilters: (state, action) => {
       state.filters = { ...state.filters, ...action.payload };
     },
     clearFilters: (state) => {
       state.filters = initialState.filters;
+    },
+    setCurrentIssue: (state, action) => {
+      state.currentIssue = action.payload;
     },
     clearCurrentIssue: (state) => {
       state.currentIssue = null;
@@ -78,6 +70,7 @@ const issuesSlice = createSlice({
       .addCase(fetchIssues.fulfilled, (state, action) => {
         state.loading = false;
         state.issues = action.payload;
+        state.error = null;
       })
       .addCase(fetchIssues.rejected, (state, action) => {
         state.loading = false;
@@ -90,6 +83,7 @@ const issuesSlice = createSlice({
       .addCase(fetchIssueById.fulfilled, (state, action) => {
         state.loading = false;
         state.currentIssue = action.payload;
+        state.error = null;
       })
       .addCase(fetchIssueById.rejected, (state, action) => {
         state.loading = false;
@@ -98,7 +92,7 @@ const issuesSlice = createSlice({
   },
 });
 
-export const { setIssues, setCurrentIssue, updateIssueStatus, setFilters, clearFilters, clearCurrentIssue } = issuesSlice.actions;
+export const { setFilters, clearFilters, setCurrentIssue, clearCurrentIssue } = issuesSlice.actions;
 
 // Selectors
 export const selectAllIssues = (state) => state.issues.issues;
@@ -109,49 +103,47 @@ export const selectFilters = (state) => state.issues.filters;
 export const selectIssueById = (state, issueId) => 
   state.issues.issues.find(issue => issue.id === issueId) || state.issues.currentIssue;
 
-// Filtered issues selector
+// Filtered selectors
 export const selectFilteredIssues = (state) => {
   const { issues, filters } = state.issues;
   let filtered = [...issues];
-  
-  if (filters.status) {
-    filtered = filtered.filter(i => i.status === filters.status);
-  }
-  if (filters.priority) {
-    filtered = filtered.filter(i => i.priority === filters.priority);
-  }
-  if (filters.site) {
-    filtered = filtered.filter(i => i.site_id === filters.site);
-  }
+
+  // Search filter
   if (filters.search) {
-    const search = filters.search.toLowerCase();
-    filtered = filtered.filter(i => 
-      i.title.toLowerCase().includes(search) ||
-      i.description.toLowerCase().includes(search) ||
-      i.id.toString().includes(search)
+    const searchLower = filters.search.toLowerCase();
+    filtered = filtered.filter(issue =>
+      issue.title?.toLowerCase().includes(searchLower) ||
+      issue.description?.toLowerCase().includes(searchLower) ||
+      issue.id?.toString().includes(searchLower) ||
+      issue.site?.name?.toLowerCase().includes(searchLower)
     );
   }
-  
-  // Sort: overdue first, then by priority, then by created_at
-  const priorityOrder = { high: 0, medium: 1, low: 2 };
-  return filtered.sort((a, b) => {
-    const aOverdue = new Date(a.deadline_at) < new Date() && a.status !== 'COMPLETED';
-    const bOverdue = new Date(b.deadline_at) < new Date() && b.status !== 'COMPLETED';
-    if (aOverdue && !bOverdue) return -1;
-    if (!aOverdue && bOverdue) return 1;
-    if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
-    }
-    return new Date(b.created_at) - new Date(a.created_at);
-  });
+
+  // Status filter
+  if (filters.status) {
+    filtered = filtered.filter(issue => issue.status === filters.status);
+  }
+
+  // Priority filter
+  if (filters.priority) {
+    filtered = filtered.filter(issue => issue.priority === filters.priority);
+  }
+
+  return filtered;
 };
 
+// Status-based selectors
 export const selectNotFixedIssues = (state) => {
-  return selectFilteredIssues(state).filter(i => NOT_FIXED_STATUSES.includes(i.status));
+  const notFixedStatuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'ESCALATED'];
+  return state.issues.issues.filter(issue => notFixedStatuses.includes(issue.status));
 };
 
 export const selectFixedIssues = (state) => {
-  return selectFilteredIssues(state).filter(i => FIXED_STATUSES.includes(i.status));
+  return state.issues.issues.filter(issue => issue.status === 'COMPLETED');
+};
+
+export const selectEscalatedIssues = (state) => {
+  return state.issues.issues.filter(issue => issue.status === 'ESCALATED');
 };
 
 export default issuesSlice.reducer;
