@@ -154,8 +154,10 @@ export default function ChatScreen() {
       {/* Notification Banner */}
       <NotificationBanner
         count={unreadCount}
+        notifications={notifications}
         onPress={handleNotificationPress}
         onDismiss={handleNotificationDismiss}
+        onMarkRead={(id) => dispatch(markAsRead(id))}
       />
 
       {/* Messages */}
