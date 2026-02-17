@@ -1,10 +1,15 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { loginUser as loginUserApi } from '../../mocks/apiService';
-import { saveUser, removeUser, loadUser } from '../../utils/storage';
+import { 
+  loginUser as loginUserApi, 
+  logoutUser as logoutUserApi,
+  getStoredUser,
+  getCurrentUser,
+} from '../../services/api';
 
 const initialState = {
   isAuthenticated: false,
   user: null,
+  token: null,
   loading: false,
   error: null,
 };
@@ -13,11 +18,13 @@ export const loginUser = createAsyncThunk(
   'auth/login',
   async ({ username, password }, { rejectWithValue }) => {
     try {
-      const user = await loginUserApi(username, password);
-      await saveUser(user);
-      return user;
+      const result = await loginUserApi(username, password);
+      if (!result.success) {
+        return rejectWithValue(result.error);
+      }
+      return result;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || 'Login failed');
     }
   }
 );
@@ -26,8 +33,16 @@ export const checkAuthStatus = createAsyncThunk(
   'auth/checkStatus',
   async (_, { rejectWithValue }) => {
     try {
-      const user = await loadUser();
-      return user;
+      // First check stored user
+      const storedUser = await getStoredUser();
+      if (storedUser) {
+        // Verify with server
+        const result = await getCurrentUser();
+        if (result.success) {
+          return { user: result.user };
+        }
+      }
+      return null;
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -37,7 +52,7 @@ export const checkAuthStatus = createAsyncThunk(
 export const logoutUser = createAsyncThunk(
   'auth/logout',
   async () => {
-    await removeUser();
+    await logoutUserApi();
     return null;
   }
 );
@@ -68,18 +83,23 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
         state.isAuthenticated = true;
         state.error = null;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload || 'Login failed';
         state.isAuthenticated = false;
       })
       .addCase(checkAuthStatus.fulfilled, (state, action) => {
-        state.user = action.payload;
-        state.isAuthenticated = !!action.payload;
+        if (action.payload) {
+          state.user = action.payload.user;
+          state.isAuthenticated = true;
+        } else {
+          state.isAuthenticated = false;
+        }
         state.loading = false;
       })
       .addCase(checkAuthStatus.rejected, (state) => {
@@ -88,6 +108,7 @@ const authSlice = createSlice({
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
+        state.token = null;
         state.isAuthenticated = false;
         state.loading = false;
         state.error = null;
@@ -103,5 +124,6 @@ export const selectCurrentUser = (state) => state.auth.user;
 export const selectUserRole = (state) => state.auth.user?.role;
 export const selectAuthLoading = (state) => state.auth.loading;
 export const selectAuthError = (state) => state.auth.error;
+export const selectAuthToken = (state) => state.auth.token;
 
 export default authSlice.reducer;
