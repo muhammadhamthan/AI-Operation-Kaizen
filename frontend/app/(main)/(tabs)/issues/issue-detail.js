@@ -218,12 +218,12 @@ export default function IssueDetailScreen() {
             {issue.images.map((img, index) => (
               <View key={index} style={styles.imageContainer}>
                 <View style={styles.imageHeader}>
-                  <Badge 
+                  <StatusBadge 
                     label={img.image_type} 
                     color={img.image_type === 'BEFORE' ? '#f97316' : '#16a34a'} 
                   />
                   {img.ai_flag && img.ai_flag !== 'NOT_CHECKED' && (
-                    <Badge 
+                    <StatusBadge 
                       label={`AI: ${img.ai_flag}`} 
                       color={img.ai_flag === 'OK' ? '#16a34a' : '#ef4444'} 
                     />
