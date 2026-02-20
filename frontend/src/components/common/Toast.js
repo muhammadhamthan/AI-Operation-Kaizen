@@ -45,13 +45,13 @@ const Toast = ({ message, type = 'info', duration = 3000, onHide }) => {
   const getConfig = () => {
     switch (type) {
       case 'success':
-        return { icon: 'checkmark-circle', color: '#16a34a', bgColor: '#dcfce7' };
+        return { icon: 'checkmark-circle', color: '#10a37f' };
       case 'error':
-        return { icon: 'alert-circle', color: '#ef4444', bgColor: '#fee2e2' };
+        return { icon: 'alert-circle', color: '#ef4444' };
       case 'warning':
-        return { icon: 'warning', color: '#f97316', bgColor: '#ffedd5' };
+        return { icon: 'warning', color: '#f59e0b' };
       default:
-        return { icon: 'information-circle', color: '#3b82f6', bgColor: '#dbeafe' };
+        return { icon: 'information-circle', color: '#8e8ea0' };
     }
   };
 
@@ -62,14 +62,13 @@ const Toast = ({ message, type = 'info', duration = 3000, onHide }) => {
       style={[
         styles.container,
         {
-          backgroundColor: config.bgColor,
           opacity: fadeAnim,
           transform: [{ translateY }],
         },
       ]}
     >
-      <Ionicons name={config.icon} size={20} color={config.color} />
-      <Text style={[styles.message, { color: config.color }]}>{message}</Text>
+      <Ionicons name={config.icon} size={16} color={config.color} />
+      <Text style={styles.message}>{message}</Text>
     </Animated.View>
   );
 };
@@ -78,24 +77,30 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     bottom: 100,
-    left: 20,
-    right: 20,
+    left: 24,
+    right: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 10,
+    gap: 9,
+    backgroundColor: '#2f2f2f',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
   },
   message: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13.5,
+    fontWeight: '400',
+    color: '#ececec',
+    letterSpacing: -0.1,
+    lineHeight: 18,
   },
 });
 

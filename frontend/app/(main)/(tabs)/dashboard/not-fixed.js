@@ -1,5 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  TextInput, 
+  TouchableOpacity, 
+  RefreshControl,
+  Platform 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -14,7 +23,7 @@ import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 
 export default function NotFixedIssuesScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
   const router = useRouter();
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
@@ -26,6 +35,7 @@ export default function NotFixedIssuesScreen() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
+  // ── LOGIC UNTOUCHED ──
   useEffect(() => {
     if (user) {
       dispatch(fetchIssues(user));
@@ -37,14 +47,12 @@ export default function NotFixedIssuesScreen() {
   }, [searchText]);
 
   const onRefresh = useCallback(async () => {
-    // Check if offline
     if (!isOnline) {
       setToastMessage("Can't refresh while offline");
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
-    // Cooldown check (5 seconds)
     const now = Date.now();
     if (lastRefresh && now - lastRefresh < 5000) {
       setToastMessage('Just refreshed. Wait a moment.');
@@ -68,53 +76,70 @@ export default function NotFixedIssuesScreen() {
     return <Loader message="Loading issues..." />;
   }
 
+  // ── PREMIUM MONOCHROME PALETTE ──
+  const bgColor = isDark ? '#212121' : '#f9f9f9';
+  const borderColor = isDark ? '#333333' : '#e5e5e5';
+  const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
+  const pendingAccent = '#f59e0b'; // Premium Amber instead of harsh orange
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { backgroundColor: '#f97316' }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
+      
+      {/* ── HEADER ── */}
+      <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Not Fixed Issues</Text>
+        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Pending Issues</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <View style={[styles.searchContainer, { backgroundColor: theme.card }]}>
-        <View style={[styles.searchInput, { backgroundColor: theme.inputBackground }]}>
-          <Ionicons name="search" size={20} color={theme.textSecondary} />
+      {/* ── SEARCH BAR ── */}
+      <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
+        <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
+          <Ionicons name="search" size={18} color={theme.textSecondary} />
           <TextInput
             style={[styles.searchTextInput, { color: theme.text }]}
-            placeholder="Search issues..."
+            placeholder="Search pending issues..."
             placeholderTextColor={theme.textSecondary}
             value={searchText}
             onChangeText={setSearchText}
           />
           {searchText !== '' && (
-            <TouchableOpacity onPress={() => setSearchText('')}>
-              <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
+            <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
+      {/* ── RESULTS COUNT ── */}
       <View style={styles.resultsHeader}>
         <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
           {issues.length} issue{issues.length !== 1 ? 's' : ''} found
         </Text>
       </View>
 
+      {/* ── LIST ── */}
       <FlatList
         data={issues}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => <IssueCard issue={item} onPress={() => handleIssuePress(item)} />}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<EmptyState icon="checkmark-circle-outline" title="All Clear!" message="No pending issues at the moment." />}
+        ListEmptyComponent={
+          <EmptyState 
+            icon="checkmark-circle-outline" 
+            title="All Clear!" 
+            message="No pending issues at the moment." 
+          />
+        }
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#f97316']}
-            tintColor="#f97316"
+            colors={[pendingAccent]}
+            tintColor={pendingAccent}
           />
         }
       />
@@ -126,14 +151,32 @@ export default function NotFixedIssuesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16 },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: '#fff' },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backButton: { padding: 4, marginLeft: -4 },
+  headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   placeholder: { width: 32 },
-  searchContainer: { padding: 16, paddingBottom: 8 },
-  searchInput: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, gap: 8 },
-  searchTextInput: { flex: 1, fontSize: 16 },
-  resultsHeader: { paddingHorizontal: 16, paddingBottom: 8 },
-  resultsCount: { fontSize: 13 },
-  listContent: { padding: 16, paddingTop: 0 },
+  
+  searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  searchInput: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 14, 
+    height: 44, // Matched globally with all other screens
+    borderRadius: 12, 
+    borderWidth: 1,
+    gap: 8 
+  },
+  searchTextInput: { flex: 1, fontSize: 15 },
+  
+  resultsHeader: { paddingHorizontal: 20, paddingBottom: 12 },
+  resultsCount: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
+  
+  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
 });

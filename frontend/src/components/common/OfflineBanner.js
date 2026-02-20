@@ -4,66 +4,97 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { selectIsOnline } from '../../store/slices/offlineSlice';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../theme/ThemeContext'; // NEW: Imported theme
 
 const OfflineBanner = () => {
   const isOnline = useSelector(selectIsOnline);
+  const { isDark } = useTheme(); // NEW: Grabbing dark mode status
+  
   const [showBackOnline, setShowBackOnline] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
+  
+  // Advanced Animations
+  const slideAnim = useRef(new Animated.Value(-100)).current; // Starts hidden above screen
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!isOnline) {
-      // Show offline banner
+      // Show offline pill
       setWasOffline(true);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else if (wasOffline) {
-      // Show "Back online" message briefly
-      setShowBackOnline(true);
-      Animated.sequence([
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: Math.max(insets.top + 12, 20), // Drops just below status bar
+          useNativeDriver: true,
+          tension: 40,
+          friction: 6,
+        }),
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 200,
           useNativeDriver: true,
         }),
-        Animated.delay(2000),
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setShowBackOnline(false);
-        setWasOffline(false);
-      });
+      ]).start();
+    } else if (wasOffline) {
+      // Show "Back online" message briefly, then slide up
+      setShowBackOnline(true);
+      
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.spring(slideAnim, {
+            toValue: -100, // Slides back out of view
+            useNativeDriver: true,
+            tension: 20,
+            friction: 7,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setShowBackOnline(false);
+          setWasOffline(false);
+        });
+      }, 2500); // Gives them 2.5 seconds to see it's back online
     }
-  }, [isOnline]);
+  }, [isOnline, insets.top, slideAnim, fadeAnim]);
 
   if (isOnline && !showBackOnline) return null;
+
+  // Premium Pill Colors
+  const pillBg = isDark ? '#333333' : '#171717'; 
+  const pillBorder = isDark ? '#424242' : 'transparent';
+  const iconColor = isOnline ? '#10a37f' : '#ef4444'; // OpenAI Green / Clean Red
 
   return (
     <Animated.View
       style={[
         styles.container,
         {
-          backgroundColor: isOnline ? '#16a34a' : '#ef4444',
           opacity: fadeAnim,
-          paddingTop: Platform.OS === 'ios' ? insets.top : 0,
+          transform: [{ translateY: slideAnim }],
         },
       ]}
+      pointerEvents="none" // Ensures the banner never blocks user taps on the app underneath
     >
-      <View style={styles.content}>
+      <View 
+        style={[
+          styles.pill, 
+          { 
+            backgroundColor: pillBg,
+            borderColor: pillBorder,
+            borderWidth: isDark ? 1 : 0, 
+          }
+        ]}
+      >
         <Ionicons
-          name={isOnline ? 'checkmark-circle' : 'cloud-offline'}
-          size={18}
-          color="#fff"
+          name={isOnline ? 'wifi' : 'wifi-outline'} // Swapped to cleaner wifi icons
+          size={16}
+          color={iconColor}
         />
         <Text style={styles.text}>
-          {isOnline ? '✓ Back online' : '△ No internet connection'}
+          {isOnline ? 'Back online' : 'No internet connection'}
         </Text>
       </View>
     </Animated.View>
@@ -77,19 +108,34 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9999,
+    alignItems: 'center', // Centers the floating pill
   },
-  content: {
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    borderRadius: 30, // Perfect rounded pill shape
     gap: 8,
+    // Subtle shadow to detach it from the screen content
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   text: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#ffffff', // Always white for maximum contrast on the dark pill
+    fontSize: 13,
     fontWeight: '600',
+    letterSpacing: 0.2, // Premium tracking
   },
 });
 

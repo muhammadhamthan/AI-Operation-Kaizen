@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -15,7 +15,7 @@ import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import Loader from '../../../../src/components/common/Loader';
 
 export default function FixedDetailScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const dispatch = useDispatch();
@@ -31,80 +31,108 @@ export default function FixedDetailScreen() {
 
   const resolutionTime = formatDurationFromDates(issue.created_at, issue.updated_at);
 
+  // ── PREMIUM PALETTE ──
+  const bgColor = isDark ? '#212121' : '#f9f9f9';
+  const surfaceColor = isDark ? '#171717' : '#ffffff';
+  const borderColor = isDark ? '#333333' : '#e5e5e5';
+  const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
+  const successColor = '#10a37f'; // OpenAI Green
+  const successBg = isDark ? 'rgba(16, 163, 127, 0.15)' : 'rgba(16, 163, 127, 0.1)';
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { backgroundColor: '#16a34a' }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]}>
+      
+      {/* ── HEADER ── */}
+      <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Ionicons name="checkmark-circle" size={20} color="#fff" />
-          <Text style={styles.headerTitle}>COMPLETED</Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Resolution Report</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Performance Metrics */}
-        <Card style={[styles.card, { backgroundColor: '#dcfce7' }]}>
-          <Text style={[styles.metricsTitle, { color: '#166534' }]}>Performance Metrics</Text>
-          <View style={styles.metricsRow}>
-            <View style={styles.metricItem}>
-              <Ionicons name="time-outline" size={20} color="#166534" />
-              <Text style={[styles.metricValue, { color: '#166534' }]}>{resolutionTime || 'N/A'}</Text>
-              <Text style={[styles.metricLabel, { color: '#166534' }]}>Resolution Time</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Ionicons name="call-outline" size={20} color="#166534" />
-              <Text style={[styles.metricValue, { color: '#166534' }]}>{issue.callLogs?.length || 0}</Text>
-              <Text style={[styles.metricLabel, { color: '#166534' }]}>Call Attempts</Text>
+        
+        {/* ── ISSUE IDENTITY & STATUS ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <View style={styles.idRow}>
+            <Text style={[styles.issueId, { color: theme.textSecondary }]}>ISSUE #{issue.id}</Text>
+            <View style={[styles.successBadge, { backgroundColor: successBg }]}>
+              <Ionicons name="checkmark-circle" size={14} color={successColor} />
+              <Text style={[styles.successText, { color: successColor }]}>Completed</Text>
             </View>
           </View>
-        </Card>
-
-        <Card style={styles.card}>
-          <Text style={[styles.issueId, { color: theme.primary }]}>Issue #{issue.id}</Text>
+          
           <Text style={[styles.title, { color: theme.text }]}>{issue.title}</Text>
           <Text style={[styles.description, { color: theme.textSecondary }]}>{issue.description}</Text>
+          
           <View style={styles.badges}>
             <StatusBadge status={issue.priority} type="priority" size="small" />
-            <View style={styles.typeTag}>
-              <Text style={[styles.typeText, { color: theme.textSecondary }]}>{issue.issue_type}</Text>
+            <View style={[styles.typeTag, { backgroundColor: iconBg }]}>
+              <Text style={[styles.typeText, { color: theme.text }]}>{issue.issue_type}</Text>
             </View>
           </View>
-        </Card>
+        </View>
 
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Before / After Photos</Text>
+        {/* ── PERFORMANCE METRICS ── */}
+        <View style={styles.metricsContainer}>
+          <View style={[styles.metricCard, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <View style={[styles.metricIconWrapper, { backgroundColor: successBg }]}>
+              <Ionicons name="time-outline" size={20} color={successColor} />
+            </View>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{resolutionTime || 'N/A'}</Text>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Resolution Time</Text>
+          </View>
+          
+          <View style={[styles.metricCard, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <View style={[styles.metricIconWrapper, { backgroundColor: iconBg }]}>
+              <Ionicons name="cellular-outline" size={20} color={theme.textSecondary} />
+            </View>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{issue.callLogs?.length || 0}</Text>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Call Attempts</Text>
+          </View>
+        </View>
+
+        {/* ── PHOTOS ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Before & After</Text>
           <ImageGallery images={issue.images} />
-        </Card>
+        </View>
 
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Participants</Text>
-          <View style={styles.participantsRow}>
+        {/* ── PARTICIPANTS ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Participants</Text>
+          <View style={styles.peopleGrid}>
             {issue.raisedBy && (
-              <View style={styles.participant}>
+              <View style={[styles.personRow, { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
                 <Avatar uri={issue.raisedBy.avatar} name={issue.raisedBy.name} size="medium" />
-                <Text style={[styles.participantName, { color: theme.text }]}>{issue.raisedBy.name}</Text>
-                <Text style={[styles.participantRole, { color: theme.textSecondary }]}>Supervisor</Text>
+                <View style={styles.personInfo}>
+                  <Text style={[styles.personName, { color: theme.text }]}>{issue.raisedBy.name}</Text>
+                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Supervisor</Text>
+                </View>
               </View>
             )}
+            
             {issue.solver && (
-              <View style={styles.participant}>
+              <View style={[styles.personRow, { paddingTop: 12 }]}>
                 <Avatar uri={issue.solver.avatar} name={issue.solver.name} size="medium" />
-                <Text style={[styles.participantName, { color: theme.text }]}>{issue.solver.name}</Text>
-                <Text style={[styles.participantRole, { color: theme.textSecondary }]}>Solver</Text>
+                <View style={styles.personInfo}>
+                  <Text style={[styles.personName, { color: theme.text }]}>{issue.solver.name}</Text>
+                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Solver</Text>
+                </View>
+                <Ionicons name="checkmark-done" size={20} color={successColor} />
               </View>
             )}
           </View>
-        </Card>
+        </View>
 
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Full Timeline</Text>
+        {/* ── TIMELINE ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Full Timeline</Text>
           <IssueTimeline history={issue.history || []} />
-        </Card>
+        </View>
 
-        <View style={{ height: 32 }} />
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -112,27 +140,64 @@ export default function FixedDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16 },
-  backButton: { padding: 4 },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backButton: { padding: 4, marginLeft: -4 },
+  headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   placeholder: { width: 32 },
-  content: { flex: 1, padding: 16 },
-  card: { marginBottom: 16 },
-  metricsTitle: { fontSize: 14, fontWeight: '600', marginBottom: 12 },
-  metricsRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  metricItem: { alignItems: 'center', gap: 4 },
-  metricValue: { fontSize: 24, fontWeight: '700' },
-  metricLabel: { fontSize: 12 },
-  issueId: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  description: { fontSize: 15, lineHeight: 22, marginBottom: 12 },
-  badges: { flexDirection: 'row', gap: 8 },
-  typeTag: { backgroundColor: '#f3f4f6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  typeText: { fontSize: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
-  participantsRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  participant: { alignItems: 'center', gap: 6 },
-  participantName: { fontSize: 14, fontWeight: '500' },
-  participantRole: { fontSize: 12 },
+  
+  content: { flex: 1 },
+  
+  card: { 
+    marginHorizontal: 16, 
+    marginTop: 16, 
+    padding: 20 
+  },
+  flatCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: { shadowOpacity: 0 },
+      android: { elevation: 0 },
+    }),
+  },
+
+  idRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  issueId: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  successBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4 },
+  successText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.2 },
+  
+  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 8, lineHeight: 28 },
+  description: { fontSize: 15, lineHeight: 24, letterSpacing: -0.1, marginBottom: 16 },
+  
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  typeTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  typeText: { fontSize: 12, fontWeight: '600' },
+  
+  metricsContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 16, gap: 12 },
+  metricCard: { flex: 1, padding: 16, alignItems: 'flex-start' },
+  metricIconWrapper: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  metricValue: { fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginBottom: 2, fontVariant: ['tabular-nums'] },
+  metricLabel: { fontSize: 12, fontWeight: '500' },
+  
+  sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
+  
+  peopleGrid: { flexDirection: 'column' },
+  personRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, 
+    paddingBottom: 12 
+  },
+  personInfo: { flex: 1, justifyContent: 'center' },
+  personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
+  personRole: { fontSize: 13 },
+
+  bottomPadding: { height: 40 },
 });

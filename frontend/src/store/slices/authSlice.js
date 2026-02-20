@@ -4,7 +4,7 @@ import {
   logoutUser as logoutUserApi,
   getStoredUser,
   getCurrentUser,
-} from '../../services/api';
+} from '../../mocks/apiService';  // From slices/ → ../../mocks/
 
 const initialState = {
   isAuthenticated: false,
@@ -18,17 +18,19 @@ export const loginUser = createAsyncThunk(
   'auth/login',
   async ({ username, password }, { rejectWithValue }) => {
     try {
+      console.log('🔍 Thunk calling loginUserApi...');
       const result = await loginUserApi(username, password);
+      console.log('🔍 Thunk received:', JSON.stringify(result));
       if (!result.success) {
         return rejectWithValue(result.error);
       }
       return result;
     } catch (error) {
+      console.log('🔍 Thunk caught error:', error.message);
       return rejectWithValue(error.message || 'Login failed');
     }
   }
 );
-
 export const checkAuthStatus = createAsyncThunk(
   'auth/checkStatus',
   async (_, { rejectWithValue }) => {

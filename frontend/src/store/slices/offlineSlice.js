@@ -5,6 +5,7 @@ const initialState = {
   lastChecked: null,
   pendingActions: [],
   lastSyncTime: null,
+  location: null, // NEW: Added to store location
 };
 
 const offlineSlice = createSlice({
@@ -40,6 +41,10 @@ const offlineSlice = createSlice({
       state.pendingActions = [];
       state.lastSyncTime = new Date().toISOString();
     },
+    // NEW: Reducer to store the location
+    setLocation: (state, action) => {
+      state.location = action.payload;
+    },
   },
 });
 
@@ -49,11 +54,13 @@ export const {
   removePendingAction,
   incrementRetryCount,
   clearSyncedActions,
+  setLocation, // Exported new action
 } = offlineSlice.actions;
 
 // Selectors
 export const selectIsOnline = (state) => state.offline.isOnline;
 export const selectPendingActions = (state) => state.offline.pendingActions;
 export const selectLastSyncTime = (state) => state.offline.lastSyncTime;
+export const selectLocation = (state) => state.offline.location; // Exported new selector
 
 export default offlineSlice.reducer;

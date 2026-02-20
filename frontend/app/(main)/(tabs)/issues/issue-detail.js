@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Animated,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,7 +22,7 @@ import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Loader from '../../../../src/components/common/Loader';
 
 export default function IssueDetailScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme(); // 🚀 Added isDark for premium shading
   const router = useRouter();
   const { id, highlighted } = useLocalSearchParams();
   const issue = useSelector((state) => selectIssueById(state, parseInt(id)));
@@ -30,7 +31,6 @@ export default function IssueDetailScreen() {
 
   useEffect(() => {
     if (highlighted === 'true') {
-      // Fade out highlight after 2 seconds
       Animated.timing(highlightAnim, {
         toValue: 0,
         duration: 2000,
@@ -47,126 +47,150 @@ export default function IssueDetailScreen() {
   const overdueDays = calculateOverdueDays(issue.deadline_at);
   const isOverdue = overdueDays > 0;
 
+  // Modernized semantic colors
   const getStatusColor = (status) => {
     const colors = {
       OPEN: '#3b82f6',
-      ASSIGNED: '#f97316',
+      ASSIGNED: '#f59e0b',
       IN_PROGRESS: '#8b5cf6',
       RESOLVED_PENDING_REVIEW: '#eab308',
-      COMPLETED: '#16a34a',
+      COMPLETED: '#10a37f', // OpenAI Green
       REOPENED: '#ef4444',
-      ESCALATED: '#dc2626',
+      ESCALATED: '#ef4444',
     };
-    return colors[status] || '#6b7280';
+    return colors[status] || '#8e8ea0';
   };
 
   const getPriorityColor = (priority) => {
     const colors = {
       high: '#ef4444',
-      medium: '#f97316',
-      low: '#22c55e',
+      medium: '#f59e0b',
+      low: '#10a37f', // OpenAI Green
     };
-    return colors[priority] || '#6b7280';
+    return colors[priority] || '#8e8ea0';
   };
 
+  // Premium Palette
+  const bgColor = isDark ? '#212121' : '#f9f9f9';
+  const surfaceColor = isDark ? '#171717' : '#ffffff';
+  const borderColor = isDark ? '#333333' : '#e5e5e5';
+  const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
+
+  // Subtler, more premium highlight flash
   const highlightColor = highlightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [theme.card, '#fef3c7'],
+    outputRange: [surfaceColor, isDark ? '#3f3f46' : '#fef9c3'],
   });
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <Animated.View style={[styles.header, { backgroundColor: highlightColor, borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]}>
+      
+      {/* ── HEADER ── */}
+      <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Issue #{issue.id}</Text>
+        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
         <View style={styles.placeholder} />
-      </Animated.View>
+      </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Title & Status */}
-        <Animated.View style={{ backgroundColor: highlightColor }}>
-          <Card style={styles.card}>
-            <Text style={[styles.issueTitle, { color: theme.text }]}>{issue.title}</Text>
-            <View style={styles.badgeRow}>
-              <StatusBadge 
-                label={issue.status.replace('_', ' ')} 
-                color={getStatusColor(issue.status)} 
-              />
-              <StatusBadge 
-                label={issue.priority.toUpperCase()} 
-                color={getPriorityColor(issue.priority)} 
-              />
-              {isOverdue && (
-                <StatusBadge label={`${overdueDays}d overdue`} color="#ef4444" />
-              )}
-            </View>
-          </Card>
+        
+        {/* ── TITLE & STATUS ── */}
+        <Animated.View style={[styles.card, styles.flatCard, { backgroundColor: highlightColor, borderColor }]}>
+          <Text style={[styles.issueTitle, { color: theme.text }]}>{issue.title}</Text>
+          <View style={styles.badgeRow}>
+            <StatusBadge 
+              label={issue.status.replace('_', ' ')} 
+              color={getStatusColor(issue.status)} 
+            />
+            <StatusBadge 
+              label={issue.priority.toUpperCase()} 
+              color={getPriorityColor(issue.priority)} 
+            />
+            {isOverdue && (
+              <StatusBadge label={`${overdueDays}d overdue`} color="#ef4444" />
+            )}
+          </View>
         </Animated.View>
 
-        {/* Description */}
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Description</Text>
-          <Text style={[styles.description, { color: theme.textSecondary }]}>
+        {/* ── DESCRIPTION ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Description</Text>
+          <Text style={[styles.description, { color: theme.text }]}>
             {issue.description}
           </Text>
-        </Card>
+        </View>
 
-        {/* Site & Location */}
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Location</Text>
+        {/* ── LOCATION ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Location</Text>
+          
           <View style={styles.infoRow}>
-            <Ionicons name="location" size={20} color={theme.primary} />
+            <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+              <Ionicons name="location-outline" size={18} color={theme.textSecondary} />
+            </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Site</Text>
               <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site?.name || 'N/A'}</Text>
             </View>
           </View>
+          
           {issue.site?.location && (
             <View style={styles.infoRow}>
-              <Ionicons name="map" size={20} color={theme.primary} />
+              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+                <Ionicons name="map-outline" size={18} color={theme.textSecondary} />
+              </View>
               <View style={styles.infoContent}>
                 <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Address</Text>
                 <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site.location}</Text>
               </View>
             </View>
           )}
-        </Card>
+        </View>
 
-        {/* Raised By */}
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Raised By</Text>
+        {/* ── RAISED BY ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Raised By</Text>
           <View style={styles.infoRow}>
-            <Ionicons name="person" size={20} color={theme.primary} />
+            <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+              <Ionicons name="person-outline" size={18} color={theme.textSecondary} />
+            </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoValue, { color: theme.text }]}>{issue.raised_by?.name || 'N/A'}</Text>
-              <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              <Text style={[styles.infoLabel, { color: theme.textSecondary, marginTop: 2 }]}>
                 {formatDateTime(issue.created_at)}
               </Text>
             </View>
           </View>
-        </Card>
+        </View>
 
-        {/* Assignment */}
+        {/* ── ASSIGNMENT ── */}
         {issue.assignment && (
-          <Card style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Assigned To</Text>
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Assigned To</Text>
+            
             <View style={styles.infoRow}>
-              <Ionicons name="person-circle" size={20} color={theme.primary} />
+              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+                <Ionicons name="briefcase-outline" size={18} color={theme.textSecondary} />
+              </View>
               <View style={styles.infoContent}>
                 <Text style={[styles.infoValue, { color: theme.text }]}>
                   {issue.assignment.assigned_to?.name || 'N/A'}
                 </Text>
-                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                  {issue.assignment.assigned_to?.phone}
-                </Text>
+                {issue.assignment.assigned_to?.phone && (
+                  <Text style={[styles.infoLabel, { color: theme.textSecondary, marginTop: 2 }]}>
+                    {issue.assignment.assigned_to.phone}
+                  </Text>
+                )}
               </View>
             </View>
+            
             {issue.assignment.due_date && (
               <View style={styles.infoRow}>
-                <Ionicons name="calendar" size={20} color={theme.primary} />
+                <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+                  <Ionicons name="calendar-outline" size={18} color={theme.textSecondary} />
+                </View>
                 <View style={styles.infoContent}>
                   <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Due Date</Text>
                   <Text style={[styles.infoValue, { color: theme.text }]}>
@@ -175,14 +199,17 @@ export default function IssueDetailScreen() {
                 </View>
               </View>
             )}
-          </Card>
+          </View>
         )}
 
-        {/* Deadline */}
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Timeline</Text>
+        {/* ── TIMELINE ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Timeline</Text>
+          
           <View style={styles.infoRow}>
-            <Ionicons name="time" size={20} color={isOverdue ? '#ef4444' : theme.primary} />
+            <View style={[styles.iconWrapper, { backgroundColor: isOverdue ? 'rgba(239,68,68,0.1)' : iconBg }]}>
+              <Ionicons name="flag-outline" size={18} color={isOverdue ? '#ef4444' : theme.textSecondary} />
+            </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Deadline</Text>
               <Text style={[styles.infoValue, { color: isOverdue ? '#ef4444' : theme.text }]}>
@@ -191,8 +218,11 @@ export default function IssueDetailScreen() {
               </Text>
             </View>
           </View>
+          
           <View style={styles.infoRow}>
-            <Ionicons name="create" size={20} color={theme.primary} />
+            <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+              <Ionicons name="add-outline" size={18} color={theme.textSecondary} />
+            </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Created</Text>
               <Text style={[styles.infoValue, { color: theme.text }]}>
@@ -200,8 +230,11 @@ export default function IssueDetailScreen() {
               </Text>
             </View>
           </View>
+          
           <View style={styles.infoRow}>
-            <Ionicons name="refresh" size={20} color={theme.primary} />
+            <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+              <Ionicons name="refresh-outline" size={18} color={theme.textSecondary} />
+            </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Last Updated</Text>
               <Text style={[styles.infoValue, { color: theme.text }]}>
@@ -209,29 +242,29 @@ export default function IssueDetailScreen() {
               </Text>
             </View>
           </View>
-        </Card>
+        </View>
 
-        {/* Images */}
+        {/* ── IMAGES ── */}
         {issue.images && issue.images.length > 0 && (
-          <Card style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Images</Text>
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Media Attached</Text>
             {issue.images.map((img, index) => (
               <View key={index} style={styles.imageContainer}>
                 <View style={styles.imageHeader}>
                   <StatusBadge 
                     label={img.image_type} 
-                    color={img.image_type === 'BEFORE' ? '#f97316' : '#16a34a'} 
+                    color={img.image_type === 'BEFORE' ? '#f59e0b' : '#10a37f'} 
                   />
                   {img.ai_flag && img.ai_flag !== 'NOT_CHECKED' && (
                     <StatusBadge 
                       label={`AI: ${img.ai_flag}`} 
-                      color={img.ai_flag === 'OK' ? '#16a34a' : '#ef4444'} 
+                      color={img.ai_flag === 'OK' ? '#10a37f' : '#ef4444'} 
                     />
                   )}
                 </View>
                 <Image
                   source={{ uri: img.image_url }}
-                  style={styles.image}
+                  style={[styles.image, { borderColor }]}
                   resizeMode="cover"
                 />
                 <Text style={[styles.imageDate, { color: theme.textSecondary }]}>
@@ -239,50 +272,57 @@ export default function IssueDetailScreen() {
                 </Text>
               </View>
             ))}
-          </Card>
+          </View>
         )}
 
-        {/* Call Logs */}
+        {/* ── CALL LOGS ── */}
         {issue.call_logs && issue.call_logs.length > 0 && (
-          <Card style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Call Logs</Text>
-            {issue.call_logs.map((log, index) => (
-              <View key={index} style={[styles.callLog, { borderBottomColor: theme.border }]}>
-                <View style={styles.callLogHeader}>
-                  <Text style={[styles.callAttempt, { color: theme.text }]}>
-                    Attempt #{log.attempt_number}
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Automated Call Logs</Text>
+            {issue.call_logs.map((log, index) => {
+              const isLast = index === issue.call_logs.length - 1;
+              return (
+                <View key={index} style={[styles.callLog, !isLast && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                  <View style={styles.callLogHeader}>
+                    <Text style={[styles.callAttempt, { color: theme.text }]}>
+                      Attempt #{log.attempt_number}
+                    </Text>
+                    <StatusBadge 
+                      label={log.status} 
+                      color={log.status === 'ANSWERED' ? '#10a37f' : '#ef4444'} 
+                    />
+                  </View>
+                  <Text style={[styles.callTime, { color: theme.textSecondary }]}>
+                    {formatDateTime(log.initiated_at)}
                   </Text>
-                  <StatusBadge 
-                    label={log.status} 
-                    color={log.status === 'ANSWERED' ? '#16a34a' : '#ef4444'} 
-                  />
                 </View>
-                <Text style={[styles.callTime, { color: theme.textSecondary }]}>
-                  {formatDateTime(log.initiated_at)}
-                </Text>
-              </View>
-            ))}
-          </Card>
+              );
+            })}
+          </View>
         )}
 
-        {/* History */}
+        {/* ── HISTORY ── */}
         {issue.history && issue.history.length > 0 && (
-          <Card style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>History</Text>
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Activity Log</Text>
             {issue.history.map((item, index) => (
-              <View key={index} style={[styles.historyItem, { borderLeftColor: theme.primary }]}>
-                <Text style={[styles.historyAction, { color: theme.text }]}>
-                  {item.action_type}
-                </Text>
-                <Text style={[styles.historyDetails, { color: theme.textSecondary }]}>
-                  {item.details}
-                </Text>
-                <Text style={[styles.historyTime, { color: theme.textSecondary }]}>
-                  {formatDateTime(item.created_at)} by {item.changed_by?.name || 'System'}
-                </Text>
+              <View key={index} style={styles.historyItem}>
+                {/* Custom thread line */}
+                <View style={[styles.historyThread, { backgroundColor: borderColor }]} />
+                <View style={styles.historyContent}>
+                  <Text style={[styles.historyAction, { color: theme.text }]}>
+                    {item.action_type.replace(/_/g, ' ')}
+                  </Text>
+                  <Text style={[styles.historyDetails, { color: theme.textSecondary }]}>
+                    {item.details}
+                  </Text>
+                  <Text style={[styles.historyTime, { color: theme.textSecondary }]}>
+                    {formatDateTime(item.created_at)} • {item.changed_by?.name || 'System AI'}
+                  </Text>
+                </View>
               </View>
             ))}
-          </Card>
+          </View>
         )}
 
         <View style={styles.bottomPadding} />
@@ -301,14 +341,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backButton: {
     padding: 4,
+    marginLeft: -4,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   placeholder: {
     width: 32,
@@ -319,11 +362,22 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: 16,
     marginTop: 16,
+    padding: 20,
+  },
+  flatCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: { shadowOpacity: 0 },
+      android: { elevation: 0 },
+    }),
   },
   issueTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
-    marginBottom: 12,
+    letterSpacing: -0.5,
+    marginBottom: 16,
+    lineHeight: 30,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -331,84 +385,111 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 16,
   },
   description: {
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 24,
+    letterSpacing: -0.1,
   },
   infoRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 14,
+  },
+  iconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 10, // Squircle shape
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoContent: {
     flex: 1,
+    justifyContent: 'center',
   },
   infoLabel: {
     fontSize: 12,
+    fontWeight: '500',
     marginBottom: 2,
   },
   infoValue: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   imageContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   imageHeader: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   image: {
     width: '100%',
-    height: 200,
-    borderRadius: 8,
+    height: 220,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   imageDate: {
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 8,
   },
   callLog: {
-    paddingBottom: 12,
-    marginBottom: 12,
-    borderBottomWidth: 1,
+    paddingVertical: 12,
   },
   callLogHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   callAttempt: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   callTime: {
-    fontSize: 12,
+    fontSize: 13,
   },
   historyItem: {
-    borderLeftWidth: 3,
-    paddingLeft: 12,
+    flexDirection: 'row',
     marginBottom: 16,
+  },
+  historyThread: {
+    width: 2,
+    borderRadius: 1,
+    marginRight: 16,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  historyContent: {
+    flex: 1,
+    paddingBottom: 4,
   },
   historyAction: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.1,
     marginBottom: 4,
+    textTransform: 'capitalize',
   },
   historyDetails: {
-    fontSize: 13,
-    marginBottom: 4,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 6,
   },
   historyTime: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '500',
   },
   bottomPadding: {
-    height: 32,
+    height: 40,
   },
 });

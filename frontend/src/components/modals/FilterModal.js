@@ -8,6 +8,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Animated,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
@@ -25,7 +26,7 @@ const STATUS_OPTIONS = [
 const PRIORITY_OPTIONS = [
   { label: 'High', value: 'high', color: '#ef4444' },
   { label: 'Medium', value: 'medium', color: '#f97316' },
-  { label: 'Low', value: 'low', color: '#22c55e' },
+  { label: 'Low', value: 'low', color: '#10a37f' },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -53,7 +54,7 @@ const FilterModal = ({
   initialFilters = {},
   sites = [],
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [slideAnim] = useState(new Animated.Value(0));
   
   const [selectedStatuses, setSelectedStatuses] = useState(initialFilters.statuses || []);
@@ -76,29 +77,9 @@ const FilterModal = ({
     }
   }, [visible]);
 
-  const toggleStatus = (status) => {
-    setSelectedStatuses(prev =>
-      prev.includes(status)
-        ? prev.filter(s => s !== status)
-        : [...prev, status]
-    );
-  };
-
-  const togglePriority = (priority) => {
-    setSelectedPriorities(prev =>
-      prev.includes(priority)
-        ? prev.filter(p => p !== priority)
-        : [...prev, priority]
-    );
-  };
-
-  const toggleCategory = (category) => {
-    setSelectedCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
-    );
-  };
+  const toggleStatus = (status) => setSelectedStatuses(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]);
+  const togglePriority = (priority) => setSelectedPriorities(prev => prev.includes(priority) ? prev.filter(p => p !== priority) : [...prev, priority]);
+  const toggleCategory = (category) => setSelectedCategories(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
 
   const handleReset = () => {
     setSelectedStatuses([]);
@@ -110,15 +91,14 @@ const FilterModal = ({
   };
 
   const handleApply = () => {
-    const filters = {
+    onApply({
       statuses: selectedStatuses,
       priorities: selectedPriorities,
       categories: selectedCategories,
       site: selectedSite,
       dateRange: selectedDateRange,
       overdueOnly: showOverdueOnly,
-    };
-    onApply(filters);
+    });
     onClose();
   };
 
@@ -133,128 +113,105 @@ const FilterModal = ({
     return count;
   };
 
-  const translateY = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [600, 0],
-  });
+  const translateY = slideAnim.interpolate({ inputRange: [0, 1], outputRange: [600, 0] });
 
-  const renderChip = (option, isSelected, onToggle, showColor = false) => (
-    <TouchableOpacity
-      key={option.value}
-      style={[
-        styles.chip,
-        { 
-          backgroundColor: isSelected ? theme.primary : theme.inputBackground,
-          borderColor: isSelected ? theme.primary : theme.border,
-        },
-      ]}
-      onPress={onToggle}
-    >
-      {showColor && option.color && (
-        <View style={[styles.colorDot, { backgroundColor: option.color }]} />
-      )}
-      <Text
+  // ── STRICT MONOCHROME PALETTE ──
+  const activeBg = isDark ? '#ffffff' : '#101010'; // Stark contrast
+  const activeText = isDark ? '#000000' : '#ffffff';
+  const inactiveBg = isDark ? '#212121' : '#f9f9f9';
+  const inactiveBorder = isDark ? '#333333' : '#e5e5e5';
+  const inactiveText = isDark ? '#a1a1aa' : '#52525b';
+
+  const renderChip = (option, isSelected, onToggle, showColor = false) => {
+    return (
+      <TouchableOpacity
+        key={option.value}
+        activeOpacity={0.7}
         style={[
-          styles.chipText,
-          { color: isSelected ? '#fff' : theme.text },
+          styles.chip,
+          { 
+            backgroundColor: isSelected ? activeBg : inactiveBg,
+            borderColor: isSelected ? activeBg : inactiveBorder,
+            borderWidth: 1,
+          },
         ]}
+        onPress={onToggle}
       >
-        {option.label}
-      </Text>
-      {isSelected && (
-        <Ionicons name="checkmark" size={14} color="#fff" style={styles.chipIcon} />
-      )}
-    </TouchableOpacity>
-  );
+        {showColor && option.color && (
+          <View style={[styles.colorDot, { backgroundColor: option.color }]} />
+        )}
+        <Text
+          style={[
+            styles.chipText,
+            { color: isSelected ? activeText : inactiveText },
+          ]}
+        >
+          {option.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
-            <Animated.View
-              style={[
-                styles.modalContainer,
-                { backgroundColor: theme.card, transform: [{ translateY }] },
-              ]}
-            >
-              {/* Header */}
-              <View style={[styles.header, { borderBottomColor: theme.border }]}>
-                <TouchableOpacity onPress={handleReset}>
-                  <Text style={[styles.resetText, { color: theme.primary }]}>Reset</Text>
+            <Animated.View style={[styles.modalContainer, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff', transform: [{ translateY }] }]}>
+              
+              <View style={styles.dragHandleContainer}>
+                <View style={[styles.dragHandle, { backgroundColor: isDark ? '#333' : '#e5e5e5' }]} />
+              </View>
+
+              <View style={[styles.header, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                <TouchableOpacity onPress={handleReset} activeOpacity={0.6}>
+                  <Text style={[styles.resetText, { color: theme.textSecondary }]}>Reset</Text>
                 </TouchableOpacity>
                 <Text style={[styles.title, { color: theme.text }]}>Filters</Text>
-                <TouchableOpacity onPress={onClose}>
-                  <Ionicons name="close" size={24} color={theme.text} />
+                <TouchableOpacity onPress={onClose} activeOpacity={0.6} style={styles.closeBtn}>
+                  <Ionicons name="close-circle" size={26} color={isDark ? '#444' : '#e5e5e5'} />
                 </TouchableOpacity>
               </View>
 
-              {/* Filter Content */}
               <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Status */}
+                
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Status</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Status</Text>
                   <View style={styles.chipsContainer}>
-                    {STATUS_OPTIONS.map(option =>
-                      renderChip(
-                        option,
-                        selectedStatuses.includes(option.value),
-                        () => toggleStatus(option.value)
-                      )
-                    )}
+                    {STATUS_OPTIONS.map(option => renderChip(option, selectedStatuses.includes(option.value), () => toggleStatus(option.value)))}
                   </View>
                 </View>
 
-                {/* Priority */}
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Priority</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Priority</Text>
                   <View style={styles.chipsContainer}>
-                    {PRIORITY_OPTIONS.map(option =>
-                      renderChip(
-                        option,
-                        selectedPriorities.includes(option.value),
-                        () => togglePriority(option.value),
-                        true
-                      )
-                    )}
+                    {PRIORITY_OPTIONS.map(option => renderChip(option, selectedPriorities.includes(option.value), () => togglePriority(option.value), true))}
                   </View>
                 </View>
 
-                {/* Category */}
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Category</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Category</Text>
                   <View style={styles.chipsContainer}>
-                    {CATEGORY_OPTIONS.map(option =>
-                      renderChip(
-                        option,
-                        selectedCategories.includes(option.value),
-                        () => toggleCategory(option.value)
-                      )
-                    )}
+                    {CATEGORY_OPTIONS.map(option => renderChip(option, selectedCategories.includes(option.value), () => toggleCategory(option.value)))}
                   </View>
                 </View>
 
-                {/* Site */}
                 {sites.length > 0 && (
                   <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Site</Text>
+                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Site</Text>
                     <View style={styles.chipsContainer}>
                       <TouchableOpacity
                         style={[
                           styles.chip,
                           { 
-                            backgroundColor: !selectedSite ? theme.primary : theme.inputBackground,
-                            borderColor: !selectedSite ? theme.primary : theme.border,
+                            backgroundColor: !selectedSite ? activeBg : inactiveBg,
+                            borderColor: !selectedSite ? activeBg : inactiveBorder,
+                            borderWidth: 1,
                           },
                         ]}
                         onPress={() => setSelectedSite(null)}
                       >
-                        <Text style={[styles.chipText, { color: !selectedSite ? '#fff' : theme.text }]}>
+                        <Text style={[styles.chipText, { color: !selectedSite ? activeText : inactiveText }]}>
                           All Sites
                         </Text>
                       </TouchableOpacity>
@@ -264,13 +221,14 @@ const FilterModal = ({
                           style={[
                             styles.chip,
                             { 
-                              backgroundColor: selectedSite === site.id ? theme.primary : theme.inputBackground,
-                              borderColor: selectedSite === site.id ? theme.primary : theme.border,
+                              backgroundColor: selectedSite === site.id ? activeBg : inactiveBg,
+                              borderColor: selectedSite === site.id ? activeBg : inactiveBorder,
+                              borderWidth: 1,
                             },
                           ]}
                           onPress={() => setSelectedSite(site.id)}
                         >
-                          <Text style={[styles.chipText, { color: selectedSite === site.id ? '#fff' : theme.text }]}>
+                          <Text style={[styles.chipText, { color: selectedSite === site.id ? activeText : inactiveText }]}>
                             {site.name}
                           </Text>
                         </TouchableOpacity>
@@ -279,60 +237,40 @@ const FilterModal = ({
                   </View>
                 )}
 
-                {/* Date Range */}
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Date Range</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Date Range</Text>
                   <View style={styles.chipsContainer}>
-                    {DATE_RANGE_OPTIONS.map(option =>
-                      renderChip(
-                        option,
-                        selectedDateRange === option.value,
-                        () => setSelectedDateRange(option.value)
-                      )
-                    )}
+                    {DATE_RANGE_OPTIONS.map(option => renderChip(option, selectedDateRange === option.value, () => setSelectedDateRange(option.value)))}
                   </View>
                 </View>
 
-                {/* Overdue Toggle */}
                 <TouchableOpacity
-                  style={[styles.toggleRow, { backgroundColor: theme.inputBackground }]}
+                  activeOpacity={0.8}
+                  style={[styles.toggleRow, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f9f9f9', borderColor: isDark ? '#333' : '#f0f0f0' }]}
                   onPress={() => setShowOverdueOnly(!showOverdueOnly)}
                 >
                   <View style={styles.toggleContent}>
-                    <Ionicons name="time" size={20} color="#ef4444" />
-                    <Text style={[styles.toggleText, { color: theme.text }]}>
-                      Show Overdue Only
-                    </Text>
+                    <View style={[styles.iconWrapper, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                      <Ionicons name="time" size={18} color="#ef4444" />
+                    </View>
+                    <Text style={[styles.toggleText, { color: theme.text }]}>Show Overdue Only</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.toggle,
-                      {
-                        backgroundColor: showOverdueOnly ? theme.primary : theme.border,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.toggleKnob,
-                        {
-                          transform: [{ translateX: showOverdueOnly ? 20 : 0 }],
-                        },
-                      ]}
-                    />
+                  {/* Semantic Green used strictly for active toggle state */}
+                  <View style={[styles.toggle, { backgroundColor: showOverdueOnly ? '#10a37f' : (isDark ? '#444' : '#e5e5e5') }]}>
+                    <View style={[styles.toggleKnob, { transform: [{ translateX: showOverdueOnly ? 20 : 0 }] }]} />
                   </View>
                 </TouchableOpacity>
 
                 <View style={styles.bottomPadding} />
               </ScrollView>
 
-              {/* Apply Button */}
-              <View style={[styles.footer, { borderTopColor: theme.border }]}>
+              <View style={[styles.footer, { borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                 <TouchableOpacity
-                  style={[styles.applyButton, { backgroundColor: theme.primary }]}
+                  activeOpacity={0.8}
+                  style={[styles.applyButton, { backgroundColor: activeBg }]}
                   onPress={handleApply}
                 >
-                  <Text style={styles.applyButtonText}>
+                  <Text style={[styles.applyButtonText, { color: activeText }]}>
                     Apply Filters
                     {getActiveFilterCount() > 0 && ` (${getActiveFilterCount()})`}
                   </Text>
@@ -349,66 +287,83 @@ const FilterModal = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   modalContainer: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '85%',
+    maxHeight: '88%',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12 },
+      android: { elevation: 10 },
+    }),
+  },
+  dragHandleContainer: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   resetText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
+  },
+  closeBtn: {
+    padding: 2,
   },
   content: {
     paddingHorizontal: 20,
   },
   section: {
-    marginTop: 20,
+    marginTop: 28,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 14,
   },
   chipsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12, // More structured squircle matching GPT interfaces
     gap: 6,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
-  },
-  chipIcon: {
-    marginLeft: 2,
   },
   colorDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    marginRight: 2,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -416,17 +371,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 28,
   },
   toggleContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+  iconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   toggleText: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   toggle: {
     width: 44,
@@ -439,10 +403,14 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2 },
+      android: { elevation: 2 },
+    }),
   },
   bottomPadding: {
-    height: 20,
+    height: 40,
   },
   footer: {
     paddingHorizontal: 20,
@@ -450,14 +418,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   applyButton: {
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
   },
   applyButtonText: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
 });
 

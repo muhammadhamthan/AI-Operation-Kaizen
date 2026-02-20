@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi } from '../../services/api';
+import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi } from '../../mocks/apiService';
 
 const initialState = {
   issues: [],

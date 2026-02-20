@@ -1,36 +1,50 @@
 import React from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { useSelector } from 'react-redux';
 import { selectIsOnline } from '../../../src/store/slices/offlineSlice';
 import OfflineBanner from '../../../src/components/common/OfflineBanner';
-import { View } from 'react-native';
 
 export default function TabsLayout() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const isOnline = useSelector(selectIsOnline);
 
+  // ── STRICT MONOCHROME PALETTE ──
+  const activeColor = isDark ? '#ffffff' : '#101010';
+  const inactiveColor = isDark ? '#8e8ea0' : '#8e8ea0'; // Signature GPT muted gray
+  const bgColor = isDark ? '#171717' : '#ffffff';
+  const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+
   return (
-    <View style={{ flex: 1 }}>
-      {/* Offline Banner - Shows above all tabs when offline */}
-      <OfflineBanner />
-      
+    <>
+      <View style={{ position: 'absolute', top: 0, width: '100%', zIndex: 9999, elevation: 9999 }}>
+        <OfflineBanner />
+      </View>
+
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: theme.primary,
-          tabBarInactiveTintColor: theme.textSecondary,
+          tabBarActiveTintColor: activeColor,
+          tabBarInactiveTintColor: inactiveColor,
+
+          // ── PREMIUM FLAT STYLING ──
           tabBarStyle: {
-            backgroundColor: theme.tabBar,
-            borderTopColor: theme.border,
-            height: 60,
-            paddingBottom: 8,
+            backgroundColor: bgColor,
+            borderTopColor: borderColor,
+            borderTopWidth: StyleSheet.hairlineWidth, // Ultra-thin, crisp border
+            height: Platform.OS === 'ios' ? 85 : 65, // Accommodates safe areas elegantly
+            paddingBottom: Platform.OS === 'ios' ? 28 : 10,
             paddingTop: 8,
+            elevation: 0, // Strips away Android default drop-shadow
+            shadowOpacity: 0, // Strips away iOS default shadow
           },
           tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '500',
+            fontSize: 11,
+            fontWeight: '600',
+            letterSpacing: -0.1,
+            marginTop: 4,
           },
         }}
       >
@@ -38,8 +52,13 @@ export default function TabsLayout() {
           name="chat"
           options={{
             title: 'Chat',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="chatbubbles" size={size} color={color} />
+            // 🚀 DYNAMIC ICONS: Outline when inactive, Solid when active
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons 
+                name={focused ? "chatbubbles" : "chatbubbles-outline"} 
+                size={24} 
+                color={color} 
+              />
             ),
           }}
         />
@@ -47,8 +66,13 @@ export default function TabsLayout() {
           name="issues"
           options={{
             title: 'Issues',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="document-text" size={size} color={color} />
+            // 🚀 DYNAMIC ICONS: Outline when inactive, Solid when active
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons 
+                name={focused ? "document-text" : "document-text-outline"} 
+                size={24} 
+                color={color} 
+              />
             ),
           }}
         />
@@ -56,12 +80,17 @@ export default function TabsLayout() {
           name="dashboard"
           options={{
             title: 'Dashboard',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="grid" size={size} color={color} />
+            // 🚀 DYNAMIC ICONS: Outline when inactive, Solid when active
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons 
+                name={focused ? "grid" : "grid-outline"} 
+                size={24} 
+                color={color} 
+              />
             ),
           }}
         />
       </Tabs>
-    </View>
+    </>
   );
 }

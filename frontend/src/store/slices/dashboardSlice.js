@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchDashboardStats as fetchDashboardStatsApi } from '../../services/api';
+import { fetchDashboardData as fetchDashboardDataApi } from '../../mocks/apiService';  // ✅ Correct name
 
 const initialState = {
   stats: {
@@ -41,11 +41,11 @@ export const fetchDashboardData = createAsyncThunk(
   'dashboard/fetchData',
   async (user, { rejectWithValue }) => {
     try {
-      const result = await fetchDashboardStatsApi();
+      const result = await fetchDashboardDataApi(user);  // ✅ Pass user
       if (!result.success) {
         return rejectWithValue(result.error);
       }
-      return result.stats;
+      return result;  // ✅ Return full result (stats + charts)
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to fetch dashboard data');
     }
@@ -71,13 +71,15 @@ const dashboardSlice = createSlice({
       })
       .addCase(fetchDashboardData.fulfilled, (state, action) => {
         state.loading = false;
-        state.stats = action.payload;
+        state.stats = action.payload.stats;     // ✅ Extract stats
+        state.charts = action.payload.charts;   // ✅ Extract charts
         state.error = null;
       })
       .addCase(fetchDashboardData.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
+
   },
 });
 

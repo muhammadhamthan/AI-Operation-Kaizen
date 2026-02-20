@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { navigateToNotification, getNavigationPreview } from '../../utils/notificationNavigation';
 
 const NotificationBanner = ({ count, notifications = [], onPress, onDismiss, onMarkRead }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [showList, setShowList] = useState(false);
 
   if (!count || count === 0) return null;
@@ -19,13 +19,8 @@ const NotificationBanner = ({ count, notifications = [], onPress, onDismiss, onM
   };
 
   const handleNotificationPress = (notification) => {
-    // Mark as read
     onMarkRead?.(notification.id);
-    
-    // Navigate to the notification target
     navigateToNotification(notification);
-    
-    // Close the list
     setShowList(false);
   };
 
@@ -46,14 +41,26 @@ const NotificationBanner = ({ count, notifications = [], onPress, onDismiss, onM
     return icons[type] || 'notifications';
   };
 
+  // Exact ChatGPT-style colors
+  const bannerBg = isDark ? '#2f2f2f' : '#f4f4f4'; // Soft flat gray
+  const modalBg = isDark ? '#212121' : '#ffffff';
+  const modalOverlayBg = isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.3)';
+  const unreadBg = isDark ? '#343541' : '#f7f7f8'; // OpenAI's specific alternating row colors
+  const borderColor = isDark ? '#424242' : '#e5e5e5';
+  const accentColor = '#10a37f'; // The official OpenAI Green
+
   const renderNotificationItem = ({ item }) => (
     <TouchableOpacity
-      style={[styles.notificationItem, { backgroundColor: item.read ? theme.card : `${theme.primary}10` }]}
+      style={[
+        styles.notificationItem,
+        {
+          backgroundColor: item.read ? 'transparent' : unreadBg,
+        },
+      ]}
       onPress={() => handleNotificationPress(item)}
+      activeOpacity={0.7}
     >
-      <View style={[styles.notificationIcon, { backgroundColor: `${theme.primary}20` }]}>
-        <Ionicons name={getNotificationIcon(item.type)} size={20} color={theme.primary} />
-      </View>
+      <View style={[styles.notificationDot, { backgroundColor: item.read ? 'transparent' : accentColor }]} />
       <View style={styles.notificationContent}>
         <Text style={[styles.notificationTitle, { color: theme.text }]} numberOfLines={1}>
           {item.title || item.message}
@@ -62,62 +69,76 @@ const NotificationBanner = ({ count, notifications = [], onPress, onDismiss, onM
           {item.body || getNavigationPreview(item)}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+      <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
     </TouchableOpacity>
   );
 
   return (
     <>
-      {/* Banner */}
+      {/* ── Banner — subtle inline strip ── */}
       <TouchableOpacity
-        style={[styles.container, { backgroundColor: theme.primary }]}
+        style={[
+          styles.banner,
+          {
+            backgroundColor: bannerBg,
+            // Removed borders entirely for the "flat" look
+          },
+        ]}
         onPress={handleBannerPress}
         activeOpacity={0.8}
       >
-        <View style={styles.content}>
-          <Ionicons name="notifications" size={20} color="#ffffff" />
-          <Text style={styles.text}>
-            {count} New Notification{count > 1 ? 's' : ''}
+        <View style={styles.bannerLeft}>
+          <View style={[styles.bannerDot, { backgroundColor: accentColor }]} />
+          <Text style={[styles.bannerText, { color: theme.text }]}>
+            {count} new notification{count > 1 ? 's' : ''}
           </Text>
         </View>
         <TouchableOpacity
-          style={styles.closeButton}
+          style={styles.bannerClose}
           onPress={(e) => {
             e.stopPropagation();
             onDismiss?.();
           }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="close" size={18} color="#ffffff" />
+          <Ionicons name="close" size={18} color={theme.textSecondary} />
         </TouchableOpacity>
       </TouchableOpacity>
 
-      {/* Notifications List Modal */}
+      {/* ── Notifications Modal ── */}
       <Modal
         visible={showList}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowList(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+        <View style={[styles.modalOverlay, { backgroundColor: modalOverlayBg }]}>
+          <View style={[styles.modalContent, { backgroundColor: modalBg, borderColor: borderColor }]}>
+            
+            {/* Modal Header */}
+            <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Notifications</Text>
-              <TouchableOpacity onPress={() => setShowList(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
+              <TouchableOpacity
+                onPress={() => setShowList(false)}
+                style={styles.modalClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
-            
+
+            {/* Notification List */}
             <FlatList
               data={notifications}
               keyExtractor={(item) => item.id.toString()}
               renderItem={renderNotificationItem}
               contentContainerStyle={styles.listContent}
               ItemSeparatorComponent={() => (
-                <View style={[styles.separator, { backgroundColor: theme.border }]} />
+                <View style={styles.separator} /> // Invisible spacer instead of lines
               )}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Ionicons name="notifications-off-outline" size={48} color={theme.textSecondary} />
+                  <Ionicons name="notifications-outline" size={32} color={theme.textSecondary} style={{ opacity: 0.5 }} />
                   <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                     No notifications
                   </Text>
@@ -132,38 +153,50 @@ const NotificationBanner = ({ count, notifications = [], onPress, onDismiss, onM
 };
 
 const styles = StyleSheet.create({
-  container: {
+  // ── Banner ────────
+  banner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 12, // Slightly taller
     paddingHorizontal: 16,
     marginHorizontal: 16,
     marginVertical: 8,
-    borderRadius: 12,
+    borderRadius: 12, // Soft rounded corners
   },
-  content: {
+  bannerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  text: {
-    color: '#ffffff',
+  bannerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  bannerText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
-  closeButton: {
-    padding: 4,
+  bannerClose: {
+    padding: 2,
   },
+
+  // ── Modal ────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '70%',
+    borderRadius: 16, // Beautiful large curves
+    borderWidth: 1, // Subtle border helps it pop without shadows
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '75%',
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -174,48 +207,55 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
+  modalClose: {
+    padding: 4,
+    borderRadius: 8,
+  },
+
+  // ── Notification Items ────────
   listContent: {
-    padding: 16,
+    padding: 8,
   },
   notificationItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    gap: 12,
+    alignItems: 'center', // Centers dot, text, and chevron vertically
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12, // Soft item curves
+    gap: 14,
   },
-  notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  notificationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
   },
   notificationContent: {
     flex: 1,
+    gap: 4, // Space between title and body
   },
   notificationTitle: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 2,
   },
   notificationBody: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
   },
   separator: {
-    height: 1,
-    marginVertical: 8,
+    height: 4, // Using invisible gap spacing instead of hard lines
+    backgroundColor: 'transparent',
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 48,
+    gap: 12,
   },
   emptyText: {
-    marginTop: 12,
     fontSize: 14,
   },
 });
