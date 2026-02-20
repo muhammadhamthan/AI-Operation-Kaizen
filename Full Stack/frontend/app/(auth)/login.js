@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   Platform,
   TouchableOpacity,
   ScrollView,
-  Image,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -28,6 +29,34 @@ export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [validationError, setValidationError] = useState('');
+
+  // ── Premium Entrance Animations ──
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const logoScale = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 6,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim, logoScale]);
 
   const handleLogin = async () => {
     setValidationError('');
@@ -52,8 +81,34 @@ export default function LoginScreen() {
     }
   };
 
+  // ── High-End Color Palette ──
+  const screenBg = isDark ? '#121212' : '#ffffff'; 
+  const textColor = isDark ? '#ffffff' : '#000000';
+  const mutedColor = isDark ? '#8e8ea0' : '#6e6e80';
+  const logoBg = isDark ? '#ffffff' : '#000000';
+  const logoIconColor = isDark ? '#000000' : '#ffffff';
+  
+  // Frosted Glass / Soft Card effect for the Dev box
+  const devBoxBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
+  const devBoxBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.container, { backgroundColor: screenBg }]}>
+      
+      {/* ── Seamless Theme Toggle ── */}
+      <TouchableOpacity
+        style={styles.themeToggle}
+        onPress={toggleTheme}
+        activeOpacity={0.6}
+        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+      >
+        <Ionicons
+          name={isDark ? 'sunny' : 'moon'} 
+          size={24}
+          color={mutedColor}
+        />
+      </TouchableOpacity>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -62,83 +117,112 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          bounces={false} // Prevents over-scrolling for a more native app feel
         >
-          <View style={styles.header}>
-            <View style={[styles.logoContainer, { backgroundColor: theme.primary }]}>
-              <Ionicons name="construct" size={48} color="#ffffff" />
+          {/* ── Animated Header ── */}
+          <Animated.View 
+            style={[
+              styles.header,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            {/* Logo with Glow Effect */}
+            <View style={styles.logoOuterGlow}>
+              <Animated.View 
+                style={[
+                  styles.logoContainer, 
+                  { 
+                    backgroundColor: logoBg,
+                    transform: [{ scale: logoScale }] 
+                  }
+                ]}
+              >
+                <Ionicons name="construct" size={32} color={logoIconColor} style={{ marginLeft: 2 }} />
+              </Animated.View>
             </View>
-            <Text style={[styles.title, { color: theme.text }]}>
+
+            <Text style={[styles.title, { color: textColor }]}>
               MaintenanceFlow
             </Text>
-            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            <Text style={[styles.subtitle, { color: mutedColor }]}>
               Industrial Issue Tracking
             </Text>
-          </View>
+          </Animated.View>
 
-          <View style={styles.form}>
-            <Input
-              label="Username"
-              value={username}
-              onChangeText={setUsername}
-              placeholder="Enter your username"
-              icon="person-outline"
-              autoCapitalize="none"
-            />
+          {/* ── Animated Form ── */}
+          <Animated.View 
+            style={[
+              styles.form,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <View style={styles.inputGroup}>
+              <Input
+                label="Username"
+                value={username}
+                onChangeText={setUsername}
+                placeholder="Enter your username"
+                icon="person-outline"
+                autoCapitalize="none"
+              />
+            </View>
 
-            <Input
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              icon="lock-closed-outline"
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <View style={styles.inputGroup}>
+              <Input
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Enter your password"
+                icon="lock-closed-outline"
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
 
             {(validationError || error) && (
-              <View style={[styles.errorContainer, { backgroundColor: `${theme.danger}15` }]}>
-                <Ionicons name="alert-circle" size={18} color={theme.danger} />
+              <Animated.View style={[styles.errorContainer, { backgroundColor: `${theme.danger}15` }]}>
+                <Ionicons name="warning" size={18} color={theme.danger} />
                 <Text style={[styles.errorText, { color: theme.danger }]}>
                   {validationError || error}
                 </Text>
-              </View>
+              </Animated.View>
             )}
 
             <Button
-              title="Login"
+              title="Continue" 
               onPress={handleLogin}
               loading={loading}
-              icon="log-in-outline"
               style={styles.loginButton}
             />
 
-            <View style={[styles.testCredentials, { backgroundColor: theme.inputBackground }]}>
-              <Text style={[styles.testTitle, { color: theme.textSecondary }]}>
-                Test Credentials:
-              </Text>
-              <Text style={[styles.testText, { color: theme.textSecondary }]}>
-                Manager: manager1 / manager123
-              </Text>
-              <Text style={[styles.testText, { color: theme.textSecondary }]}>
-                Supervisor: supervisor1 / super123
-              </Text>
-              <Text style={[styles.testText, { color: theme.textSecondary }]}>
-                Solver: solver1 / solver123
-              </Text>
+            {/* ── Sleek Developer Card ── */}
+            <View style={[styles.testCredentials, { backgroundColor: devBoxBg, borderColor: devBoxBorder }]}>
+              <View style={styles.devCardHeader}>
+                <Ionicons name="code-slash" size={14} color={mutedColor} />
+                <Text style={[styles.testTitle, { color: mutedColor }]}>
+                  TEST CREDENTIALS
+                </Text>
+              </View>
+              <View style={styles.testList}>
+                <Text style={[styles.testText, { color: textColor }]}>
+                  <Text style={{ fontWeight: '600', color: mutedColor }}>Mgr:</Text> manager1 / manager123
+                </Text>
+                <Text style={[styles.testText, { color: textColor }]}>
+                  <Text style={{ fontWeight: '600', color: mutedColor }}>Sup:</Text> supervisor1 / super123
+                </Text>
+                <Text style={[styles.testText, { color: textColor }]}>
+                  <Text style={{ fontWeight: '600', color: mutedColor }}>Sol:</Text> solver1 / solver123
+                </Text>
+              </View>
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
-
-        <TouchableOpacity
-          style={[styles.themeToggle, { backgroundColor: theme.card, borderColor: theme.border }]}
-          onPress={toggleTheme}
-        >
-          <Ionicons
-            name={isDark ? 'sunny-outline' : 'moon-outline'}
-            size={24}
-            color={theme.text}
-          />
-        </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -153,72 +237,113 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
-    justifyContent: 'center',
+    paddingHorizontal: 28,
+    justifyContent: 'center', 
+    paddingBottom: 40,
   },
+  
+  // ── Header ──
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 56, 
+  },
+  logoOuterGlow: {
+    shadowColor: '#10a37f', // OpenAI signature green glow
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+    marginBottom: 28,
   },
   logoContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
+    width: 68,
+    height: 68,
+    borderRadius: 24, 
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontSize: 34,
+    fontWeight: '800',
+    marginBottom: 10,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '400',
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
+
+  // ── Form ──
   form: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 380, 
     alignSelf: 'center',
   },
+  inputGroup: {
+    marginBottom: 20, 
+  },
+  
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 8,
+    padding: 14,
+    borderRadius: 14, 
+    marginBottom: 24,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)', 
   },
   errorText: {
     fontSize: 14,
+    fontWeight: '500',
     flex: 1,
   },
+  
   loginButton: {
-    marginTop: 8,
+    marginTop: 4,
+    paddingVertical: 16, 
+    borderRadius: 16, 
   },
+
+  // ── Test Credentials Card ──
   testCredentials: {
-    marginTop: 32,
-    padding: 16,
-    borderRadius: 12,
+    marginTop: 48,
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1, 
+  },
+  devCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 16,
   },
   testTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2, 
+  },
+  testList: {
+    gap: 10, 
+    alignItems: 'center',
   },
   testText: {
-    fontSize: 12,
-    marginBottom: 4,
+    fontSize: 14,
+    letterSpacing: 0.3,
   },
+
+  // ── Theme Toggle ──
   themeToggle: {
     position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
+    top: Platform.OS === 'ios' ? 10 : 20,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: 'rgba(128, 128, 128, 0.1)', 
+    borderRadius: 20,
   },
 });

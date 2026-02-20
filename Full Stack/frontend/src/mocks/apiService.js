@@ -15,12 +15,39 @@ const delay = (ms = 200) => new Promise(resolve => setTimeout(resolve, ms));
 // Auth
 export const loginUser = async (username, password) => {
   await delay();
+  console.log('🔍 loginUser called with:', username, password);
   const user = getUserByUsername(username);
+  console.log('🔍 user found:', user?.username || 'NOT FOUND');
+  
   if (!user || user.password !== password) {
-    throw new Error('Invalid credentials');
+    return { success: false, error: 'Invalid credentials' };
   }
   const { password: _, ...userWithoutPassword } = user;
-  return userWithoutPassword;
+  const result = {
+    success: true,
+    user: userWithoutPassword,
+    token: `mock-token-${user.id}-${Date.now()}`,
+  };
+  console.log('🔍 loginUser returning:', result.success);
+  return result;
+};
+
+// Auth - Logout
+export const logoutUser = async () => {
+  await delay();
+  return { success: true };
+};
+
+// Auth - Get stored user (simulates checking AsyncStorage/localStorage)
+export const getStoredUser = async () => {
+  await delay();
+  return null; // No persisted session in mock
+};
+
+// Auth - Get current user (simulates verifying token with server)
+export const getCurrentUser = async () => {
+  await delay();
+  return { success: false }; // No active session in mock
 };
 
 // Issues - with role-based filtering
@@ -28,41 +55,44 @@ export const fetchIssues = async (user) => {
   await delay();
   let filteredIssues = [...issues];
   
-  if (user.role === 'supervisor') {
+  if (user?.role === 'supervisor') {
     const userSites = user.sites || [];
     filteredIssues = issues.filter(issue => userSites.includes(issue.site_id));
-  } else if (user.role === 'problem_solver') {
+  } else if (user?.role === 'problem_solver') {
     const assignedIssueIds = getIssueIdsBySolverId(user.id);
     filteredIssues = issues.filter(issue => assignedIssueIds.includes(issue.id));
   }
-  // Manager sees all issues - no filtering
   
-  return filteredIssues.map(issue => ({
+  const mappedIssues = filteredIssues.map(issue => ({
     ...issue,
     site: getSiteById(issue.site_id),
     assignment: getAssignmentByIssueId(issue.id),
     beforeImage: getImagesByIssueId(issue.id).find(img => img.image_type === 'BEFORE'),
   }));
+
+  return { success: true, issues: mappedIssues };
 };
 
 export const fetchIssueById = async (id) => {
   await delay();
   const issue = getIssueById(id);
-  if (!issue) throw new Error('Issue not found');
+  if (!issue) return { success: false, error: 'Issue not found' };
   
   const assignment = getAssignmentByIssueId(id);
   return {
-    ...issue,
-    site: getSiteById(issue.site_id),
-    assignment,
-    images: getImagesByIssueId(id),
-    history: getHistoryByIssueId(id),
-    callLogs: assignment ? getCallLogsByAssignmentId(assignment.id) : [],
-    raisedBy: getUserById(issue.raised_by_supervisor_id),
-    solver: assignment ? getUserById(assignment.assigned_to_solver_id) : null,
+    success: true,
+    issue: {
+      ...issue,
+      site: getSiteById(issue.site_id),
+      assignment,
+      images: getImagesByIssueId(id),
+      history: getHistoryByIssueId(id),
+      callLogs: assignment ? getCallLogsByAssignmentId(assignment.id) : [],
+      raisedBy: getUserById(issue.raised_by_supervisor_id),
+      solver: assignment ? getUserById(assignment.assigned_to_solver_id) : null,
+    },
   };
 };
-
 export const fetchNotFixedIssues = async (user) => {
   await delay();
   const allIssues = await fetchIssues(user);
@@ -79,27 +109,29 @@ export const fetchFixedIssues = async (user) => {
 export const fetchComplaints = async (user) => {
   await delay();
   let filteredComplaints = [...complaints];
-  
-  if (user.role === 'supervisor') {
+
+  if (user?.role === 'supervisor') {
     filteredComplaints = getComplaintsBySupervisorId(user.id);
-  } else if (user.role === 'problem_solver') {
+  } else if (user?.role === 'problem_solver') {
     filteredComplaints = getComplaintsBySolverId(user.id);
   }
-  // Manager sees all complaints
-  
-  return filteredComplaints.map(complaint => ({
+
+  const mappedComplaints = filteredComplaints.map(complaint => ({
     ...complaint,
     issue: getIssueById(complaint.issue_id),
     raisedBy: getUserById(complaint.raised_by_supervisor_id),
-    targetSolver: complaint.target_solver_id ? getUserById(complaint.target_solver_id) : null,
+    targetSolver: complaint.target_solver_id
+      ? getUserById(complaint.target_solver_id)
+      : null,
   }));
-};
 
+  return { success: true, complaints: mappedComplaints };  // ✅ wrapped
+};
 export const fetchComplaintById = async (id) => {
   await delay();
   const complaint = getComplaintById(id);
   if (!complaint) throw new Error('Complaint not found');
-  
+
   return {
     ...complaint,
     issue: getIssueById(complaint.issue_id),
@@ -113,13 +145,16 @@ export const fetchDashboardData = async (user) => {
   await delay(300);
   const allIssues = await fetchIssues(user);
   const allComplaints = await fetchComplaints(user);
-  
-  const totalIssues = allIssues.length;
-  const notFixedIssues = allIssues.filter(i => NOT_FIXED_STATUSES.includes(i.status)).length;
-  const fixedIssues = allIssues.filter(i => FIXED_STATUSES.includes(i.status)).length;
-  const complaintsCount = allComplaints.length;
-  
-  // Generate trend data for last 7 days
+
+  // ⚠️ Since fetchIssues now returns { success, issues }, extract the array
+  const issuesList = allIssues.issues || [];
+  const complaintsList = allComplaints.complaints || [];
+
+  const totalIssues = issuesList.length;
+  const notFixedIssues = issuesList.filter(i => NOT_FIXED_STATUSES.includes(i.status)).length;
+  const fixedIssues = issuesList.filter(i => FIXED_STATUSES.includes(i.status)).length;
+  const complaintsCount = complaintsList.length;
+
   const trendData = [];
   for (let i = 6; i >= 0; i--) {
     const date = new Date();
@@ -131,25 +166,24 @@ export const fetchDashboardData = async (user) => {
       completed: Math.floor(Math.random() * 4) + 1,
     });
   }
-  
-  // Issue types breakdown
+
   const issueTypeCounts = {};
-  allIssues.forEach(issue => {
+  issuesList.forEach(issue => {
     issueTypeCounts[issue.issue_type] = (issueTypeCounts[issue.issue_type] || 0) + 1;
   });
   const issueTypes = Object.entries(issueTypeCounts).map(([name, count]) => ({ name, count }));
-  
-  // Site comparison (Manager only)
+
   const sitesComparison = sites.map(site => {
-    const siteIssues = allIssues.filter(i => i.site_id === site.id);
+    const siteIssues = issuesList.filter(i => i.site_id === site.id);
     return {
       siteName: site.name.split(' ')[0],
       open: siteIssues.filter(i => NOT_FIXED_STATUSES.includes(i.status)).length,
       completed: siteIssues.filter(i => FIXED_STATUSES.includes(i.status)).length,
     };
   });
-  
+
   return {
+    success: true,
     stats: {
       totalIssues,
       notFixedIssues,

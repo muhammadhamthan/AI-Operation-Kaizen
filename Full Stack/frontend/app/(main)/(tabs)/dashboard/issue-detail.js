@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSmartBack } from '../../../../src/hooks/useSmartBack';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { fetchIssueById, selectCurrentIssue, selectIssuesLoading, clearCurrentIssue } from '../../../../src/store/slices/issuesSlice';
-import Card from '../../../../src/components/common/Card';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import Button from '../../../../src/components/common/Button';
@@ -24,9 +25,29 @@ import CallHistorySection from '../../../../src/components/issue/CallHistorySect
 import Loader from '../../../../src/components/common/Loader';
 
 export default function IssueDetailScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  
+  const { id, fromNotification } = useLocalSearchParams();
+
+  // ── LOGIC UNTOUCHED ──
+  const handleSmartBack = useCallback(() => {
+    if (fromNotification === 'true') {
+      router.replace('/(main)/(tabs)/dashboard');
+      setTimeout(() => {
+        router.navigate('/(main)/(tabs)/chat');
+      }, 100); 
+    } else {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(main)/(tabs)/dashboard');
+      }
+    }
+  }, [fromNotification, router]);
+
+  useSmartBack(handleSmartBack);
+
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
   const issue = useSelector(selectCurrentIssue);
@@ -49,89 +70,112 @@ export default function IssueDetailScreen() {
     return <Loader message="Loading issue details..." />;
   }
 
+  // ── PREMIUM PALETTE ──
+  const bgColor = isDark ? '#212121' : '#f9f9f9';
+  const surfaceColor = isDark ? '#171717' : '#ffffff';
+  const borderColor = isDark ? '#333333' : '#e5e5e5';
+  const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
+      
+      {/* ── HEADER ── */}
+      <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
+        <TouchableOpacity onPress={handleSmartBack} activeOpacity={0.6} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Issue #{issue.id}</Text>
-          <StatusBadge status={issue.status} size="small" />
-        </View>
+        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Issue Info Card */}
-        <Card style={styles.card}>
+        
+        {/* ── ISSUE IDENTITY ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <View style={styles.badgeRow}>
+            <StatusBadge status={issue.status} size="small" />
+            <StatusBadge status={issue.priority} type="priority" size="small" />
+          </View>
           <Text style={[styles.title, { color: theme.text }]}>{issue.title}</Text>
           <Text style={[styles.description, { color: theme.textSecondary }]}>
             {issue.description}
           </Text>
+        </View>
 
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <Ionicons name="location-outline" size={16} color={theme.textSecondary} />
-              <Text style={[styles.infoText, { color: theme.textSecondary }]}>
-                {issue.site?.name}
-              </Text>
+        {/* ── DETAILS ROW ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Details</Text>
+          
+          <View style={styles.infoRow}>
+            <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+              <Ionicons name="location-outline" size={18} color={theme.textSecondary} />
             </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="construct-outline" size={16} color={theme.textSecondary} />
-              <Text style={[styles.infoText, { color: theme.textSecondary }]}>
-                {issue.issue_type}
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="flag-outline" size={16} color={theme.textSecondary} />
-              <StatusBadge status={issue.priority} type="priority" size="small" />
+            <View style={styles.infoContent}>
+              <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Site</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site?.name}</Text>
             </View>
           </View>
-        </Card>
-
-        {/* People Involved */}
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>People Involved</Text>
-          <View style={styles.peopleRow}>
-            <View style={styles.personItem}>
-              <Avatar uri={issue.raisedBy?.avatar} name={issue.raisedBy?.name} size="medium" />
-              <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
-                {issue.raisedBy?.name}
-              </Text>
-              <Text style={[styles.personRole, { color: theme.textSecondary }]}>Raised By</Text>
+          
+          <View style={[styles.infoRow, { marginBottom: 0 }]}>
+            <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+              <Ionicons name="construct-outline" size={18} color={theme.textSecondary} />
             </View>
-            {issue.solver && (
-              <View style={styles.personItem}>
-                <Avatar uri={issue.solver?.avatar} name={issue.solver?.name} size="medium" />
+            <View style={styles.infoContent}>
+              <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Category</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.issue_type}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── PEOPLE INVOLVED ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
+          <View style={styles.peopleGrid}>
+            <View style={[styles.personRow, issue.solver && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <Avatar uri={issue.raisedBy?.avatar} name={issue.raisedBy?.name} size="medium" />
+              <View style={styles.personInfo}>
                 <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
-                  {issue.solver?.name}
+                  {issue.raisedBy?.name}
                 </Text>
-                <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
+                <Text style={[styles.personRole, { color: theme.textSecondary }]}>Raised By</Text>
+              </View>
+            </View>
+            
+            {issue.solver && (
+              <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
+                <Avatar uri={issue.solver?.avatar} name={issue.solver?.name} size="medium" />
+                <View style={styles.personInfo}>
+                  <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
+                    {issue.solver?.name}
+                  </Text>
+                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
+                </View>
               </View>
             )}
           </View>
-        </Card>
+        </View>
 
-        {/* Photos */}
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Photos</Text>
+        {/* ── PHOTOS ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Photos</Text>
           <ImageGallery images={issue.images} />
-        </Card>
+        </View>
 
-        {/* Timeline */}
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Timeline</Text>
+        {/* ── TIMELINE ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Timeline</Text>
           <IssueTimeline history={issue.history || []} />
-        </Card>
+        </View>
 
-        {/* Call History - Solver only */}
+        {/* ── CALL HISTORY (Solver Only) ── */}
         {user?.role === 'problem_solver' && issue.callLogs?.length > 0 && (
-          <CallHistorySection callLogs={issue.callLogs} />
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor, padding: 0, overflow: 'hidden' }]}>
+            {/* Note: CallHistorySection handles its own padding internally in the updated version */}
+            <CallHistorySection callLogs={issue.callLogs} />
+          </View>
         )}
 
-        {/* Action Buttons */}
+        {/* ── ACTIONS ── */}
         <View style={styles.actions}>
           {user?.role === 'supervisor' && (
             <>
@@ -184,90 +228,65 @@ export default function IssueDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
+  container: { flex: 1 },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
     paddingVertical: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backButton: {
-    padding: 4,
+  backButton: { padding: 4, marginLeft: -4 },
+  headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  placeholder: { width: 32 },
+  
+  content: { flex: 1 },
+  
+  card: { 
+    marginHorizontal: 16, 
+    marginTop: 16, 
+    padding: 20 
   },
-  headerCenter: {
+  flatCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: { shadowOpacity: 0 },
+      android: { elevation: 0 },
+    }),
+  },
+
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 8, lineHeight: 28 },
+  description: { fontSize: 15, lineHeight: 24, letterSpacing: -0.1 },
+
+  sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
+  
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 14 },
+  iconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 10, // Squircle shape
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  infoContent: { flex: 1, justifyContent: 'center' },
+  infoLabel: { fontSize: 12, fontWeight: '500', marginBottom: 2 },
+  infoValue: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
+
+  peopleGrid: { flexDirection: 'column' },
+  personRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, 
+    paddingBottom: 12 
   },
-  placeholder: {
-    width: 32,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  card: {
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  infoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  infoText: {
-    fontSize: 14,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  peopleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  personItem: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  personName: {
-    fontSize: 14,
-    fontWeight: '500',
-    maxWidth: 100,
-    textAlign: 'center',
-  },
-  personRole: {
-    fontSize: 12,
-  },
-  actions: {
-    marginTop: 8,
-  },
-  buttonMargin: {
-    marginTop: 12,
-  },
-  bottomPadding: {
-    height: 32,
-  },
+  personInfo: { flex: 1, justifyContent: 'center' },
+  personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
+  personRole: { fontSize: 13 },
+
+  actions: { marginHorizontal: 16, marginTop: 32 },
+  buttonMargin: { marginTop: 12 },
+  bottomPadding: { height: 40 },
 });

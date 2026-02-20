@@ -3,14 +3,14 @@ import { View, Text, Image, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 
 const Avatar = ({ uri, name, size = 'medium', showName = false }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const getSize = () => {
     switch (size) {
       case 'small': return 32;
       case 'large': return 64;
       case 'xlarge': return 120;
-      default: return 44;
+      default: return 44; // medium
     }
   };
 
@@ -24,7 +24,15 @@ const Avatar = ({ uri, name, size = 'medium', showName = false }) => {
   };
 
   const avatarSize = getSize();
-  const initials = name ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '?';
+  // Ensures we only get max 2 letters, perfectly capitalized
+  const initials = name 
+    ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() 
+    : '?';
+
+  // Premium flat color palette for placeholders
+  const placeholderBg = isDark ? '#343541' : '#e5e5e5'; 
+  const placeholderText = isDark ? '#ececec' : '#4b5563';
+  const imageBg = isDark ? '#2f2f2f' : '#f4f4f4';
 
   return (
     <View style={[styles.container, showName && styles.containerWithName]}>
@@ -33,7 +41,12 @@ const Avatar = ({ uri, name, size = 'medium', showName = false }) => {
           source={{ uri }}
           style={[
             styles.image,
-            { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
+            { 
+              width: avatarSize, 
+              height: avatarSize, 
+              borderRadius: avatarSize / 2,
+              backgroundColor: imageBg, // Shows cleanly while loading
+            },
           ]}
         />
       ) : (
@@ -44,17 +57,29 @@ const Avatar = ({ uri, name, size = 'medium', showName = false }) => {
               width: avatarSize,
               height: avatarSize,
               borderRadius: avatarSize / 2,
-              backgroundColor: theme.primary,
+              backgroundColor: placeholderBg,
             },
           ]}
         >
-          <Text style={[styles.initials, { fontSize: getFontSize(), color: '#ffffff' }]}>
+          <Text 
+            style={[
+              styles.initials, 
+              { 
+                fontSize: getFontSize(), 
+                color: placeholderText 
+              }
+            ]}
+          >
             {initials}
           </Text>
         </View>
       )}
+      
       {showName && name && (
-        <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+        <Text 
+          style={[styles.name, { color: theme.text }]} 
+          numberOfLines={1}
+        >
           {name}
         </Text>
       )}
@@ -65,24 +90,32 @@ const Avatar = ({ uri, name, size = 'medium', showName = false }) => {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
   containerWithName: {
-    gap: 8,
+    gap: 8, // Modern flex gap
   },
   image: {
-    backgroundColor: '#e5e7eb',
+    // Subtle border to define the image boundary, especially helpful for dark images in dark mode
+    borderWidth: 1,
+    borderColor: 'rgba(128,128,128,0.1)',
   },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(128,128,128,0.1)', // Matches image border logic
   },
   initials: {
     fontWeight: '600',
+    letterSpacing: 0.5, // Slight tracking makes initials look much more intentional
   },
   name: {
     fontSize: 14,
     fontWeight: '500',
     maxWidth: 100,
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
 });
 
