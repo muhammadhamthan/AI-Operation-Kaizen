@@ -126,7 +126,7 @@ async def send_chat_message(
 ):
     """
     No auth required — user is handled inside chatbot_service.
-    Frontend: POST /api/v1/chat/message
+    Frontend: POST /api/v1/chat
     Body: {"message": "...", "image_url": null, "issue_id": null}
     """
     chatbot_service = ChatbotService(db)

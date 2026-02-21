@@ -8,12 +8,12 @@ import { Platform } from 'react-native';
 // ==================================================
 const getBaseUrl = () => {
   if (Platform.OS === 'web') {
-    return 'http://localhost:8000/api/v1';
+    return 'ai-operation-kaizen-v3.vercel.app/api/v1';
   }
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
+    return 'ai-operation-kaizen-v3.vercel.app/api/v1';
   }
-  return 'http://localhost:8000/api/v1';
+  return 'ai-operation-kaizen-v3.vercel.app/api/v1';
 };
 
 const API_BASE_URL = getBaseUrl();
@@ -56,7 +56,7 @@ export const sendChatMessage = async (message, issueId = null, imageUrl = null) 
 
     console.log('💬 Sending:', payload);
 
-    const response = await api.post('/chat/message', payload);
+    const response = await api.post('/chat', payload);
 
     console.log('🤖 Response:', response.data);
 
