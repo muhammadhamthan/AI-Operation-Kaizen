@@ -119,7 +119,7 @@ from app.schemas.chatbot_schema import (
 router = APIRouter()
 
 
-@router.post("/message", response_model=ChatResponse)
+@router.post("/", response_model=ChatResponse)
 async def send_chat_message(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
