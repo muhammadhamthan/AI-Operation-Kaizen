@@ -192,6 +192,7 @@ class ChatbotService:
         try:
             from app.services.ai_service import sql_agent
             agent_response = sql_agent(message)
+            print(f"Agent response: {agent_response}")
 
             from app.schemas.chatbot_schema import ChatResponse
             return ChatResponse(

@@ -119,14 +119,14 @@ from app.schemas.chatbot_schema import (
 router = APIRouter()
 
 
-@router.post("/message", response_model=ChatResponse)
+@router.post("/", response_model=ChatResponse)
 async def send_chat_message(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
     No auth required — user is handled inside chatbot_service.
-    Frontend: POST /api/v1/chat/message
+    Frontend: POST /api/v1/chat
     Body: {"message": "...", "image_url": null, "issue_id": null}
     """
     chatbot_service = ChatbotService(db)
