@@ -1,134 +1,96 @@
-// src/store/slices/chatSlice.js
-
-import { createSlice } from '@reduxjs/toolkit';
-
-// ══════════════════════════════════════════════════
-// INITIAL STATE
-// ══════════════════════════════════════════════════
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { fetchChatHistory, fetchChatMessages } from '../../mocks/apiService';
 
 const initialState = {
   messages: [],
-  sending: false,
+  chatHistory: [],
+  currentConversationId: null,
   loading: false,
   error: null,
+  context: null,
 };
 
-// ══════════════════════════════════════════════════
-// SLICE (no async thunks — chat.js calls API directly)
-// ══════════════════════════════════════════════════
+export const loadChatHistory = createAsyncThunk(
+  'chat/loadHistory',
+  async (_, { rejectWithValue }) => {
+    try {
+      const history = await fetchChatHistory();
+      return history;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const loadConversation = createAsyncThunk(
+  'chat/loadConversation',
+  async (conversationId, { rejectWithValue }) => {
+    try {
+      const messages = await fetchChatMessages(conversationId);
+      return { conversationId, messages };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
 
 const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
-    // Add a single message (user or AI)
     addMessage: (state, action) => {
       state.messages.push(action.payload);
     },
-
-    // Add user message
-    addUserMessage: (state, action) => {
-      state.messages.push({
-        id: Date.now(),
-        role: 'user',
-        message: action.payload.message,
-        userName: action.payload.userName || 'You',
-        createdAt: new Date().toISOString(),
-      });
-    },
-
-    // Add AI response
-    addAIMessage: (state, action) => {
-      // Remove typing indicator first
-      state.messages = state.messages.filter((m) => !m.isTyping);
-      state.messages.push({
-        id: Date.now() + 1,
-        role: 'ai',
-        message: action.payload.message,
-        intent: action.payload.intent || null,
-        createdAt: new Date().toISOString(),
-      });
-      state.sending = false;
-    },
-
-    // Add typing indicator
-    setTyping: (state) => {
-      state.sending = true;
-      state.messages.push({
-        id: 'typing',
-        role: 'ai',
-        message: '⏳ Thinking...',
-        isTyping: true,
-        createdAt: new Date().toISOString(),
-      });
-    },
-
-    // Remove typing indicator on error
-    setError: (state, action) => {
-      state.sending = false;
-      state.messages = state.messages.filter((m) => !m.isTyping);
-      state.messages.push({
-        id: Date.now() + 2,
-        role: 'ai',
-        message: `❌ ${action.payload || 'Something went wrong'}`,
-        createdAt: new Date().toISOString(),
-      });
-      state.error = action.payload;
-    },
-
-    // Load history from backend
     setMessages: (state, action) => {
       state.messages = action.payload;
-      state.loading = false;
     },
-
-    // Set loading state
-    setLoading: (state, action) => {
-      state.loading = action.payload;
+    setContext: (state, action) => {
+      state.context = action.payload;
     },
-
-    // Clear all messages
-    clearChat: (state) => {
+    clearMessages: (state) => {
       state.messages = [];
-      state.error = null;
-      state.sending = false;
-      state.loading = false;
+      state.currentConversationId = null;
     },
-
-    // Clear error only
-    clearError: (state) => {
-      state.error = null;
+    startNewConversation: (state) => {
+      state.messages = [];
+      state.currentConversationId = `conv_${Date.now()}`;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(loadChatHistory.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(loadChatHistory.fulfilled, (state, action) => {
+        state.loading = false;
+        state.chatHistory = action.payload;
+      })
+      .addCase(loadChatHistory.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(loadConversation.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(loadConversation.fulfilled, (state, action) => {
+        state.loading = false;
+        state.messages = action.payload.messages;
+        state.currentConversationId = action.payload.conversationId;
+      })
+      .addCase(loadConversation.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
   },
 });
 
-// ══════════════════════════════════════════════════
-// ACTIONS
-// ══════════════════════════════════════════════════
+export const { addMessage, setMessages, setContext, clearMessages, startNewConversation } = chatSlice.actions;
 
-export const {
-  addMessage,
-  addUserMessage,
-  addAIMessage,
-  setTyping,
-  setError,
-  setMessages,
-  setLoading,
-  clearChat,
-  clearError,
-} = chatSlice.actions;
-
-// ══════════════════════════════════════════════════
-// SELECTORS (all properly accept state)
-// ══════════════════════════════════════════════════
-
-export const selectMessages = (state) => state.chat.messages;
-export const selectChatSending = (state) => state.chat.sending;
+// Selectors
+export const selectAllMessages = (state) => state.chat.messages;
+export const selectChatHistory = (state) => state.chat.chatHistory;
+export const selectCurrentConversationId = (state) => state.chat.currentConversationId;
 export const selectChatLoading = (state) => state.chat.loading;
-export const selectChatError = (state) => state.chat.error;
-
-// ══════════════════════════════════════════════════
-// REDUCER
-// ══════════════════════════════════════════════════
+export const selectContext = (state) => state.chat.context;
 
 export default chatSlice.reducer;
