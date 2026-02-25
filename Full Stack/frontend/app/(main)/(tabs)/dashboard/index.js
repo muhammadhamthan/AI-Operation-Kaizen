@@ -23,6 +23,8 @@ import ChartDownloadButton from '../../../../src/components/dashboard/ChartDownl
 import Loader from '../../../../src/components/common/Loader';
 import Avatar from '../../../../src/components/common/Avatar';
 import Toast from '../../../../src/components/common/Toast';
+import { sites } from '../../../../src/mocks/sites';
+import { users } from '../../../../src/mocks/users';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -35,12 +37,11 @@ export default function DashboardScreen() {
   const charts = useSelector(selectCharts);
   const loading = useSelector(selectDashboardLoading);
   const isOnline = useSelector(selectIsOnline);
-  
+
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
-  // 📸 REFS FOR PDF CAPTURE
   const lineChartRef = useRef();
   const pieChartRef = useRef();
   const barChartRef = useRef();
@@ -70,7 +71,6 @@ export default function DashboardScreen() {
 
   if (loading) return <Loader message="Analyzing data..." />;
 
-  // ── PREMIUM CHART CONFIG ──
   const chartConfig = {
     backgroundColor: isDark ? '#171717' : '#ffffff',
     backgroundGradientFrom: isDark ? '#171717' : '#ffffff',
@@ -87,8 +87,8 @@ export default function DashboardScreen() {
   const lineData = {
     labels: charts.trend?.map(d => d.day) || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets: [
-      { data: charts.trend?.map(d => d.created) || [3, 4, 2, 5, 4, 3, 2], color: () => '#ef4444' }, // Red
-      { data: charts.trend?.map(d => d.completed) || [2, 3, 3, 4, 3, 2, 3], color: () => '#10a37f' }, // OpenAI Green
+      { data: charts.trend?.map(d => d.created) || [3, 4, 2, 5, 4, 3, 2], color: () => '#ef4444' },
+      { data: charts.trend?.map(d => d.completed) || [2, 3, 3, 4, 3, 2, 3], color: () => '#10a37f' },
     ],
     legend: ['Created', 'Completed'],
   };
@@ -101,15 +101,39 @@ export default function DashboardScreen() {
     legendFontColor: theme.text,
     legendFontSize: 12,
   })) || [
-    { name: 'Plumbing', population: 8, color: '#10a37f', legendFontColor: theme.text, legendFontSize: 12 },
-    { name: 'Electrical', population: 6, color: '#3b82f6', legendFontColor: theme.text, legendFontSize: 12 },
-    { name: 'HVAC', population: 4, color: '#ef4444', legendFontColor: theme.text, legendFontSize: 12 },
-  ];
+      { name: 'Plumbing', population: 8, color: '#10a37f', legendFontColor: theme.text, legendFontSize: 12 },
+      { name: 'Electrical', population: 6, color: '#3b82f6', legendFontColor: theme.text, legendFontSize: 12 },
+      { name: 'HVAC', population: 4, color: '#ef4444', legendFontColor: theme.text, legendFontSize: 12 },
+    ];
+
+  const allSolvers = users.filter(u => u.role === 'problem_solver').length;
+  const sitesCount = 
+    user?.role === 'manager' 
+      ? sites.length 
+      : user?.role === 'supervisor' 
+        ? user.sites?.length || 2 
+        : 1;
+  const teamCount = 
+    user?.role === 'manager' 
+      ? allSolvers 
+      : user?.role === 'supervisor' 
+        ? 3 
+        : 1;
+
+  const solverFirstName = user?.name ? user.name.split(' ')[0] : 'My';
+
+  // ── FIX: CALCULATE SUCCESS RATE SAFELY ──
+  const fixedCount = stats?.fixedIssues || 0;
+  const notFixedCount = stats?.notFixedIssues || 0;
+  const totalTasks = fixedCount + notFixedCount;
+  
+  // If stats.successRate exists, use it. Otherwise calculate it (defaulting to 100% if no tasks exist)
+  const displaySuccessRate = stats?.successRate !== undefined 
+    ? stats.successRate 
+    : (totalTasks > 0 ? Math.round((fixedCount / totalTasks) * 100) : 100);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
-      
-      {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
         <View>
           <Text style={[styles.greeting, { color: theme.textSecondary }]}>Analytics Overview</Text>
@@ -120,94 +144,82 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollArea} 
+      <ScrollView
+        style={styles.scrollArea}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
       >
-        
-        {/* ── KEY METRICS ── */}
         <View style={styles.statsContainer}>
           <View style={styles.statsRow}>
-            <DashboardCard title="Pending" count={stats.notFixedIssues} icon="time-outline" color="#f59e0b" onPress={() => router.push('/(main)/(tabs)/dashboard/not-fixed')} />
-            <DashboardCard title="Resolved" count={stats.fixedIssues} icon="checkmark-done" color="#10a37f" onPress={() => router.push('/(main)/(tabs)/dashboard/fixed')} />
+            <DashboardCard title="Pending" count={notFixedCount} icon="time-outline" color="#f59e0b" onPress={() => router.push('/(main)/(tabs)/dashboard/not-fixed')} />
+            <DashboardCard title="Resolved" count={fixedCount} icon="checkmark-done" color="#10a37f" onPress={() => router.push('/(main)/(tabs)/dashboard/fixed')} />
           </View>
-          <DashboardCard title="Escalated Complaints" count={stats.complaints} icon="warning-outline" color="#ef4444" onPress={() => router.push('/(main)/(tabs)/dashboard/complaints')} style={styles.fullWidthCard} />
+          
+          {(user?.role === 'manager' || user?.role === 'supervisor') && (
+            <>
+              <DashboardCard title="Escalated Complaints" count={stats?.complaints || 0} icon="warning-outline" color="#ef4444" onPress={() => router.push('/(main)/(tabs)/dashboard/complaints')} style={styles.fullWidthCard} />
+              <View style={styles.statsRow}>
+                <DashboardCard title="Sites" count={sitesCount} icon="business-outline" color="#3b82f6" onPress={() => router.push('/(main)/(tabs)/dashboard/sites')} />
+                <DashboardCard title="Team" count={teamCount} icon="people-outline" color="#8b5cf6" onPress={() => router.push('/(main)/(tabs)/dashboard/solvers')} />
+              </View>
+            </>
+          )}
+
+          {user?.role === 'problem_solver' && (
+            <>
+              <DashboardCard 
+                title={`${solverFirstName}'s Analytics`} 
+                count="View Full Profile" 
+                icon="person-circle-outline" 
+                color="#8b5cf6" 
+                onPress={() => router.push('/(main)/(tabs)/dashboard/solver-profile')} 
+                style={styles.fullWidthCard} 
+              />
+              
+              <View style={styles.statsRow}>
+              
+                <DashboardCard title="Success Rate" count={`${displaySuccessRate}%`} icon="star-outline" color="#10a37f" onPress={() => router.push('/(main)/(tabs)/dashboard/solver-profile')} />
+              </View>
+            </>
+          )}
         </View>
 
-        {/* ── LINE CHART ── */}
+        {/* ... (Charts remain exactly the same) ... */}
         <View style={[styles.chartCard, { backgroundColor: isDark ? '#171717' : '#ffffff', borderColor: isDark ? '#333' : '#e5e5e5' }]}>
           <Text style={[styles.chartTitle, { color: theme.text }]}>Volume Over Time</Text>
           <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>7-day rolling average of issue creation vs completion.</Text>
-          
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {/* 🚀 Changed to View with collapsable={false} for Web/PDF Fix */}
             <View ref={lineChartRef} collapsable={false} style={{ backgroundColor: isDark ? '#171717' : '#ffffff', paddingRight: 16 }}>
-              <LineChart
-                data={lineData}
-                width={SCREEN_WIDTH - 32}
-                height={220}
-                chartConfig={chartConfig}
-                bezier
-                style={styles.chart}
-                withInnerLines={true}
-                withOuterLines={false}
-              />
+              <LineChart data={lineData} width={SCREEN_WIDTH - 32} height={220} chartConfig={chartConfig} bezier style={styles.chart} withInnerLines={true} withOuterLines={false} />
             </View>
           </ScrollView>
-          <ChartDownloadButton viewShotRef={lineChartRef} chartType="Volume Over Time" />
+          <ChartDownloadButton chartType="Volume Over Time" chartData={charts.trend} />
         </View>
 
-        {/* ── PIE CHART ── */}
         <View style={[styles.chartCard, { backgroundColor: isDark ? '#171717' : '#ffffff', borderColor: isDark ? '#333' : '#e5e5e5' }]}>
           <Text style={[styles.chartTitle, { color: theme.text }]}>Category Breakdown</Text>
           <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>Distribution of issues by maintenance category.</Text>
-          
           <View ref={pieChartRef} collapsable={false} style={{ backgroundColor: isDark ? '#171717' : '#ffffff', alignItems: 'center' }}>
-            <PieChart
-              data={pieData}
-              width={SCREEN_WIDTH - 64}
-              height={200}
-              chartConfig={chartConfig}
-              accessor="population"
-              backgroundColor="transparent"
-              paddingLeft="15"
-              absolute
-            />
+            <PieChart data={pieData} width={SCREEN_WIDTH - 64} height={200} chartConfig={chartConfig} accessor="population" backgroundColor="transparent" paddingLeft="15" absolute />
           </View>
-          <ChartDownloadButton viewShotRef={pieChartRef} chartType="Category Breakdown" />
+          <ChartDownloadButton chartType="Category Breakdown" chartData={charts.issueTypes} />
         </View>
 
-        {/* ── BAR CHART (Manager Only) ── */}
         {user?.role === 'manager' && (
           <View style={[styles.chartCard, { backgroundColor: isDark ? '#171717' : '#ffffff', borderColor: isDark ? '#333' : '#e5e5e5' }]}>
             <Text style={[styles.chartTitle, { color: theme.text }]}>Site Performance</Text>
             <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>Total issues handled per location.</Text>
-            
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View ref={barChartRef} collapsable={false} style={{ backgroundColor: isDark ? '#171717' : '#ffffff', paddingRight: 16 }}>
-                <BarChart
-                  data={{
-                    labels: charts.sitesComparison?.map(s => s.siteName.substring(0, 5)) || ['Vepery', 'Ambat', 'Guindy', 'Perun', 'Taram'],
-                    datasets: [{ data: charts.sitesComparison?.map(s => s.open + s.completed) || [8, 6, 7, 5, 4] }],
-                  }}
-                  width={SCREEN_WIDTH - 32}
-                  height={220}
-                  chartConfig={{ ...chartConfig, color: () => '#3b82f6' }}
-                  style={styles.chart}
-                  showValuesOnTopOfBars
-                  withInnerLines={false}
-                />
+                <BarChart data={{ labels: charts.sitesComparison?.map(s => s.siteName.substring(0, 5)) || ['Vepery', 'Ambat', 'Guindy', 'Perun', 'Taram'], datasets: [{ data: charts.sitesComparison?.map(s => s.open + s.completed) || [8, 6, 7, 5, 4] }] }} width={SCREEN_WIDTH - 32} height={220} chartConfig={{ ...chartConfig, color: () => '#3b82f6' }} style={styles.chart} showValuesOnTopOfBars withInnerLines={false} />
               </View>
             </ScrollView>
-            <ChartDownloadButton viewShotRef={barChartRef} chartType="Site Performance" />
+            <ChartDownloadButton chartType="Site Performance" chartData={charts.sitesComparison} />
           </View>
         )}
-
         <View style={styles.bottomPadding} />
       </ScrollView>
-
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -216,31 +228,14 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollArea: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 20 : 10,
-    paddingBottom: 20,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 20 : 10, paddingBottom: 20 },
   greeting: { fontSize: 14, fontWeight: '500', marginBottom: 4 },
   userName: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   content: { padding: 16 },
   statsContainer: { marginBottom: 24 },
-  statsRow: { flexDirection: 'row', marginBottom: 12 },
-  fullWidthCard: { flex: 1, marginRight: 0 },
-  chartCard: {
-    marginBottom: 20,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    // Modern Flat shadow (very subtle)
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8 },
-      android: { elevation: 1 },
-    }),
-  },
+  statsRow: { flexDirection: 'row', marginBottom: 12, gap: 12 },
+  fullWidthCard: { flex: 1, marginBottom: 12 },
+  chartCard: { marginBottom: 20, padding: 20, borderRadius: 16, borderWidth: 1, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8 }, android: { elevation: 1 } }) },
   chartTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4 },
   chartSubtitle: { fontSize: 13, marginBottom: 24, lineHeight: 18 },
   chart: { borderRadius: 12, marginLeft: -10 },

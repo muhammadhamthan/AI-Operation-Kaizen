@@ -93,25 +93,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── PERFORMANCE METRICS ── */}
-        {stats.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Performance Metrics</Text>
-            <View style={styles.statsGrid}>
-              {stats.map((stat, index) => (
-                <View key={index} style={[styles.statCard, { backgroundColor: surfaceColor, borderColor }]}>
-                  <View style={[styles.statIconContainer, { backgroundColor: iconBg }]}>
-                    <Ionicons name={stat.icon} size={18} color={theme.textSecondary} />
-                  </View>
-                  <View style={styles.statInfo}>
-                    <Text style={[styles.statValue, { color: theme.text }]}>{stat.value}</Text>
-                    <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{stat.label}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
+     
 
         {/* ── ACCOUNT SETTINGS ── */}
         <View style={styles.section}>

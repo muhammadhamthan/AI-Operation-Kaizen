@@ -27,8 +27,11 @@ import FilterModal from '../../../../src/components/modals/FilterModal';
 import { useDebounce } from '../../../../src/hooks/useDebounce';
 import { sites } from '../../../../src/mocks/sites';
 
+// ── FIX: Import the assignment lookup helper ──
+import { getIssueIdsBySolverId } from '../../../../src/mocks/issueAssignments';
+
 export default function IssuesTabScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Added isDark for precise monochrome shading
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
@@ -52,15 +55,29 @@ export default function IssuesTabScreen() {
 
   const debouncedSearch = useDebounce(searchText, 300);
 
-  // ── LOGIC UNTOUCHED ──
   useEffect(() => {
     if (user) dispatch(fetchIssues(user));
-  }, [user]);
+  }, [user, dispatch]);
 
   const filteredIssues = useMemo(() => {
     if (!allIssues) return [];
     
+    // ── FIX: Pre-fetch assigned IDs if the user is a problem solver ──
+    const assignedIds = user?.role === 'problem_solver' ? getIssueIdsBySolverId(user.id) : [];
+    const userSites = user?.sites || [];
+    
     return allIssues.filter(issue => {
+      // ── FIX: Role-Based Filtering Security Clamp ──
+      // Problem solvers only see issues assigned to them
+      if (user?.role === 'problem_solver' && !assignedIds.includes(issue.id)) {
+        return false;
+      }
+      // Supervisors only see issues from their assigned sites
+      if (user?.role === 'supervisor' && !userSites.includes(issue.site_id)) {
+        return false;
+      }
+
+      // ── Search & Filter Logic ──
       if (debouncedSearch) {
         const searchLower = debouncedSearch.toLowerCase();
         const matchesSearch = 
@@ -95,7 +112,7 @@ export default function IssuesTabScreen() {
 
       return true;
     });
-  }, [allIssues, debouncedSearch, appliedFilters]);
+  }, [allIssues, debouncedSearch, appliedFilters, user]);
 
   const onRefresh = useCallback(async () => {
     if (!isOnline) {
@@ -113,7 +130,7 @@ export default function IssuesTabScreen() {
     if (user) await dispatch(fetchIssues(user));
     setLastRefresh(Date.now());
     setRefreshing(false);
-  }, [user, isOnline, lastRefresh]);
+  }, [user, isOnline, lastRefresh, dispatch]);
 
   const handleIssuePress = (issue) => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } });
   const handleApplyFilters = (filters) => setAppliedFilters(filters);
@@ -136,7 +153,6 @@ export default function IssuesTabScreen() {
   const hasActiveFilters = getActiveFilterCount() > 0 || searchText !== '';
   const activeFilterCount = getActiveFilterCount();
 
-  // ── PREMIUM MONOCHROME PALETTE ──
   const activeBg = isDark ? '#ffffff' : '#101010';
   const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -205,7 +221,6 @@ export default function IssuesTabScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }]}>
       
-      {/* ── HEADER ── */}
       <View style={[styles.header, { borderBottomColor: borderColor }]}>
         <View>
           <Text style={[styles.headerTitle, { color: theme.text }]}>All Issues</Text>
@@ -227,7 +242,6 @@ export default function IssuesTabScreen() {
         ListHeaderComponent={
           <View style={styles.headerComponentWrapper}>
             
-            {/* ── SEARCH & FILTER ROW ── */}
             <View style={styles.searchContainer}>
               <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
                 <Ionicons name="search" size={18} color={theme.textSecondary} />
@@ -269,7 +283,6 @@ export default function IssuesTabScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* ── ACTIVE FILTER CHIPS ── */}
             {hasActiveFilters && (
               <View style={styles.activeFiltersContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeChipsScroll}>
@@ -281,7 +294,6 @@ export default function IssuesTabScreen() {
               </View>
             )}
 
-            {/* ── RESULTS COUNT ── */}
             <View style={styles.resultsHeader}>
               <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
                 {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
@@ -342,8 +354,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     paddingHorizontal: 14, 
-    height: 44, // Fixed height for exact alignment
-    borderRadius: 12, // Squircle 
+    height: 44,
+    borderRadius: 12, 
     borderWidth: 1,
     gap: 8 
   },
@@ -351,7 +363,7 @@ const styles = StyleSheet.create({
   filterButton: { 
     width: 44, 
     height: 44, 
-    borderRadius: 12, // Match input squircle
+    borderRadius: 12,
     borderWidth: 1,
     justifyContent: 'center', 
     alignItems: 'center', 
@@ -361,14 +373,14 @@ const styles = StyleSheet.create({
     position: 'absolute', 
     top: -6, 
     right: -6, 
-    backgroundColor: '#ef4444', // Kept red for high-alert visibility
+    backgroundColor: '#ef4444',
     width: 18, 
     height: 18, 
     borderRadius: 9, 
     justifyContent: 'center', 
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#ffffff', // Cuts into the button shape elegantly
+    borderColor: '#ffffff',
   },
   filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   
