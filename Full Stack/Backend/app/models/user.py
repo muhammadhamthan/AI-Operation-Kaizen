@@ -43,6 +43,12 @@ class User(Base):
         nullable=False,
         comment="supervisor | problemsolver | manager",
     )
+    password_hash = Column(
+        String(255),
+        nullable=False,
+        server_default="",
+        comment="Hashed password for authentication",
+    )
     #IT IS ADDITIONL
     is_active = Column(
         Boolean,

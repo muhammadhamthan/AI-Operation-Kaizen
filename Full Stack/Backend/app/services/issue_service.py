@@ -297,7 +297,7 @@ class IssueService:
             return ChatResponse(message=f"Issue #{issue_id} not found.", intent="update_issue", actions_taken=[])
 
         actions = []
-        new_pri = entities.get("priority")
+        new_pri = entities.get("priority") 
         if new_pri:
             try:
                 p = Priority(new_pri.lower())

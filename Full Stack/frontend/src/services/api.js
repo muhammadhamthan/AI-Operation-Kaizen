@@ -10,27 +10,28 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
 
-// API Base URL - Backend is on port 8001
-const getBaseUrl = () => {
-  // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || 
-                     process.env.EXPO_PUBLIC_BACKEND_URL;
+// // API Base URL - Backend is on port 8001
+// const getBaseUrl = () => {
+//   // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
+//   const backendUrl = 'http://127.0.0.1:8000';
   
-  if (backendUrl) {
-    return `${backendUrl}/api`;
-  }
+//   // if (backendUrl) {
+//   //   return `${backendUrl}/api`;
+//   // }
   
-  // For local development
-  if (Platform.OS === 'web') {
-    // Use relative URL which will be proxied
-    return 'http://localhost:8001/api';
-  }
+//   // // For local development
+//   // if (Platform.OS === 'web') {
+//   //   // Use relative URL which will be proxied
+//   //   return 'http://localhost:8001/api';
+//   // }
   
-  // Native apps need full URL
-  return 'http://localhost:8001/api';
-};
+//   // Native apps need full URL
+//   return 'http://localhost:8001/api';
+// };
 
-const API_BASE_URL = getBaseUrl();
+const backendUrl = 'http://127.0.0.1:8000';
+
+const API_BASE_URL = backendUrl;
 
 console.log('API Base URL:', API_BASE_URL);
 
@@ -81,16 +82,10 @@ api.interceptors.response.use(
  */
 export const loginUser = async (username, password) => {
   try {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    const response = await api.post('/auth/login', formData.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+    const response = await api.post('/api/v1/auth/login', {
+        phone: username,   // IMPORTANT: match backend field
+        password: password,
     });
-
     const { access_token, user } = response.data;
 
     // Store token and user
@@ -119,7 +114,7 @@ export const loginUser = async (username, password) => {
  */
 export const getCurrentUser = async () => {
   try {
-    const response = await api.get('/auth/me');
+    const response = await api.get('/api/v1/auth/me');
     return {
       success: true,
       user: {
@@ -345,8 +340,28 @@ export const sendChatMessage = async (text, currentIssueId = null, imageUrl = nu
     }
   };
 
-  const response = await axios.post(`${API_URL}/chat`, requestBody);
+  const response = await axios.post(`/api/v1/chat`, requestBody);
   return response.data;
+};
+
+export const fetchChatHistory = async () => {
+  try {
+    const response = await api.get('/api/v1/chat/history');
+    return response.data;
+  } catch (error) {
+    console.error('Fetch chat history error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const fetchChatMessages = async (conversationId) => {
+  try {
+    const response = await api.get(`/api/v1/chat/${conversationId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Fetch chat messages error:', error.response?.data || error.message);
+    throw error;
+  }
 };
 
 // ==================== HEALTH CHECK ====================

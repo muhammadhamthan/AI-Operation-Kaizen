@@ -31,6 +31,7 @@ import ChatInput from '../../../src/components/chat/ChatInput';
 import ChatHistorySidebar from '../../../src/components/chat/ChatHistorySidebar';
 import Avatar from '../../../src/components/common/Avatar';
 import { navigateToNotification } from '../../../src/utils/notificationNavigation';
+import { sendChatMessage } from '../../../src/services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = 280;
@@ -95,39 +96,66 @@ export default function ChatScreen() {
   };
 
   // 🚀 THE FIX: Now accepts text, image, AND location!
-  const handleSendMessage = (text, image = null, location = null) => {
-    const userMessage = {
-      id: Date.now(),
-      message: text || '', 
-      image: image,        
-      location: location,  // 📍 NEW: Store the location payload in Redux
-      role_in_chat: 'user',
-      user_id: user?.id,
+  // const handleSendMessage = (text, image = null, location = null) => {
+  //   const userMessage = {
+  //     id: Date.now(),
+  //     message: text || '', 
+  //     image: image,        
+  //     location: location,  // 📍 NEW: Store the location payload in Redux
+  //     role_in_chat: 'user',
+  //     user_id: user?.id,
+  //     created_at: new Date().toISOString(),
+  //   };
+  //   console.log("message dispatched ",userMessage)
+  //   dispatch(addMessage(userMessage));
+
+  //   // Smart AI response logic acknowledging the new data types
+  //   setTimeout(() => {
+  //     let responseText = '';
+      
+  //     if (image || location) {
+  //       responseText = `I received your ${image ? 'image' : ''}${image && location ? ' and ' : ''}${location ? 'location data' : ''}${text ? ` along with your message: "${text}"` : '.'}\n\nIn Phase 2-3, this will automatically generate a fully enriched maintenance ticket.`;
+  //     } else {
+  //       responseText = `I understand you asked about: "${text}"\n\nThis is a placeholder response. In Phase 2-3, this will be connected to an actual AI assistant.`;
+  //     }
+
+  //     const aiMessage = {
+  //       id: Date.now() + 1,
+  //       message: responseText,
+  //       role_in_chat: 'assistant',
+  //       user_id: null,
+  //       created_at: new Date().toISOString(),
+  //     };
+  //     dispatch(addMessage(aiMessage));
+  //   }, 1000);
+  // };
+
+
+  const handleSendMessage = async (text, image = null, location = null) => {
+  const userMessage = {
+    id: Date.now(),
+    message: text,
+    role_in_chat: 'user',
+    created_at: new Date().toISOString(),
+  };
+
+  dispatch(addMessage(userMessage));
+
+  try {
+    const response = await sendChatMessage(text);
+
+    const aiMessage = {
+      id: Date.now() + 1,
+      message: response.reply, // depends on backend response
+      role_in_chat: 'assistant',
       created_at: new Date().toISOString(),
     };
-    console.log("message dispatched ",userMessage)
-    dispatch(addMessage(userMessage));
 
-    // Smart AI response logic acknowledging the new data types
-    setTimeout(() => {
-      let responseText = '';
-      
-      if (image || location) {
-        responseText = `I received your ${image ? 'image' : ''}${image && location ? ' and ' : ''}${location ? 'location data' : ''}${text ? ` along with your message: "${text}"` : '.'}\n\nIn Phase 2-3, this will automatically generate a fully enriched maintenance ticket.`;
-      } else {
-        responseText = `I understand you asked about: "${text}"\n\nThis is a placeholder response. In Phase 2-3, this will be connected to an actual AI assistant.`;
-      }
-
-      const aiMessage = {
-        id: Date.now() + 1,
-        message: responseText,
-        role_in_chat: 'assistant',
-        user_id: null,
-        created_at: new Date().toISOString(),
-      };
-      dispatch(addMessage(aiMessage));
-    }, 1000);
-  };
+    dispatch(addMessage(aiMessage));
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   const handleSuggestionPress = (text) => {
     handleSendMessage(text);
