@@ -131,3 +131,10 @@ zipp==3.23.0
 uvicorn[standard]
 python-jose[cryptography]
 passlib[bcrypt]
+
+
+langchain>=0.3,<0.4
+langchain-community>=0.3,<0.4
+langchain-core>=0.3,<0.4
+twilio
+langchain-groq==0.2.5

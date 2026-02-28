@@ -43,7 +43,7 @@ const ChatHistorySidebar = ({ conversations, onSelectConversation, onNewChat, se
             ]}
             numberOfLines={1}
           >
-            {item.firstMessage}
+            {item.title}
           </Text>
           <View style={styles.metaRow}>
             <Text style={[styles.timeText, { color: mutedColor }]}>

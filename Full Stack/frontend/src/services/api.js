@@ -327,40 +327,68 @@ export const fetchSites = async () => {
  * Send message to chatbot
  */
 // chatService.js 
-export const sendChatMessage = async (text, currentIssueId = null, imageUrl = null) => {
-  const requestBody = {
-    message: text,
-    image_url: imageUrl, // URL from ImageKit
-    issue_id: currentIssueId, 
-    metadata: {
-      screen: "chat_main",
-      timestamp: new Date().toISOString(),
-      platform: Platform.OS,
-      // You can add GPS here later if needed
-    }
-  };
-
-  const response = await axios.post(`/api/v1/chat`, requestBody);
-  return response.data;
-};
-
-export const fetchChatHistory = async () => {
+export const sendChatMessage = async (
+  text,
+  sessionId = null,
+  currentIssueId = null,
+  imageUrl = null
+) => {
   try {
-    const response = await api.get('/api/v1/chat/history');
-    return response.data;
+    const requestBody = {
+      message: text,
+      session_id: sessionId,   // ✅ VERY IMPORTANT
+      image_url: imageUrl,
+      issue_id: currentIssueId,
+      metadata: {
+        platform: Platform.OS,
+        timestamp: new Date().toISOString(),
+      }
+    };
+
+    const response = await api.post('/api/v1/chat/', requestBody);
+
+    return {
+      success: true,
+      data: response.data,
+    };
   } catch (error) {
-    console.error('Fetch chat history error:', error.response?.data || error.message);
-    throw error;
+    console.error("Chat send error:", error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data?.detail || "Failed to send message",
+    };
   }
 };
 
-export const fetchChatMessages = async (conversationId) => {
+export const fetchChatSessions = async () => {
   try {
-    const response = await api.get(`/api/v1/chat/${conversationId}`);
-    return response.data;
+    const response = await api.get('/api/v1/chat/sessions');
+    return {
+      success: true,
+      sessions: response.data.sessions,
+    };
   } catch (error) {
-    console.error('Fetch chat messages error:', error.response?.data || error.message);
-    throw error;
+    console.error("Fetch sessions error:", error.response?.data || error.message);
+    return {
+      success: false,
+      sessions: [],
+    };
+  }
+};
+
+export const fetchSessionDetail = async (sessionId) => {
+  try {
+    const response = await api.get(`/api/v1/chat/sessions/${sessionId}`);
+    return {
+      success: true,
+      session: response.data,
+    };
+  } catch (error) {
+    console.error("Fetch session detail error:", error.response?.data || error.message);
+    return {
+      success: false,
+      session: null,
+    };
   }
 };
 
