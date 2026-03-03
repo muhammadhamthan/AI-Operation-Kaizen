@@ -25,7 +25,9 @@ from app.models.issue_history import IssueHistory
 from app.models.chat_history import ChatHistory
 from app.models.problem_solver_skill import ProblemSolverSkill
 from app.models.escalation_rule import EscalationRule            # Config table
-from app.models.escalation import Escalation                     # FIX 2: was missing
+from app.models.escalation import Escalation   
+from app.models.chat_session import ChatSession  
+# FIX 2: was missing
 
 # ── Import ALL enums ─────────────────────────────────────
 from app.core.enums import (
@@ -56,7 +58,7 @@ def seed_database():
     db = SessionLocal()
 
     try:
-        existing = db.query(Escalation).count()
+        existing = db.query(ChatSession).count()
         if existing > 0:
             print("⚠️  Database already seeded. Skipping...")
             return
@@ -802,6 +804,8 @@ def seed_escalations(db: Session):
     db.add_all(escalations)
     db.commit()
     print(f"   ✅ Created {len(escalations)} escalation events")
+    
+    # ═════════════════════════════════════════════════════════
 
 
 # ══════════════════════════════════════════════════════════

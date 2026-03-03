@@ -23,6 +23,13 @@ class ChatHistory(Base):
         primary_key=True,
         autoincrement=True,
     )
+    # ── Link to session ─────────────────────────────
+    session_id = Column(
+        Integer,
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),# CASCADE , If the parent row is deleted, automatically delete all related child rows.
+        nullable=True,
+        comment="Which conversation session this message belongs to",
+    )
     user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -74,6 +81,7 @@ class ChatHistory(Base):
         back_populates="chat_messages",
         lazy="selectin",
     )
+    session = relationship("ChatSession", back_populates="messages", lazy="selectin")
 
     # ── Indexes ──────────────────────────────────────────
     __table_args__ = (

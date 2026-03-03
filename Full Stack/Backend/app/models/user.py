@@ -152,6 +152,14 @@ class User(Base):
         back_populates="changed_by_user",
         lazy="dynamic",
     )
+    
+    # Chat sessions owned by this user
+    chat_sessions = relationship(
+        "ChatSession",
+        back_populates="user",
+        lazy="dynamic",
+        order_by="ChatSession.updated_at.desc()",
+    )
 
     # ── Indexes ──────────────────────────────────────────
     __table_args__ = (

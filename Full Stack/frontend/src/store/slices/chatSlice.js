@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchChatHistory, fetchChatMessages } from '../../mocks/apiService';
-
+import {
+  fetchChatSessions,
+  fetchSessionDetail,
+} from '../../services/api';
 const initialState = {
   messages: [],
   chatHistory: [],
@@ -14,8 +16,9 @@ export const loadChatHistory = createAsyncThunk(
   'chat/loadHistory',
   async (_, { rejectWithValue }) => {
     try {
-      const history = await fetchChatHistory();
-      return history;
+      const result = await fetchChatSessions();
+      if (!result.success) throw new Error();
+      return result.sessions;
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -24,10 +27,15 @@ export const loadChatHistory = createAsyncThunk(
 
 export const loadConversation = createAsyncThunk(
   'chat/loadConversation',
-  async (conversationId, { rejectWithValue }) => {
+  async (sessionId, { rejectWithValue }) => {
     try {
-      const messages = await fetchChatMessages(conversationId);
-      return { conversationId, messages };
+      const result = await fetchSessionDetail(sessionId);
+      if (!result.success) throw new Error();
+
+      return {
+        sessionId,
+        messages: result.session.messages,
+      };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -38,23 +46,30 @@ const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
+
     addMessage: (state, action) => {
       state.messages.push(action.payload);
     },
+
     setMessages: (state, action) => {
       state.messages = action.payload;
     },
-    setContext: (state, action) => {
-      state.context = action.payload;
-    },
+
     clearMessages: (state) => {
       state.messages = [];
       state.currentConversationId = null;
     },
+
     startNewConversation: (state) => {
       state.messages = [];
-      state.currentConversationId = `conv_${Date.now()}`;
+      state.currentConversationId = null;  // 🔥 important
     },
+
+    // ✅ ADD THIS
+    setCurrentConversationId: (state, action) => {
+      state.currentConversationId = action.payload;
+    },
+
   },
   extraReducers: (builder) => {
     builder
@@ -84,7 +99,7 @@ const chatSlice = createSlice({
   },
 });
 
-export const { addMessage, setMessages, setContext, clearMessages, startNewConversation } = chatSlice.actions;
+export const { addMessage, setMessages, setContext, clearMessages, startNewConversation , setCurrentConversationId } = chatSlice.actions;
 
 // Selectors
 export const selectAllMessages = (state) => state.chat.messages;

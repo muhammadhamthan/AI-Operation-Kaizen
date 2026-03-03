@@ -23,6 +23,7 @@ import {
   loadChatHistory,
   loadConversation,
   startNewConversation,
+  selectCurrentConversationId
 } from '../../../src/store/slices/chatSlice';
 import { selectUnreadCount, selectNotifications, markAllAsRead, markAsRead, setNotifications } from '../../../src/store/slices/notificationsSlice';
 import NotificationBanner from '../../../src/components/chat/NotificationBanner';
@@ -57,6 +58,7 @@ export default function ChatScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const drawerAnimation = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const currentSessionId = useSelector(selectCurrentConversationId);
 
   useEffect(() => {
     if (user?.id) {
@@ -131,23 +133,39 @@ export default function ChatScreen() {
   // };
 
 
-  const handleSendMessage = async (text, image = null, location = null) => {
+  const handleSendMessage = async (text) => {
   const userMessage = {
     id: Date.now(),
     message: text,
-    role_in_chat: 'user',
+    role_in_chat: 'USER',
     created_at: new Date().toISOString(),
   };
 
   dispatch(addMessage(userMessage));
 
   try {
-    const response = await sendChatMessage(text);
+    const result = await sendChatMessage(
+      text,
+      currentSessionId // ✅ SEND SESSION ID
+    );
+
+    if (!result.success) return;
+
+    const response = result.data;
+
+    // ✅ VERY IMPORTANT
+    // Store session_id if this was first message
+    if (!currentSessionId && response.session_id) {
+      dispatch({
+        type: 'chat/setCurrentConversationId',
+        payload: response.session_id,
+      });
+    }
 
     const aiMessage = {
       id: Date.now() + 1,
-      message: response.reply, // depends on backend response
-      role_in_chat: 'assistant',
+      message: response.message,
+      role_in_chat: 'AI',
       created_at: new Date().toISOString(),
     };
 
