@@ -19,7 +19,7 @@ class Escalation(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     issue_id = Column(
-        Integer, ForeignKey("issues.id", ondelete="CASCADE"), nullable=False,
+        Integer, ForeignKey("issues.id", ondelete="CASCADE"), nullable=False,server_default="1" 
     )
     assignment_id = Column(
         Integer, ForeignKey("issue_assignments.id", ondelete="SET NULL"),

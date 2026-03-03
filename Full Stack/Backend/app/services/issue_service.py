@@ -135,7 +135,7 @@ class IssueService:
 
         # History: OPEN
         self._add_history(issue.id, user.id, None, "OPEN",
-                          ActionType.ASSIGN, f"Created via chat by {user.name}")
+            ActionType.ASSIGN, f"Created via chat by {user.name}")
 
         # 6. Auto-assign
         from app.services.assignment_service import AssignmentService
