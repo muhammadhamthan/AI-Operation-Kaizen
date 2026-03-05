@@ -279,7 +279,7 @@ export default function ChatScreen() {
                 message={msg.message}
                 image={msg.image} 
                 location={msg.location} // 📍 THE FIX: Pass the location down!
-                isUser={msg.role_in_chat === 'user'}
+                isUser={msg.role_in_chat === 'USER'}
                 timestamp={msg.created_at}
               />
             ))
