@@ -26,7 +26,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func as sql_func
+from sqlalchemy import func as sql_func,select
 
 from app.models.user import User
 from app.models.site import Site
@@ -476,30 +476,63 @@ class IssueService:
     # READ-ONLY: List issues for API
     # ══════════════════════════════════════════════════════
 
-    def list_issues(self, current_user, status_filter=None, priority=None, site_id=None, search=None, skip=0, limit=20):
-        query = self.db.query(Issue)
 
+    async def list_issues(
+        self,
+        current_user,
+        status_filter=None,
+        priority=None,
+        site_id=None,
+        search=None,
+        skip=0,
+        limit=20,
+    ):
+
+        stmt = select(Issue)
+
+        # Role-based filtering
         if current_user.role == UserRole.SUPERVISOR:
-            site_ids = self._get_supervisor_site_ids(current_user.id)
-            query = query.filter(Issue.site_id.in_(site_ids))
+            site_ids = await self._get_supervisor_site_ids(current_user.id)
+            stmt = stmt.where(Issue.site_id.in_(site_ids))
+
         elif current_user.role == UserRole.PROBLEMSOLVER:
-            assigned_ids = [r[0] for r in self.db.query(IssueAssignment.issue_id).filter(IssueAssignment.assigned_to_solver_id == current_user.id).all()]
-            query = query.filter(Issue.id.in_(assigned_ids))
+            sub_stmt = select(IssueAssignment.issue_id).where(
+                IssueAssignment.assigned_to_solver_id == current_user.id
+            )
 
+            result = await self.db.execute(sub_stmt)
+            assigned_ids = [r[0] for r in result.all()]
+
+            stmt = stmt.where(Issue.id.in_(assigned_ids))
+
+        # Filters
         if status_filter:
-            query = query.filter(Issue.status == status_filter)
-        if priority:
-            query = query.filter(Issue.priority == priority)
-        if site_id:
-            query = query.filter(Issue.site_id == site_id)
-        if search:
-            query = query.filter(Issue.title.ilike(f"%{search}%"))
+            stmt = stmt.where(Issue.status == status_filter)
 
-        total = query.count()
-        issues = query.order_by(Issue.created_at.desc()).offset(skip).limit(limit).all()
+        if priority:
+            stmt = stmt.where(Issue.priority == priority)
+
+        if site_id:
+            stmt = stmt.where(Issue.site_id == site_id)
+
+        if search:
+            stmt = stmt.where(Issue.title.ilike(f"%{search}%"))
+
+        # Total count query
+        count_stmt = select(sql_func.count()).select_from(stmt.subquery())
+        count_result = await self.db.execute(count_stmt)
+        total = count_result.scalar()
+
+        # Pagination
+        stmt = stmt.order_by(Issue.created_at.desc()).offset(skip).limit(limit)
+
+        result = await self.db.execute(stmt)
+        issues = result.scalars().all()
 
         return IssueListResponse(
-            total=total, page=skip // limit + 1, per_page=limit,
+            total=total,
+            page=skip // limit + 1,
+            per_page=limit,
             issues=[self._to_response(i) for i in issues],
         )
 
