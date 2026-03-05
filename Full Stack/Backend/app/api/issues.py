@@ -33,7 +33,7 @@ router = APIRouter()
     response_model=IssueListResponse,
     summary="List issues (read-only, role-filtered)",
 )
-def list_issues(
+async def list_issues(
     status_filter: Optional[str] = None,
     priority: Optional[str] = None,
     site_id: Optional[int] = None,
@@ -66,7 +66,7 @@ def list_issues(
         except ValueError:
             raise HTTPException(400, f"Invalid priority: {priority}")
 
-    return issue_service.list_issues(
+    return await issue_service.list_issues(
         current_user=current_user,
         status_filter=status_enum,
         priority=priority_enum,

@@ -60,7 +60,7 @@ class ChatbotService:
         )
 
         # ── 2. Log user message ─────────────────────────
-        self._log_chat(
+        await self._log_chat(
             session_id=session.id,
             user_id=user.id,
             issue_id=issue_id,
@@ -91,7 +91,7 @@ class ChatbotService:
             )
 
         # ── 4. Log AI response ──────────────────────────
-        self._log_chat(
+        await self._log_chat(
             session_id=session.id,
             user_id=None,
             issue_id=response.issue_id or issue_id,
@@ -102,7 +102,7 @@ class ChatbotService:
 
         # ── 5. Update session timestamp ──────────────────
         session.updated_at = sql_func.now()
-        self.db.commit()
+        await self.db.commit()
 
         return response
 
@@ -416,7 +416,7 @@ class ChatbotService:
     # PRIVATE: Log chat message
     # ══════════════════════════════════════════════════════
 
-    def _log_chat(self, session_id, user_id, issue_id, role, message, attachments):
+    async def _log_chat(self, session_id, user_id, issue_id, role, message, attachments):
         entry = ChatHistory(
             session_id=session_id,
             user_id=user_id,
@@ -426,7 +426,7 @@ class ChatbotService:
             attachments=attachments or [],
         )
         self.db.add(entry)
-        self.db.flush()
+        await self.db.flush()
 
 
 
