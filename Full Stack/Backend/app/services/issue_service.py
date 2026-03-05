@@ -63,7 +63,7 @@ class IssueService:
 
     async def create_from_chat(
         self, user: User, message: str,
-        image_url: Optional[str], ai_service,
+        image_url: Optional[str], ai_service, 
     ) -> ChatResponse:
         """
         Full Stage 1-3 flow:
@@ -84,7 +84,7 @@ class IssueService:
             .filter(SupervisorSite.c.supervisor_id == user.id).all()
         ]
         sites = (
-            self.db.query(Site).filter(Site.id.in_(site_ids)).all()
+            self.db.query(Site).filter(Site.id.in_(site_ids)).all() 
             if site_ids else self.db.query(Site).all()
         )
         site_names = [s.name for s in sites]
@@ -95,7 +95,7 @@ class IssueService:
         )
 
         # 3. Match site
-        site = self._match_site(extraction.location, sites)
+        site = self._match_site(extraction.location, sites) #here we can use the user's langtitude and latitude to match the site more accurately, we have to update the frontend to enable to get the user location and match based on it .
         if not site:
             return ChatResponse(
                 message=(
@@ -107,7 +107,7 @@ class IssueService:
             )
 
         # 4. Create issue
-        deadline = datetime.now(timezone.utc) + timedelta(days=extraction.days_to_fix)
+        deadline = datetime.now(timezone.utc) + timedelta(days=extraction.days_to_fix)#Frontend Converts to User Timezone User mobile knows its own timezone automatically.
         issue = Issue(
             site_id=site.id,
             raised_by_supervisor_id=user.id,
@@ -139,7 +139,7 @@ class IssueService:
 
         # 6. Auto-assign
         from app.services.assignment_service import AssignmentService
-        assignment_svc = AssignmentService(self.db)
+        assignment_svc = AssignmentService(self.db) # to we need to add the solvers with sites , so they can be assigned for work later ?
         solver, assignment = assignment_svc.auto_assign(
             issue=issue,
             problem_type=extraction.problem_type,
@@ -187,7 +187,7 @@ class IssueService:
     # QUERY ISSUES FROM CHAT
     # ══════════════════════════════════════════════════════
 
-    async def query_from_chat(self, user: User) -> ChatResponse:
+    async def query_from_chat(self, user: User) -> ChatResponse: # we are not using this fucnion any where
         query = self.db.query(Issue)
 
         if user.role == UserRole.SUPERVISOR:
@@ -227,7 +227,7 @@ class IssueService:
     # CHECK STATUS FROM CHAT
     # ══════════════════════════════════════════════════════
 
-    async def check_status_chat(self, user: User, issue_id: Optional[int]) -> ChatResponse:
+    async def check_status_chat(self, user: User, issue_id: Optional[int]) -> ChatResponse: # have to update role based access for this function and other functions in this class
         if not issue_id:
             return ChatResponse(message="Please specify: 'status of issue 5'", intent="check_status", actions_taken=[])
 
@@ -434,7 +434,8 @@ class IssueService:
 
     # ══════════════════════════════════════════════════════
     # QUERY ESCALATIONS (Manager)
-    # ══════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════
+
 
     async def query_escalations_chat(self, user: User) -> ChatResponse:
         escs = self.db.query(Escalation).filter(
@@ -580,7 +581,7 @@ class IssueService:
     def _match_site(self, location_name: str, sites: list) -> Optional[Site]:
         loc = location_name.lower()
         for s in sites:
-            if s.name.lower() == loc:
+            if s.name.lower() == loc:#how site anme and location name both might be different so will use the langtitude and longitude to match the site more accurately, we have to update the frontend to enable to get the user location and match based on it and update into the db .
                 return s
         for s in sites:
             if loc in s.name.lower() or s.name.lower() in loc:

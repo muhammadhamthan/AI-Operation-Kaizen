@@ -61,11 +61,11 @@ class AssignmentService:
                 ProblemSolverSkill.is_available == True,
                 (
                     (ProblemSolverSkill.site_id == site_id) |
-                    (ProblemSolverSkill.site_id.is_(None))
+                    (ProblemSolverSkill.site_id.is_(None)) # this line no needed
                 ),
             )
             .order_by(
-                ProblemSolverSkill.site_id.is_(None).asc(),
+                ProblemSolverSkill.site_id.is_(None).asc(), # this line no needed
                 ProblemSolverSkill.priority.desc(),
             )
             .all()
