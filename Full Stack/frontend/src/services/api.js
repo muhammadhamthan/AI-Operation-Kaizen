@@ -38,7 +38,7 @@ console.log('API Base URL:', API_BASE_URL);
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 30000000000, // 50 minutes - increase for long-running requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -179,21 +179,32 @@ export const fetchIssues = async (filters = {}) => {
     if (filters.site_id) params.append('site_id', filters.site_id);
 
     const response = await withRetry(
-      () => api.get(`/issues?${params.toString()}`),
+      () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
       { maxRetries: 2 }
     );
+    console.log(response)
 
     // Transform response to match frontend expectations
-    const issues = response.data.map(issue => ({
+    // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }
+    //   ...issue,
+    //   site: issue.site ? {
+    //     ...issue.site,
+    //     name: issue.site.name,
+    //   } : null,
+    //   raised_by: issue.raised_by ? {
+    //     ...issue.raised_by,
+    //     avatar: issue.raised_by.avatar_url,
+    //   } : null,
+    // }));
+
+    const issues = response.data.issues.map(issue => ({ // Map backend fields to frontend format
       ...issue,
-      site: issue.site ? {
-        ...issue.site,
-        name: issue.site.name,
-      } : null,
-      raised_by: issue.raised_by ? {
-        ...issue.raised_by,
-        avatar: issue.raised_by.avatar_url,
-      } : null,
+      site: {
+        name: issue.site_name,
+      },
+      raised_by: {
+        name: issue.supervisor_name,
+      }
     }));
 
     return {
@@ -215,8 +226,8 @@ export const fetchIssues = async (filters = {}) => {
  */
 export const fetchIssueById = async (issueId) => {
   try {
-    const response = await api.get(`/issues/${issueId}`);
-    
+    const response = await api.get(`/api/v1/issues/${issueId}`); // URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/{issue_id}
+
     const issue = {
       ...response.data,
       site: response.data.site ? {
@@ -238,6 +249,27 @@ export const fetchIssueById = async (issueId) => {
     return {
       success: false,
       error: error.response?.data?.detail || 'Failed to fetch issue',
+    };
+  }
+};
+
+/**
+ * Fetch single issue by ID along with its timeline entries
+ */
+export const fetchIssueTimeline = async (issueId) => {
+  try {
+    const response = await api.get(`/api/v1/issues/${issueId}/timeline`);
+
+    return {
+      success: true,
+      timeline: response.data.entries,
+    };
+  } catch (error) {
+    console.error("Timeline fetch error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      timeline: [],
     };
   }
 };
