@@ -7,6 +7,8 @@ import chatReducer from './slices/chatSlice';
 import dashboardReducer from './slices/dashboardSlice';
 import notificationsReducer from './slices/notificationsSlice';
 import offlineReducer from './slices/offlineSlice';
+import sitesReducer from "./slices/sitesSlice"
+import performanceReducer from "./slices/performanceSlice"
 
 // 1. Combine all your reducers into one app-level reducer
 const appReducer = combineReducers({
@@ -18,6 +20,8 @@ const appReducer = combineReducers({
   dashboard: dashboardReducer,
   notifications: notificationsReducer,
   offline: offlineReducer,
+  sites: sitesReducer,
+  performance: performanceReducer,
 });
 
 // 2. Wrap it in a root reducer to intercept actions

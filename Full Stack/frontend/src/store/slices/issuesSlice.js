@@ -4,6 +4,7 @@ import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi , fe
 const initialState = {
   issues: [],
   currentIssue: null,
+  timeline: [], // New state for issue timeline
   loading: false,
   error: null,
   filters: {

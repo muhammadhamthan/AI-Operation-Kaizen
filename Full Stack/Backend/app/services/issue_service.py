@@ -63,7 +63,7 @@ class IssueService:
 
     async def create_from_chat(
         self, user: User, message: str,
-        image_url: Optional[str], ai_service,
+        image_url: Optional[str], ai_service, 
     ) -> ChatResponse:
         """
         Full Stage 1-3 flow:
@@ -84,7 +84,7 @@ class IssueService:
             .filter(SupervisorSite.c.supervisor_id == user.id).all()
         ]
         sites = (
-            self.db.query(Site).filter(Site.id.in_(site_ids)).all()
+            self.db.query(Site).filter(Site.id.in_(site_ids)).all() 
             if site_ids else self.db.query(Site).all()
         )
         site_names = [s.name for s in sites]
@@ -95,7 +95,7 @@ class IssueService:
         )
 
         # 3. Match site
-        site = self._match_site(extraction.location, sites)
+        site = self._match_site(extraction.location, sites) #here we can use the user's langtitude and latitude to match the site more accurately, we have to update the frontend to enable to get the user location and match based on it .
         if not site:
             return ChatResponse(
                 message=(
@@ -107,7 +107,7 @@ class IssueService:
             )
 
         # 4. Create issue
-        deadline = datetime.now(timezone.utc) + timedelta(days=extraction.days_to_fix)
+        deadline = datetime.now(timezone.utc) + timedelta(days=extraction.days_to_fix)#Frontend Converts to User Timezone User mobile knows its own timezone automatically.
         issue = Issue(
             site_id=site.id,
             raised_by_supervisor_id=user.id,
@@ -135,11 +135,11 @@ class IssueService:
 
         # History: OPEN
         self._add_history(issue.id, user.id, None, "OPEN",
-                          ActionType.ASSIGN, f"Created via chat by {user.name}")
+            ActionType.ASSIGN, f"Created via chat by {user.name}")
 
         # 6. Auto-assign
         from app.services.assignment_service import AssignmentService
-        assignment_svc = AssignmentService(self.db)
+        assignment_svc = AssignmentService(self.db) # to we need to add the solvers with sites , so they can be assigned for work later ?
         solver, assignment = assignment_svc.auto_assign(
             issue=issue,
             problem_type=extraction.problem_type,
@@ -187,7 +187,7 @@ class IssueService:
     # QUERY ISSUES FROM CHAT
     # ══════════════════════════════════════════════════════
 
-    async def query_from_chat(self, user: User) -> ChatResponse:
+    async def query_from_chat(self, user: User) -> ChatResponse: # we are not using this fucnion any where
         query = self.db.query(Issue)
 
         if user.role == UserRole.SUPERVISOR:
@@ -227,7 +227,7 @@ class IssueService:
     # CHECK STATUS FROM CHAT
     # ══════════════════════════════════════════════════════
 
-    async def check_status_chat(self, user: User, issue_id: Optional[int]) -> ChatResponse:
+    async def check_status_chat(self, user: User, issue_id: Optional[int]) -> ChatResponse: # have to update role based access for this function and other functions in this class
         if not issue_id:
             return ChatResponse(message="Please specify: 'status of issue 5'", intent="check_status", actions_taken=[])
 
@@ -434,7 +434,8 @@ class IssueService:
 
     # ══════════════════════════════════════════════════════
     # QUERY ESCALATIONS (Manager)
-    # ══════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════
+
 
     async def query_escalations_chat(self, user: User) -> ChatResponse:
         escs = self.db.query(Escalation).filter(
@@ -506,28 +507,32 @@ class IssueService:
             stmt = stmt.where(Issue.id.in_(assigned_ids))
 
         # Filters
-        if status_filter:
-            stmt = stmt.where(Issue.status == status_filter)
+        # if status_filter:
+        #     stmt = stmt.where(Issue.status == status_filter)
 
-        if priority:
-            stmt = stmt.where(Issue.priority == priority)
+        # if priority:
+        #     stmt = stmt.where(Issue.priority == priority)
 
-        if site_id:
-            stmt = stmt.where(Issue.site_id == site_id)
+        # if site_id:
+        #     stmt = stmt.where(Issue.site_id == site_id)
 
-        if search:
-            stmt = stmt.where(Issue.title.ilike(f"%{search}%"))
+        # if search:
+        #     stmt = stmt.where(Issue.title.ilike(f"%{search}%"))
 
         # Total count query
         count_stmt = select(sql_func.count()).select_from(stmt.subquery())
         count_result = await self.db.execute(count_stmt)
         total = count_result.scalar()
 
-        # Pagination
-        stmt = stmt.order_by(Issue.created_at.desc()).offset(skip).limit(limit)
+        # # Pagination
+        # stmt = stmt.order_by(Issue.created_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(stmt)
         issues = result.scalars().all()
+        print("------------------------------------------------------------------------------------")
+        print(issues)
+
+        # total = 90
 
         return IssueListResponse(
             total=total,
@@ -540,14 +545,20 @@ class IssueService:
     # READ-ONLY: Issue detail
     # ══════════════════════════════════════════════════════
 
-    def get_issue_detail(self, issue_id: int):
-        issue = self.db.query(Issue).filter(Issue.id == issue_id).first()
+    async def get_issue_detail(self, issue_id: int):
+        issue_stmt = select(Issue).where(Issue.id == issue_id)
+        issue = await self.db.execute(issue_stmt)
+        issue = issue.scalar()
         if not issue:
             return None
 
-        complaints_count = self.db.query(sql_func.count()).select_from(
-            __import__('app.models.complaint', fromlist=['Complaint']).Complaint
-        ).filter_by(issue_id=issue_id).scalar()
+        from app.models.complaint import Complaint #it might create circular import issue but we can handle it by importing inside the function where we need to use it
+
+        complaints_stmt = select(sql_func.count()).select_from(Complaint).where(
+            Complaint.issue_id == issue_id
+        )
+        complaints_count = await self.db.execute(complaints_stmt)
+        complaints_count = complaints_count.scalar()
 
         return IssueDetailResponse(
             id=issue.id, site_id=issue.site_id,
@@ -562,7 +573,7 @@ class IssueService:
             images=[IssueImageBrief(
                 id=img.id, image_url=img.image_url, image_type=img.image_type.value,
                 ai_flag=img.ai_flag.value, uploaded_by_user_id=img.uploaded_by_user_id,
-                uploader_name=img.uploaded_by.name if img.uploaded_by else None,
+                uploader_name=img.uploaded_by_user .name if img.uploaded_by_user else None,
                 created_at=img.created_at,
             ) for img in issue.images],
             assignments=[AssignmentBrief(
@@ -582,10 +593,15 @@ class IssueService:
     # READ-ONLY: Timeline
     # ══════════════════════════════════════════════════════
 
-    def get_timeline(self, issue_id: int):
-        entries = self.db.query(IssueHistory).filter(
-            IssueHistory.issue_id == issue_id
-        ).order_by(IssueHistory.created_at).all()
+    async def get_timeline(self, issue_id: int):
+        stmt = (
+            select(IssueHistory)
+            .where(IssueHistory.issue_id == issue_id)
+            .order_by(IssueHistory.created_at.desc())
+        )
+
+        entries = await self.db.execute(stmt)
+        entries = entries.scalars().all()
 
         return IssueHistoryListResponse(
             total=len(entries), issue_id=issue_id,
@@ -603,17 +619,23 @@ class IssueService:
     # PRIVATE HELPERS
     # ══════════════════════════════════════════════════════
 
-    def _get_supervisor_site_ids(self, supervisor_id: int):
-        return [
-            r[0] for r in
-            self.db.query(SupervisorSite.c.site_id)
-            .filter(SupervisorSite.c.supervisor_id == supervisor_id).all()
-        ]
+    from sqlalchemy import select
+
+    async def _get_supervisor_site_ids(self, supervisor_id: int):
+
+        stmt = select(SupervisorSite.c.site_id).where(
+            SupervisorSite.c.supervisor_id == supervisor_id
+        )
+
+        result = await self.db.execute(stmt)
+        result = result.scalars().all()
+
+        return result
 
     def _match_site(self, location_name: str, sites: list) -> Optional[Site]:
         loc = location_name.lower()
         for s in sites:
-            if s.name.lower() == loc:
+            if s.name.lower() == loc:#how site anme and location name both might be different so will use the langtitude and longitude to match the site more accurately, we have to update the frontend to enable to get the user location and match based on it and update into the db .
                 return s
         for s in sites:
             if loc in s.name.lower() or s.name.lower() in loc:

@@ -182,6 +182,7 @@ export const fetchIssues = async (filters = {}) => {
       () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
       { maxRetries: 2 }
     );
+    console.log(response)
 
     // Transform response to match frontend expectations
     // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }

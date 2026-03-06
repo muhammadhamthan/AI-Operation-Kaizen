@@ -82,14 +82,14 @@ async def list_issues(
     response_model=IssueDetailResponse,
     summary="Get issue detail (read-only)",
 )
-def get_issue_detail(
+async def get_issue_detail(
     issue_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Returns full issue with images, assignments, and complaint count."""
     issue_service = IssueService(db)
-    result = issue_service.get_issue_detail(issue_id)
+    result = await issue_service.get_issue_detail(issue_id)
 
     if not result:
         raise HTTPException(
