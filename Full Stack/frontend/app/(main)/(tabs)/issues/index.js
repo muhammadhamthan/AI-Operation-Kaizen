@@ -25,7 +25,6 @@ import Avatar from '../../../../src/components/common/Avatar';
 import Toast from '../../../../src/components/common/Toast';
 import FilterModal from '../../../../src/components/modals/FilterModal';
 import { useDebounce } from '../../../../src/hooks/useDebounce';
-import { sites } from '../../../../src/mocks/sites';
 
 export default function IssuesTabScreen() {
   const { theme, isDark } = useTheme(); // 🚀 Added isDark for precise monochrome shading
@@ -57,42 +56,106 @@ export default function IssuesTabScreen() {
     if (user) dispatch(fetchIssues(user));
   }, [user]);
 
-  const filteredIssues = useMemo(() => {
+  const realSites = useMemo(() => {
     if (!allIssues) return [];
+    const uniqueSites = new Map();
+
+    allIssues.forEach(issue => {
+      // Look at the backend JSON: it uses site_id and site_name
+      if (issue.site_id && issue.site_name) {
+        uniqueSites.set(issue.site_id, {
+          id: issue.site_id,
+          name: issue.site_name
+        });
+      }
+    });
+
+    return Array.from(uniqueSites.values());
+  }, [allIssues]);
+
+const filteredIssues = useMemo(() => {
+    // 1. Safety check: return empty if no issues exist yet
+    if (!allIssues || allIssues.length === 0) return [];
     
     return allIssues.filter(issue => {
+      // 2. TEXT SEARCH FILTER
       if (debouncedSearch) {
         const searchLower = debouncedSearch.toLowerCase();
         const matchesSearch = 
           issue.title?.toLowerCase().includes(searchLower) ||
           issue.description?.toLowerCase().includes(searchLower) ||
           issue.id?.toString().includes(searchLower) ||
-          issue.site?.name?.toLowerCase().includes(searchLower) ||
-          issue.issue_type?.toLowerCase().includes(searchLower);
+          issue.site_name?.toLowerCase().includes(searchLower); // ✅ Changed to site_name
+        
         if (!matchesSearch) return false;
       }
 
-      if (appliedFilters.statuses.length > 0 && !appliedFilters.statuses.includes(issue.status)) return false;
-      if (appliedFilters.priorities.length > 0 && !appliedFilters.priorities.includes(issue.priority)) return false;
-      if (appliedFilters.categories.length > 0 && !appliedFilters.categories.includes(issue.issue_type)) return false;
-      if (appliedFilters.site && issue.site_id !== appliedFilters.site) return false;
+      // 3. STATUS FILTER (Array matching)
+      if (appliedFilters.statuses && appliedFilters.statuses.length > 0) {
+        if (!appliedFilters.statuses.includes(issue.status)) return false;
+      }
 
+      // 4. PRIORITY FILTER (Array matching)
+      if (appliedFilters.priorities && appliedFilters.priorities.length > 0) {
+        if (!appliedFilters.priorities.includes(issue.priority)) return false;
+      }
+
+      // 5. SITE FILTER (Exact match)
+      if (appliedFilters.site) {
+        if (issue.site_id !== appliedFilters.site) return false;
+      }
+
+      // 6. CATEGORY FILTER (Text-based guessing since backend lacks issue_type)
+      if (appliedFilters.categories && appliedFilters.categories.length > 0) {
+        // ✅ Since "issue_type" doesn't exist, we check if the category name 
+        // appears anywhere in the title or description
+        const matchesCategory = appliedFilters.categories.some(category => {
+          const catLower = category.toLowerCase();
+          return issue.title?.toLowerCase().includes(catLower) || 
+                 issue.description?.toLowerCase().includes(catLower);
+        });
+        if (!matchesCategory) return false;
+      }
+
+      // 7. DATE RANGE FILTER
       if (appliedFilters.dateRange && appliedFilters.dateRange !== 'all') {
+        if (!issue.created_at) return false; // Safety check
+
         const issueDate = new Date(issue.created_at);
         const now = new Date();
-        switch (appliedFilters.dateRange) {
-          case 'today': if (issueDate.toDateString() !== now.toDateString()) return false; break;
-          case 'week': if (issueDate < new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)) return false; break;
-          case 'month': if (issueDate < new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)) return false; break;
-          case '3months': if (issueDate < new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)) return false; break;
+        
+        if (appliedFilters.dateRange === 'today') {
+          if (issueDate.toDateString() !== now.toDateString()) return false;
+        } else if (appliedFilters.dateRange === 'week') {
+          const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (issueDate < oneWeekAgo) return false;
+        } else if (appliedFilters.dateRange === 'month') {
+          const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          if (issueDate < oneMonthAgo) return false;
+        } else if (appliedFilters.dateRange === '3months') {
+          const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          if (issueDate < threeMonthsAgo) return false;
         }
       }
 
+      // 8. OVERDUE ONLY FILTER
       if (appliedFilters.overdueOnly) {
-        const deadline = new Date(issue.deadline_at);
-        if (deadline >= new Date() || issue.status === 'COMPLETED') return false;
+        // If it's already finished, it cannot be overdue
+        if (issue.status === 'COMPLETED' || issue.status === 'RESOLVED_PENDING_REVIEW') {
+          return false;
+        }
+        
+        if (issue.deadline_at) {
+          const deadline = new Date(issue.deadline_at);
+          // If the deadline is in the future, it's not overdue yet
+          if (deadline >= new Date()) return false; 
+        } else {
+          // If there is no deadline set, it cannot be considered overdue
+          return false; 
+        }
       }
 
+      // If the issue survives all of the above IF statements, it belongs on the screen!
       return true;
     });
   }, [allIssues, debouncedSearch, appliedFilters]);
@@ -177,10 +240,14 @@ export default function IssuesTabScreen() {
         </View>
       );
     }
-    if (appliedFilters.site) {
+   if (appliedFilters.site) {
+      // Look up the name of the site matching the selected ID
+      const selectedSiteObj = realSites.find(s => s.id === appliedFilters.site);
+      const siteDisplayName = selectedSiteObj ? selectedSiteObj.name : 'Site Selected';
+
       chips.push(
         <View key="site" style={chipStyle}>
-          <Text style={textStyle}>Site Selected</Text>
+          <Text style={textStyle}>Site: {siteDisplayName}</Text>
           <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, site: null }))}>
             <Ionicons name="close" size={14} color={iconColor} />
           </TouchableOpacity>
@@ -204,7 +271,7 @@ export default function IssuesTabScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }]}>
-      
+
       {/* ── HEADER ── */}
       <View style={[styles.header, { borderBottomColor: borderColor }]}>
         <View>
@@ -223,10 +290,10 @@ export default function IssuesTabScreen() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => <IssueCard issue={item} onPress={() => handleIssuePress(item)} />}
         contentContainerStyle={styles.listContent}
-        
+
         ListHeaderComponent={
           <View style={styles.headerComponentWrapper}>
-            
+
             {/* ── SEARCH & FILTER ROW ── */}
             <View style={styles.searchContainer}>
               <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
@@ -248,18 +315,18 @@ export default function IssuesTabScreen() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 style={[
-                  styles.filterButton, 
-                  { 
+                  styles.filterButton,
+                  {
                     backgroundColor: activeFilterCount > 0 ? activeBg : inactiveBg,
                     borderColor: activeFilterCount > 0 ? activeBg : borderColor,
                   }
                 ]}
                 onPress={() => setShowFilterModal(true)}
               >
-                <Ionicons 
-                  name="options-outline" 
-                  size={20} 
-                  color={activeFilterCount > 0 ? (isDark ? '#000' : '#fff') : theme.text} 
+                <Ionicons
+                  name="options-outline"
+                  size={20}
+                  color={activeFilterCount > 0 ? (isDark ? '#000' : '#fff') : theme.text}
                 />
                 {activeFilterCount > 0 && (
                   <View style={styles.filterBadge}>
@@ -289,7 +356,7 @@ export default function IssuesTabScreen() {
             </View>
           </View>
         }
-        
+
         ListEmptyComponent={
           <EmptyState
             icon="document-text-outline"
@@ -306,7 +373,7 @@ export default function IssuesTabScreen() {
         onClose={() => setShowFilterModal(false)}
         onApply={handleApplyFilters}
         initialFilters={appliedFilters}
-        sites={sites}
+        sites={realSites}
       />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
@@ -316,79 +383,79 @@ export default function IssuesTabScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    paddingVertical: 16, 
-    borderBottomWidth: StyleSheet.hairlineWidth 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth
   },
   headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   headerSubtitle: { fontSize: 14, fontWeight: '500', marginTop: 4 },
-  
+
   headerComponentWrapper: {
     paddingBottom: 8,
   },
-  searchContainer: { 
-    flexDirection: 'row', 
-    paddingHorizontal: 16, 
-    paddingTop: 16, 
-    paddingBottom: 12, 
-    gap: 12 
+  searchContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    gap: 12
   },
-  searchInput: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 14, 
+  searchInput: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
     height: 44, // Fixed height for exact alignment
     borderRadius: 12, // Squircle 
     borderWidth: 1,
-    gap: 8 
+    gap: 8
   },
   searchTextInput: { flex: 1, fontSize: 15 },
-  filterButton: { 
-    width: 44, 
-    height: 44, 
+  filterButton: {
+    width: 44,
+    height: 44,
     borderRadius: 12, // Match input squircle
     borderWidth: 1,
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    position: 'relative' 
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative'
   },
-  filterBadge: { 
-    position: 'absolute', 
-    top: -6, 
-    right: -6, 
+  filterBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
     backgroundColor: '#ef4444', // Kept red for high-alert visibility
-    width: 18, 
-    height: 18, 
-    borderRadius: 9, 
-    justifyContent: 'center', 
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#ffffff', // Cuts into the button shape elegantly
   },
   filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  
+
   activeFiltersContainer: { paddingHorizontal: 16, marginBottom: 8 },
   activeChipsScroll: { flexDirection: 'row', gap: 8, paddingRight: 16, alignItems: 'center' },
-  activeChip: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 8, 
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    gap: 6 
+    gap: 6
   },
   activeChipText: { fontSize: 13, fontWeight: '500' },
   clearAllButton: { paddingHorizontal: 8, paddingVertical: 6 },
   clearAllText: { fontSize: 13, fontWeight: '600' },
-  
+
   resultsHeader: { paddingHorizontal: 20, paddingVertical: 8 },
   resultsCount: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  
+
   listContent: { paddingBottom: 24 },
 });
