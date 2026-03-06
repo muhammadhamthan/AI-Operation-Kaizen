@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     # ── Database ──
     DATABASE_URL: str
     SQL_ECHO: bool = False
+    
+    AI_DATABASE_URL:str
 
     # ── JWT / Auth ──
     SECRET_KEY: str

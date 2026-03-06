@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,6 +24,7 @@ import {
   loadChatHistory,
   loadConversation,
   startNewConversation,
+  selectCurrentConversationId
 } from '../../../src/store/slices/chatSlice';
 import { selectUnreadCount, selectNotifications, markAllAsRead, markAsRead, setNotifications } from '../../../src/store/slices/notificationsSlice';
 import NotificationBanner from '../../../src/components/chat/NotificationBanner';
@@ -31,6 +33,7 @@ import ChatInput from '../../../src/components/chat/ChatInput';
 import ChatHistorySidebar from '../../../src/components/chat/ChatHistorySidebar';
 import Avatar from '../../../src/components/common/Avatar';
 import { navigateToNotification } from '../../../src/utils/notificationNavigation';
+import { sendChatMessage } from '../../../src/services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = 280;
@@ -52,17 +55,19 @@ export default function ChatScreen() {
   const unreadCount = useSelector(selectUnreadCount);
   const notifications = useSelector(selectNotifications);
   const scrollViewRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false); // 👈 ADD THIS
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const drawerAnimation = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const currentSessionId = useSelector(selectCurrentConversationId);
 
   useEffect(() => {
     if (user?.id) {
       dispatch(loadChatHistory());
       setSelectedConversation(null);
     }
-    
+
     dispatch(setNotifications([
       { id: 1, type: 'issue_assigned', title: 'New issue assigned', body: 'Issue #8 has been assigned to you', data: { issueId: 8 }, read: false },
       { id: 2, type: 'issue_reopened', title: 'Issue reopened', body: 'Issue #15 was reopened by supervisor', data: { issueId: 15 }, read: false },
@@ -95,38 +100,86 @@ export default function ChatScreen() {
   };
 
   // 🚀 THE FIX: Now accepts text, image, AND location!
-  const handleSendMessage = (text, image = null, location = null) => {
+  // const handleSendMessage = (text, image = null, location = null) => {
+  //   const userMessage = {
+  //     id: Date.now(),
+  //     message: text || '', 
+  //     image: image,        
+  //     location: location,  // 📍 NEW: Store the location payload in Redux
+  //     role_in_chat: 'user',
+  //     user_id: user?.id,
+  //     created_at: new Date().toISOString(),
+  //   };
+  //   console.log("message dispatched ",userMessage)
+  //   dispatch(addMessage(userMessage));
+
+  //   // Smart AI response logic acknowledging the new data types
+  //   setTimeout(() => {
+  //     let responseText = '';
+
+  //     if (image || location) {
+  //       responseText = `I received your ${image ? 'image' : ''}${image && location ? ' and ' : ''}${location ? 'location data' : ''}${text ? ` along with your message: "${text}"` : '.'}\n\nIn Phase 2-3, this will automatically generate a fully enriched maintenance ticket.`;
+  //     } else {
+  //       responseText = `I understand you asked about: "${text}"\n\nThis is a placeholder response. In Phase 2-3, this will be connected to an actual AI assistant.`;
+  //     }
+
+  //     const aiMessage = {
+  //       id: Date.now() + 1,
+  //       message: responseText,
+  //       role_in_chat: 'assistant',
+  //       user_id: null,
+  //       created_at: new Date().toISOString(),
+  //     };
+  //     dispatch(addMessage(aiMessage));
+  //   }, 1000);
+  // };
+
+
+  const handleSendMessage = async (text) => {
     const userMessage = {
       id: Date.now(),
-      message: text || '', 
-      image: image,        
-      location: location,  // 📍 NEW: Store the location payload in Redux
+      message: text,
       role_in_chat: 'user',
-      user_id: user?.id,
       created_at: new Date().toISOString(),
     };
-    console.log("message dispatched ",userMessage)
-    dispatch(addMessage(userMessage));
 
-    // Smart AI response logic acknowledging the new data types
-    setTimeout(() => {
-      let responseText = '';
-      
-      if (image || location) {
-        responseText = `I received your ${image ? 'image' : ''}${image && location ? ' and ' : ''}${location ? 'location data' : ''}${text ? ` along with your message: "${text}"` : '.'}\n\nIn Phase 2-3, this will automatically generate a fully enriched maintenance ticket.`;
-      } else {
-        responseText = `I understand you asked about: "${text}"\n\nThis is a placeholder response. In Phase 2-3, this will be connected to an actual AI assistant.`;
+    dispatch(addMessage(userMessage));
+    setIsLoading(true); // 👈 START LOADING ANIMATION
+
+    try {
+      const result = await sendChatMessage(
+        text,
+        currentSessionId // ✅ SEND SESSION ID
+      );
+
+      if (!result.success) return;
+
+      const response = result.data;
+
+      // ✅ VERY IMPORTANT
+      // Store session_id if this was first message
+      if (!currentSessionId && response.session_id) {
+        dispatch({
+          type: 'chat/setCurrentConversationId',
+          payload: response.session_id,
+        });
       }
 
       const aiMessage = {
         id: Date.now() + 1,
-        message: responseText,
-        role_in_chat: 'assistant',
-        user_id: null,
+        message: response.message,
+        role_in_chat: 'AI',
         created_at: new Date().toISOString(),
       };
+
       dispatch(addMessage(aiMessage));
-    }, 1000);
+    } catch (error) {
+      console.error(error);
+    }
+    finally {
+
+      setIsLoading(false); // 👈 STOP LOADING ANIMATION
+    }
   };
 
   const handleSuggestionPress = (text) => {
@@ -146,7 +199,7 @@ export default function ChatScreen() {
   const showCamera = user?.role !== 'manager';
 
   const screenBg = isDark ? '#212121' : '#ffffff';
-  const headerBg = screenBg; 
+  const headerBg = screenBg;
   const logoBg = isDark ? '#ffffff' : '#000000';
   const logoIconColor = isDark ? '#000000' : '#ffffff';
 
@@ -175,8 +228,8 @@ export default function ChatScreen() {
         onMarkRead={(id) => dispatch(markAsRead(id))}
       />
 
-      <KeyboardAvoidingView 
-        style={styles.keyboardAvoid} 
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
@@ -231,13 +284,21 @@ export default function ChatScreen() {
               <ChatMessage
                 key={msg.id}
                 message={msg.message}
-                image={msg.image} 
+                image={msg.image}
                 location={msg.location} // 📍 THE FIX: Pass the location down!
                 isUser={msg.role_in_chat === 'user'}
                 timestamp={msg.created_at}
               />
             ))
           )}
+
+          {/* 👈 ADD THIS CONDITIONAL RENDER */}
+              {isLoading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={theme.textSecondary} />
+                  <Text style={[styles.loadingText, { color: theme.textSecondary }]}>AI is typing...</Text>
+                </View>
+              )}
         </ScrollView>
 
         <ChatInput onSend={handleSendMessage} showCamera={showCamera} />
@@ -290,4 +351,16 @@ const styles = StyleSheet.create({
   suggestionText: { fontSize: 14, fontWeight: '500', lineHeight: 20 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10 },
   drawer: { position: 'absolute', top: 0, left: 0, bottom: 0, width: DRAWER_WIDTH, zIndex: 20, paddingTop: Platform.OS === 'ios' ? 50 : 30 },
+  // Add these to your existing styles
+  loadingContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingVertical: 10,
+    gap: 8,
+  },
+  loadingText: { 
+    fontSize: 14, 
+    fontStyle: 'italic',
+  },
 });

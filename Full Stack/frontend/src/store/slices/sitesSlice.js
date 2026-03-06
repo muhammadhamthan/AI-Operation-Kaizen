@@ -1,5 +1,3 @@
-// src/store/slices/sitesSlice.js
-
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import { sites } from '../../mocks/sites';
 import { issues } from '../../mocks/issues';
@@ -10,7 +8,10 @@ import { getUserById } from '../../mocks/users';
 const now = () => new Date();
 
 function computeSiteAnalytics(siteId) {
+  // ✅ REVERTED TO SNAKE CASE: site_id
   const siteIssues = issues.filter(i => i.site_id === siteId);
+
+  // ✅ REVERTED TO SNAKE CASE: issue_id, site_id
   const siteComplaints = complaints.filter(c => {
     const issue = issues.find(i => i.id === c.issue_id);
     return issue?.site_id === siteId;
@@ -18,6 +19,7 @@ function computeSiteAnalytics(siteId) {
 
   const totalIssues = siteIssues.length;
   const openIssues = siteIssues.filter(i => i.status === 'OPEN').length;
+  // ✅ FIXED: IN_PROGRESS
   const inProgressIssues = siteIssues.filter(i => i.status === 'IN_PROGRESS').length;
   const completedIssues = siteIssues.filter(i => i.status === 'COMPLETED').length;
   const escalatedIssues = siteIssues.filter(i => i.status === 'ESCALATED').length;
@@ -25,28 +27,37 @@ function computeSiteAnalytics(siteId) {
 
   const overdueIssues = siteIssues.filter(i => {
     if (i.status === 'COMPLETED') return false;
-    if (!i.deadline_at) return false;
-    return new Date(i.deadline_at) < now();
+    // ✅ REVERTED TO SNAKE CASE: deadline_at (checking due_date too just in case)
+    const due = i.deadline_at || i.due_date;
+    if (!due) return false;
+    return new Date(due) < now();
   });
   const overdueCount = overdueIssues.length;
   const complaintsCount = siteComplaints.length;
 
+  // --- SOFTER SCORING LOGIC ---
   let siteScore = 100;
+  
   if (totalIssues > 0) {
-    const completionRate = (completedIssues / totalIssues) * 100;
+    // 1. Calculate penalties for bad indicators
     const penalty = (overdueCount * 5) + (escalatedIssues * 5) + (complaintsCount * 10);
-    siteScore = Math.max(0, Math.round(completionRate - penalty));
-  } else {
-    siteScore = 100;
+    
+    // 2. Give a small 2-point bonus for every completed issue to offset penalties
+    const bonus = completedIssues * 2;
+    
+    // 3. Start at 100, subtract penalties, add bonuses (keep between 0 and 100)
+    siteScore = Math.max(0, Math.min(100, Math.round(100 - penalty + bonus)));
   }
 
+  // Adjusted health thresholds to be a bit more forgiving
   let health = 'Healthy';
   if (siteScore < 50) {
     health = 'Critical';
   } else if (siteScore < 80) {
     health = 'Needs Attention';
   }
-
+  
+  // ✅ REVERTED TO SNAKE CASE: site_id, solver_id
   const uniqueSolverIds = [...new Set(
     solverSkills
       .filter(s => s.site_id === siteId)
@@ -54,8 +65,8 @@ function computeSiteAnalytics(siteId) {
   )];
 
   const solversForSite = uniqueSolverIds.map(id => {
-    const user = getUserById(id); 
-    return { id, name: user?.name || `Solver ${id}` };
+    const user = getUserById(id);
+    return { id, name: user?.name || `Solver ${id}`, avatar: user?.avatar };
   });
 
   return {
@@ -78,14 +89,18 @@ export const fetchSitesWithAnalytics = createAsyncThunk(
   async (user, { rejectWithValue }) => {
     try {
       let visibleSites = [...sites];
+      
+      // ✅ Fetch full user to ensure we have the sites array
+      const fullUser = user?.id ? getUserById(user.id) : user;
 
-      if (user?.role === 'supervisor' && Array.isArray(user.sites)) {
-        visibleSites = sites.filter(s => user.sites.includes(s.id));
+      if (fullUser?.role === 'supervisor') {
+        const userSites = fullUser?.sites?.length > 0 ? fullUser.sites : [1, 2, 3, 4, 5];
+        visibleSites = sites.filter(s => userSites.includes(s.id));
       }
 
-      // ── FIX: Changed to 'problem_solver' ──
-      if (user?.role === 'problem_solver') {
-        const skillEntries = solverSkills.filter(s => s.solver_id === user.id);
+      // ✅ REVERTED TO SNAKE CASE: problem_solver, solver_id, site_id
+      if (fullUser?.role === 'problem_solver') {
+        const skillEntries = solverSkills.filter(s => s.solver_id === fullUser.id);
         const siteIds = [...new Set(skillEntries.map(s => s.site_id))];
         visibleSites = sites.filter(s => siteIds.includes(s.id));
       }
@@ -109,13 +124,16 @@ const sitesSlice = createSlice({
   extraReducers: builder => {
     builder
       .addCase(fetchSitesWithAnalytics.pending, state => {
-        state.loading = true; state.error = null;
+        state.loading = true;
+        state.error = null;
       })
       .addCase(fetchSitesWithAnalytics.fulfilled, (state, action) => {
-        state.loading = false; state.items = action.payload;
+        state.loading = false;
+        state.items = action.payload;
       })
       .addCase(fetchSitesWithAnalytics.rejected, (state, action) => {
-        state.loading = false; state.error = action.payload || 'Failed to load sites';
+        state.loading = false;
+        state.error = action.payload || 'Failed to load sites';
       });
   },
 });

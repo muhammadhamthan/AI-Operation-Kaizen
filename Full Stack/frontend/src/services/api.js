@@ -10,34 +10,35 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
 
-// API Base URL - Backend is on port 8001
-const getBaseUrl = () => {
-  // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || 
-                     process.env.EXPO_PUBLIC_BACKEND_URL;
+// // API Base URL - Backend is on port 8001
+// const getBaseUrl = () => {
+//   // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
+//   const backendUrl = 'http://127.0.0.1:8000';
   
-  if (backendUrl) {
-    return `${backendUrl}/api`;
-  }
+//   // if (backendUrl) {
+//   //   return `${backendUrl}/api`;
+//   // }
   
-  // For local development
-  if (Platform.OS === 'web') {
-    // Use relative URL which will be proxied
-    return 'http://localhost:8001/api';
-  }
+//   // // For local development
+//   // if (Platform.OS === 'web') {
+//   //   // Use relative URL which will be proxied
+//   //   return 'http://localhost:8001/api';
+//   // }
   
-  // Native apps need full URL
-  return 'http://localhost:8001/api';
-};
+//   // Native apps need full URL
+//   return 'http://localhost:8001/api';
+// };
 
-const API_BASE_URL = getBaseUrl();
+const backendUrl = 'http://127.0.0.1:8000';
+
+const API_BASE_URL = backendUrl;
 
 console.log('API Base URL:', API_BASE_URL);
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 30000000000, // 50 minutes - increase for long-running requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -81,16 +82,10 @@ api.interceptors.response.use(
  */
 export const loginUser = async (username, password) => {
   try {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    const response = await api.post('/auth/login', formData.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+    const response = await api.post('/api/v1/auth/login', {
+        phone: username,   // IMPORTANT: match backend field
+        password: password,
     });
-
     const { access_token, user } = response.data;
 
     // Store token and user
@@ -119,7 +114,7 @@ export const loginUser = async (username, password) => {
  */
 export const getCurrentUser = async () => {
   try {
-    const response = await api.get('/auth/me');
+    const response = await api.get('/api/v1/auth/me');
     return {
       success: true,
       user: {
@@ -184,21 +179,32 @@ export const fetchIssues = async (filters = {}) => {
     if (filters.site_id) params.append('site_id', filters.site_id);
 
     const response = await withRetry(
-      () => api.get(`/issues?${params.toString()}`),
+      () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
       { maxRetries: 2 }
     );
+    console.log(response)
 
     // Transform response to match frontend expectations
-    const issues = response.data.map(issue => ({
+    // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }
+    //   ...issue,
+    //   site: issue.site ? {
+    //     ...issue.site,
+    //     name: issue.site.name,
+    //   } : null,
+    //   raised_by: issue.raised_by ? {
+    //     ...issue.raised_by,
+    //     avatar: issue.raised_by.avatar_url,
+    //   } : null,
+    // }));
+
+    const issues = response.data.issues.map(issue => ({ // Map backend fields to frontend format
       ...issue,
-      site: issue.site ? {
-        ...issue.site,
-        name: issue.site.name,
-      } : null,
-      raised_by: issue.raised_by ? {
-        ...issue.raised_by,
-        avatar: issue.raised_by.avatar_url,
-      } : null,
+      site: {
+        name: issue.site_name,
+      },
+      raised_by: {
+        name: issue.supervisor_name,
+      }
     }));
 
     return {
@@ -220,8 +226,8 @@ export const fetchIssues = async (filters = {}) => {
  */
 export const fetchIssueById = async (issueId) => {
   try {
-    const response = await api.get(`/issues/${issueId}`);
-    
+    const response = await api.get(`/api/v1/issues/${issueId}`); // URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/{issue_id}
+
     const issue = {
       ...response.data,
       site: response.data.site ? {
@@ -243,6 +249,27 @@ export const fetchIssueById = async (issueId) => {
     return {
       success: false,
       error: error.response?.data?.detail || 'Failed to fetch issue',
+    };
+  }
+};
+
+/**
+ * Fetch single issue by ID along with its timeline entries
+ */
+export const fetchIssueTimeline = async (issueId) => {
+  try {
+    const response = await api.get(`/api/v1/issues/${issueId}/timeline`);
+
+    return {
+      success: true,
+      timeline: response.data.entries,
+    };
+  } catch (error) {
+    console.error("Timeline fetch error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      timeline: [],
     };
   }
 };
@@ -332,21 +359,69 @@ export const fetchSites = async () => {
  * Send message to chatbot
  */
 // chatService.js 
-export const sendChatMessage = async (text, currentIssueId = null, imageUrl = null) => {
-  const requestBody = {
-    message: text,
-    image_url: imageUrl, // URL from ImageKit
-    issue_id: currentIssueId, 
-    metadata: {
-      screen: "chat_main",
-      timestamp: new Date().toISOString(),
-      platform: Platform.OS,
-      // You can add GPS here later if needed
-    }
-  };
+export const sendChatMessage = async (
+  text,
+  sessionId = null,
+  currentIssueId = null,
+  imageUrl = null
+) => {
+  try {
+    const requestBody = {
+      message: text,
+      session_id: sessionId,   // ✅ VERY IMPORTANT
+      image_url: imageUrl,
+      issue_id: currentIssueId,
+      metadata: {
+        platform: Platform.OS,
+        timestamp: new Date().toISOString(),
+      }
+    };
 
-  const response = await axios.post(`${API_URL}/chat`, requestBody);
-  return response.data;
+    const response = await api.post('/api/v1/chat/', requestBody);
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error("Chat send error:", error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data?.detail || "Failed to send message",
+    };
+  }
+};
+
+export const fetchChatSessions = async () => {
+  try {
+    const response = await api.get('/api/v1/chat/sessions');
+    return {
+      success: true,
+      sessions: response.data.sessions,
+    };
+  } catch (error) {
+    console.error("Fetch sessions error:", error.response?.data || error.message);
+    return {
+      success: false,
+      sessions: [],
+    };
+  }
+};
+
+export const fetchSessionDetail = async (sessionId) => {
+  try {
+    const response = await api.get(`/api/v1/chat/sessions/${sessionId}`);
+    return {
+      success: true,
+      session: response.data,
+    };
+  } catch (error) {
+    console.error("Fetch session detail error:", error.response?.data || error.message);
+    return {
+      success: false,
+      session: null,
+    };
+  }
 };
 
 // ==================== HEALTH CHECK ====================

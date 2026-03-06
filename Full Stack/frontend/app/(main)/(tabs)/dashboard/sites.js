@@ -1,5 +1,3 @@
-// app/(main)/(tabs)/dashboard/sites.js
-
 import React, { useEffect, useCallback, useState } from 'react';
 import {
   View,
@@ -69,7 +67,6 @@ export default function SitesScreen() {
     const { analytics } = item || {};
     const overdue = analytics?.overdueCount || 0;
     const complaintsCount = analytics?.complaintsCount || 0;
-    // ── FIX: Extract the newly created score ──
     const score = analytics?.score ?? 100; 
 
     return (
@@ -78,7 +75,7 @@ export default function SitesScreen() {
         style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}
         onPress={() =>
           router.push({
-            pathname: '(main)/(tabs)/dashboard/site-detail',
+            pathname: '/(main)/(tabs)/dashboard/site-detail',
             params: { id: item.id },
           })
         }
@@ -92,7 +89,6 @@ export default function SitesScreen() {
             </View>
           </View>
 
-          {/* ── FIX: Add the Score next to the Health Badge ── */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: getHealthColor(analytics?.health) }}>
               {score}%
@@ -131,14 +127,21 @@ export default function SitesScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
+      
+      {/* ── UPDATED HEADER WITH BACK BUTTON ── */}
       <View style={[styles.header, { borderBottomColor: borderColor, backgroundColor: 'transparent' }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Sites</Text>
-          <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-            {user?.role === 'manager' ? 'All locations' : user?.role === 'supervisor' ? 'Your locations' : 'Assigned locations'}
-          </Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={26} color={theme.text} />
+          </TouchableOpacity>
+          <View>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Sites</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
+              {user?.role === 'manager' ? 'All locations' : user?.role === 'supervisor' ? 'Your locations' : 'Assigned locations'}
+            </Text>
+          </View>
         </View>
-        <TouchableOpacity onPress={() => router.push('(main)/profile')} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
           <Avatar uri={user?.avatar} name={user?.name} size="medium" />
         </TouchableOpacity>
       </View>
@@ -161,7 +164,24 @@ export default function SitesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 20, 
+    paddingVertical: 16, 
+    borderBottomWidth: StyleSheet.hairlineWidth 
+  },
+  /* ── NEW STYLES ── */
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  backButton: {
+    padding: 4,
+    marginLeft: -4,
+  },
   headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   headerSubtitle: { fontSize: 14, fontWeight: '500', marginTop: 4 },
   listContent: { paddingHorizontal: 16, paddingVertical: 12 },

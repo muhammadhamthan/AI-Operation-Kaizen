@@ -1,9 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi } from '../../mocks/apiService';
+import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi , fetchIssueTimeline as fetchIssueTimelineApi } from '../../services/api';// Initial state
 
 const initialState = {
   issues: [],
   currentIssue: null,
+  timeline: [], // New state for issue timeline
   loading: false,
   error: null,
   filters: {
@@ -40,6 +41,23 @@ export const fetchIssueById = createAsyncThunk(
       return result.issue;
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to fetch issue');
+    }
+  }
+);
+
+export const fetchIssueTimeline = createAsyncThunk(//new thunk for fetching issue timeline
+  'issues/fetchTimeline',
+  async (issueId, { rejectWithValue }) => {
+    try {
+      const result = await fetchIssueTimelineApi(issueId);
+
+      if (!result.success) {
+        return rejectWithValue('Failed to fetch timeline');
+      }
+
+      return result.timeline;
+    } catch (error) {
+      return rejectWithValue(error.message);
     }
   }
 );
@@ -88,7 +106,18 @@ const issuesSlice = createSlice({
       .addCase(fetchIssueById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
+      // Timeline cases
+      .addCase(fetchIssueTimeline.pending, (state) => {
+      state.loading = true;
+      })
+      .addCase(fetchIssueTimeline.fulfilled, (state, action) => {
+        state.loading = false;
+        state.timeline = action.payload;
+      })
+      .addCase(fetchIssueTimeline.rejected, (state) => {
+        state.loading = false;
+      })
   },
 });
 
@@ -145,5 +174,6 @@ export const selectFixedIssues = (state) => {
 export const selectEscalatedIssues = (state) => {
   return state.issues.issues.filter(issue => issue.status === 'ESCALATED');
 };
+export const selectIssueTimeline = (state) => state.issues.timeline;//new selector for issue timeline
 
 export default issuesSlice.reducer;

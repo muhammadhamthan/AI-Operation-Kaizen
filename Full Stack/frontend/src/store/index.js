@@ -7,9 +7,8 @@ import chatReducer from './slices/chatSlice';
 import dashboardReducer from './slices/dashboardSlice';
 import notificationsReducer from './slices/notificationsSlice';
 import offlineReducer from './slices/offlineSlice';
-
-import sitesReducer from './slices/sitesSlice';
-import performanceReducer from './slices/performanceSlice';
+import sitesReducer from "./slices/sitesSlice"
+import performanceReducer from "./slices/performanceSlice"
 
 // 1. Combine all your reducers into one app-level reducer
 const appReducer = combineReducers({
@@ -31,12 +30,12 @@ const rootReducer = (state, action) => {
   if (action.type === 'auth/logout/fulfilled') {
     // Optional but good UX: Save the user's theme choice before nuking the state
     const { theme } = state;
-
+    
     // Setting state to an object containing only the theme forces EVERY 
     // other slice (chat, dashboard, issues, etc.) back to its pure initialState.
-    state = { theme };
+    state = { theme }; 
   }
-
+  
   return appReducer(state, action);
 };
 

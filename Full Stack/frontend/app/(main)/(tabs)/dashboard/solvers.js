@@ -1,5 +1,3 @@
-// app/(main)/(tabs)/dashboard/solvers.js
-
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
@@ -73,7 +71,7 @@ export default function SolversScreen() {
 
   const getLabelIcon = label => {
     if (label === 'Top Performer') return 'trophy-outline';
-    if (label === 'Average') return 'speedometer-outline';
+    if (label === 'Good') return 'speedometer-outline';
     return 'alert-circle-outline';
   };
 
@@ -95,7 +93,7 @@ export default function SolversScreen() {
         ]}
         onPress={() =>
           router.push({
-            pathname: '(main)/(tabs)/dashboard/solver-profile',
+            pathname: '/(main)/(tabs)/dashboard/solver-profile',
             params: { id: item.id },
           })
         }
@@ -229,9 +227,7 @@ export default function SolversScreen() {
     );
   };
 
-  if (loading && solvers.length === 0) {
-    return <Loader message="Loading team performance..." fullScreen />;
-  }
+  if (loading && solvers.length === 0) return <Loader message="Loading team performance..." fullScreen />;
 
   return (
     <SafeAreaView
@@ -241,25 +237,30 @@ export default function SolversScreen() {
         { backgroundColor: isDark ? '#212121' : '#f9f9f9' },
       ]}
     >
-      {/* HEADER */}
+      {/* ── UPDATED HEADER WITH BACK BUTTON ── */}
       <View
         style={[
           styles.header,
           { borderBottomColor: borderColor, backgroundColor: 'transparent' },
         ]}
       >
-        <View>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            Team
-          </Text>
-          <Text
-            style={[styles.headerSubtitle, { color: theme.textSecondary }]}
-          >
-            Performance overview
-          </Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={26} color={theme.text} />
+          </TouchableOpacity>
+          <View>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>
+              Team
+            </Text>
+            <Text
+              style={[styles.headerSubtitle, { color: theme.textSecondary }]}
+            >
+              Performance overview
+            </Text>
+          </View>
         </View>
         <TouchableOpacity
-          onPress={() => router.push('(main)/profile')}
+          onPress={() => router.push('/(main)/profile')}
           activeOpacity={0.7}
         >
           <Avatar uri={user?.avatar} name={user?.name} size="medium" />
@@ -336,6 +337,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  /* ── NEW STYLES ── */
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  backButton: {
+    padding: 4,
+    marginLeft: -4,
   },
   headerTitle: {
     fontSize: 28,
@@ -458,4 +469,3 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 });
-

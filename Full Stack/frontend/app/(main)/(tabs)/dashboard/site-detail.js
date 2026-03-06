@@ -1,5 +1,3 @@
-// app/(main)/(tabs)/dashboard/site-detail.js
-
 import React, { useMemo } from 'react';
 import {
   View,
@@ -17,7 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectSiteById } from '../../../../src/store/slices/sitesSlice';
-import StatusBadge from "../../../../src/components/common/StatusBadge"
+import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import { issues } from '../../../../src/mocks/issues';
@@ -34,6 +32,11 @@ export default function SiteDetailScreen() {
 
   const site = useSelector(state => selectSiteById(state, id));
 
+  // 🕵️ DATA FLOW LOGS
+  console.log('📍 --- SITE DETAIL MOUNTED ---');
+  console.log(`Searching for Site ID: ${id}`);
+  console.log('Site Data from Redux:', site?.name);
+
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -47,34 +50,35 @@ export default function SiteDetailScreen() {
     }
   };
 
-  // ── FIX: Changed siteid to site_id to match mock format ──
+  // ✅ REVERTED TO SNAKE CASE: site_id
   const siteIssues = useMemo(
-    () => issues.filter(i => i.site_id === id || i.site_id === id),
+    () => issues.filter(i => i.site_id === id),
     [id]
   );
 
-  // ── FIX: Changed issueid and raisedbysupervisorid to snake_case ──
   const siteComplaints = useMemo(
     () =>
       complaints
         .filter(c => {
-          const issue = issues.find(i => i.id === (c.issue_id || c.issueid));
-          return (issue?.site_id || issue?.site_id) === id;
+          // ✅ REVERTED TO SNAKE CASE: issue_id
+          const issue = issues.find(i => i.id === c.issue_id);
+          // ✅ REVERTED TO SNAKE CASE: site_id
+          return issue?.site_id === id;
         })
         .map(c => ({
           ...c,
-          raisedBy: getUserById(c.raised_by_supervisor_id || c.raisedbysupervisorid),
+          // ✅ REVERTED TO SNAKE CASE: raised_by_supervisor_id
+          raisedBy: getUserById(c.raised_by_supervisor_id),
         })),
     [id]
   );
-  
 
-  // ── FIX: Changed createdat to created_at ──
   const recentIssues = useMemo(() => {
     return [...siteIssues]
       .sort(
         (a, b) =>
-          new Date(b.created_at || b.createdat).getTime() - new Date(a.created_at || a.createdat).getTime()
+          // ✅ REVERTED TO SNAKE CASE: created_at
+          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       )
       .slice(0, 5);
   }, [siteIssues]);
@@ -114,6 +118,7 @@ export default function SiteDetailScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
+
       {/* HEADER */}
       <View style={[styles.header, { borderBottomColor: borderColor, backgroundColor: bgColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
@@ -124,7 +129,7 @@ export default function SiteDetailScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        
+
         {/* SITE OVERVIEW & SCORE */}
         <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
           <View style={styles.titleRow}>
@@ -186,18 +191,26 @@ export default function SiteDetailScreen() {
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Assigned Solvers</Text>
             <View style={styles.solverList}>
               {analytics.solvers.map(solver => (
-                <View key={solver.id} style={[styles.solverChip, { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0' }]}>
+                <TouchableOpacity
+                  key={solver.id}
+                  style={[styles.solverChip, { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0' }]}
+                  activeOpacity={0.7}
+                  // ✅ Routing logic added here!
+                  onPress={() => router.push({
+                    pathname: '/(main)/(tabs)/dashboard/solver-profile',
+                    params: { id: solver.id }
+                  })}
+                >
                   <Avatar name={solver.name} size="small" />
                   <Text style={[styles.solverName, { color: theme.text }]} numberOfLines={1}>
                     {solver.name.split(' ')[0]}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
         )}
 
-        {/* RECENT COMPLAINTS */}
         {/* RECENT COMPLAINTS */}
         {siteComplaints.length > 0 && (
           <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
@@ -207,7 +220,7 @@ export default function SiteDetailScreen() {
                 <Ionicons name="warning" size={20} color="#ef4444" />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>
-                    {/* FIX: Changed from .reason to .complaint_details */}
+                    {/* ✅ REVERTED TO SNAKE CASE: complaint_details */}
                     {complaint.complaint_details || 'No reason provided'}
                   </Text>
                   <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>
@@ -230,7 +243,7 @@ export default function SiteDetailScreen() {
                 key={issue.id}
                 style={styles.issueRow}
                 activeOpacity={0.7}
-                onPress={() => router.push({ pathname: '(main)/(tabs)/dashboard/issue-detail', params: { id: issue.id } })}
+                onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/issue-detail', params: { id: issue.id } })}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>
@@ -312,4 +325,3 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 13, fontStyle: 'italic' },
   bottomPadding: { height: 40 },
 });
-
