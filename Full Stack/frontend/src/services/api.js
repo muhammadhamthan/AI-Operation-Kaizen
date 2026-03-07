@@ -281,20 +281,31 @@ export const fetchIssueTimeline = async (issueId) => {
  */
 export const fetchDashboardStats = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/dashboard/stats'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/dashboard');
+
+    const summary = response.data.summary;
 
     return {
       success: true,
-      stats: response.data,
+      stats: {
+        totalIssues: summary.total_issues,
+        notFixedIssues:
+          summary.open_issues +
+          summary.assigned_issues +
+          summary.in_progress_issues +
+          summary.reopened_issues +
+          summary.escalated_issues,
+
+        fixedIssues: summary.completed_issues,
+
+        complaints: response.data.complaints_against || 0
+      }
     };
+
   } catch (error) {
-    console.error('Fetch dashboard error:', error.response?.data || error.message);
+    console.error('Fetch dashboard error:', error);
     return {
       success: false,
-      error: error.response?.data?.detail || 'Failed to fetch dashboard',
       stats: {
         totalIssues: 0,
         notFixedIssues: 0,
@@ -312,22 +323,65 @@ export const fetchDashboardStats = async () => {
  */
 export const fetchComplaints = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/complaints'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/complaints');
+
+    const complaints = response.data.complaints.map(c => ({
+      ...c,
+
+      // map supervisor
+      raisedBy: {
+        name: c.supervisor_name,
+      },
+
+      // map solver
+      targetSolver: {
+        name: c.solver_name,
+      },
+
+      // issue object expected in UI
+      issue: {
+        title: c.issue_title
+      },
+
+      // temporary status since backend doesn't send it
+      status: "OPEN"
+    }));
 
     return {
       success: true,
-      complaints: response.data,
+      complaints,
     };
+
   } catch (error) {
-    console.error('Fetch complaints error:', error.response?.data || error.message);
     return {
       success: false,
-      error: error.response?.data?.detail || 'Failed to fetch complaints',
       complaints: [],
     };
+  }
+};
+
+export const fetchComplaintById = async (id) => {
+  try {
+    const response = await api.get(`/api/v1/complaints/${id}`);
+
+    const c = response.data;
+
+    return {
+      ...c,
+      raisedBy: {
+        name: c.supervisor_name,
+      },
+      targetSolver: {
+        name: c.solver_name,
+      },
+      issue: {
+        title: c.issue_title
+      },
+      status: "OPEN"
+    };
+
+  } catch (error) {
+    throw error;
   }
 };
 
@@ -349,6 +403,44 @@ export const fetchSites = async () => {
       success: false,
       error: error.response?.data?.detail || 'Failed to fetch sites',
       sites: [],
+    };
+  }
+};
+
+export const fetchSitesAnalytics = async () => {
+ try {
+    const response = await api.get('/api/v1/sites/analytics');
+
+    return {
+      success: true,
+      sites: response.data.sites,
+    };
+
+  } catch (error) {
+    console.error("Fetch sites error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      sites: [],
+      error: error.response?.data?.detail || "Failed to fetch sites",
+    };
+  }
+};
+
+export const fetchSolversPerformanceAPI = async () => {
+  try {
+    const response = await api.get('/api/v1/solvers');
+
+    return {
+      success: true,
+      solvers: response.data.solvers,
+    };
+
+  } catch (error) {
+    return {
+      success: false,
+      solvers: [],
+      error: error.response?.data?.detail || "Failed to fetch solvers",
     };
   }
 };

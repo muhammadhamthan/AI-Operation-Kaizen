@@ -1,8 +1,9 @@
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
-import { users } from '../../mocks/users';
-import { solverSkills } from '../../mocks/solverSkills';
-import { calculateSolverScore } from '../../utils/scoreEngine';
-import { supervisorSites } from "../../mocks/supervisorSites";
+// import { users } from '../../mocks/users';
+// import { solverSkills } from '../../mocks/solverSkills';
+// import { calculateSolverScore } from '../../utils/scoreEngine';
+// import { supervisorSites } from "../../mocks/supervisorSites";
+import { fetchSolversPerformanceAPI } from '../../services/api';
 
 function getVisibleSolvers(user) {
   // Fix role typo
@@ -37,19 +38,12 @@ function getVisibleSolvers(user) {
 
 export const fetchSolversPerformance = createAsyncThunk(
   'performance/fetchSolvers',
-  async (user, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      if (!user) return [];
-      const solvers = getVisibleSolvers(user);
-      const data = solvers.map(solver => {
-        // Safely check if scoreEngine exists/works, otherwise default to 0
-        const perf = typeof calculateSolverScore === 'function' ? calculateSolverScore(solver.id) : 0; 
-        return { ...solver, performance: perf };
-      });
-      return data;
+      const res = await fetchSolversPerformanceAPI();
+      return res.solvers;
     } catch (e) {
-      console.error('Redux Thunk Error:', e);
-      return rejectWithValue(e.message || 'Failed to load performance');
+      return rejectWithValue(e.message);
     }
   }
 );

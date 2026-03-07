@@ -593,7 +593,7 @@ class IssueService:
     # READ-ONLY: Timeline
     # ══════════════════════════════════════════════════════
 
-    async def get_timeline(self, issue_id: int):
+    async def get_timeline(self, issue_id: int): # IT IS NOT USED YET IN THE FRONTEND
         stmt = (
             select(IssueHistory)
             .where(IssueHistory.issue_id == issue_id)

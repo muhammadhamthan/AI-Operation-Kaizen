@@ -23,7 +23,7 @@ router = APIRouter()
     "",
     summary="Get role-based dashboard data",
 )
-def get_dashboard(
+async def get_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -36,10 +36,10 @@ def get_dashboard(
     service = DashboardService(db)
 
     if current_user.role == UserRole.SUPERVISOR:
-        return service.get_supervisor_dashboard(current_user)
+        return await service.get_supervisor_dashboard(current_user)
     elif current_user.role == UserRole.MANAGER:
-        return service.get_manager_dashboard(current_user)
+        return await service.get_manager_dashboard(current_user)
     elif current_user.role == UserRole.PROBLEMSOLVER:
-        return service.get_solver_dashboard(current_user)
+        return await service.get_solver_dashboard(current_user)
     else:
-        return service.get_supervisor_dashboard(current_user)
+        return await service.get_supervisor_dashboard(current_user)

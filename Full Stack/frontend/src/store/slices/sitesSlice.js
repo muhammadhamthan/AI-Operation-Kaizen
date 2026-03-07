@@ -1,9 +1,11 @@
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
-import { sites } from '../../mocks/sites';
-import { issues } from '../../mocks/issues';
-import { complaints } from '../../mocks/complaints';
-import { solverSkills } from '../../mocks/solverSkills';
-import { getUserById } from '../../mocks/users';
+// import { sites } from '../../mocks/sites';
+// import { issues } from '../../mocks/issues';
+// import { complaints } from '../../mocks/complaints';
+// import { solverSkills } from '../../mocks/solverSkills';
+// import { getUserById } from '../../mocks/users';
+import { fetchSitesAnalytics } from '../../services/api';
+
 
 const now = () => new Date();
 
@@ -86,33 +88,17 @@ function computeSiteAnalytics(siteId) {
 
 export const fetchSitesWithAnalytics = createAsyncThunk(
   'sites/fetchWithAnalytics',
-  async (user, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      let visibleSites = [...sites];
-      
-      // ✅ Fetch full user to ensure we have the sites array
-      const fullUser = user?.id ? getUserById(user.id) : user;
+      const res = await fetchSitesAnalytics();
 
-      if (fullUser?.role === 'supervisor') {
-        const userSites = fullUser?.sites?.length > 0 ? fullUser.sites : [1, 2, 3, 4, 5];
-        visibleSites = sites.filter(s => userSites.includes(s.id));
+      if (!res.success) {
+        return rejectWithValue(res.error);
       }
 
-      // ✅ REVERTED TO SNAKE CASE: problem_solver, solver_id, site_id
-      if (fullUser?.role === 'problem_solver') {
-        const skillEntries = solverSkills.filter(s => s.solver_id === fullUser.id);
-        const siteIds = [...new Set(skillEntries.map(s => s.site_id))];
-        visibleSites = sites.filter(s => siteIds.includes(s.id));
-      }
-
-      const enriched = visibleSites.map(site => ({
-        ...site,
-        analytics: computeSiteAnalytics(site.id),
-      }));
-
-      return enriched;
+      return res.sites;
     } catch (e) {
-      return rejectWithValue(e.message || 'Failed to load sites');
+      return rejectWithValue(e.message);
     }
   }
 );
