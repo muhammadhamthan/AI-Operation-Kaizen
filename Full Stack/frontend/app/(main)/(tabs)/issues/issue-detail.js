@@ -1,3 +1,5 @@
+import { useDispatch } from 'react-redux';//new import for dispatching actions
+import { fetchIssueById } from '../../../../src/store/slices/issuesSlice';//new import for fetching issue details
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -25,8 +27,17 @@ export default function IssueDetailScreen() {
   const { theme, isDark } = useTheme(); // 🚀 Added isDark for premium shading
   const router = useRouter();
   const { id, highlighted } = useLocalSearchParams();
+  //new
+  const dispatch = useDispatch();
+
   const issue = useSelector((state) => selectIssueById(state, parseInt(id)));
-  
+
+  useEffect(() => {
+    if (id) {
+      dispatch(fetchIssueById(parseInt(id)));
+    }
+  }, [id]);
+  //new
   const [highlightAnim] = useState(new Animated.Value(highlighted === 'true' ? 1 : 0));
 
   useEffect(() => {

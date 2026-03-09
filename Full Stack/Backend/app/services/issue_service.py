@@ -541,14 +541,20 @@ class IssueService:
     # READ-ONLY: Issue detail
     # ══════════════════════════════════════════════════════
 
-    def get_issue_detail(self, issue_id: int):
-        issue = self.db.query(Issue).filter(Issue.id == issue_id).first()
+    async def get_issue_detail(self, issue_id: int):
+        issue_stmt = select(Issue).where(Issue.id == issue_id)
+        issue = await self.db.execute(issue_stmt)
+        issue = issue.scalar()
         if not issue:
             return None
 
-        complaints_count = self.db.query(sql_func.count()).select_from(
-            __import__('app.models.complaint', fromlist=['Complaint']).Complaint
-        ).filter_by(issue_id=issue_id).scalar()
+        from app.models.complaint import Complaint #it might create circular import issue but we can handle it by importing inside the function where we need to use it
+
+        complaints_stmt = select(sql_func.count()).select_from(Complaint).where(
+            Complaint.issue_id == issue_id
+        )
+        complaints_count = await self.db.execute(complaints_stmt)
+        complaints_count = complaints_count.scalar()
 
         return IssueDetailResponse(
             id=issue.id, site_id=issue.site_id,
@@ -563,7 +569,7 @@ class IssueService:
             images=[IssueImageBrief(
                 id=img.id, image_url=img.image_url, image_type=img.image_type.value,
                 ai_flag=img.ai_flag.value, uploaded_by_user_id=img.uploaded_by_user_id,
-                uploader_name=img.uploaded_by.name if img.uploaded_by else None,
+                uploader_name=img.uploaded_by_user .name if img.uploaded_by_user else None,
                 created_at=img.created_at,
             ) for img in issue.images],
             assignments=[AssignmentBrief(
@@ -583,10 +589,15 @@ class IssueService:
     # READ-ONLY: Timeline
     # ══════════════════════════════════════════════════════
 
-    def get_timeline(self, issue_id: int):
-        entries = self.db.query(IssueHistory).filter(
-            IssueHistory.issue_id == issue_id
-        ).order_by(IssueHistory.created_at).all()
+    async def get_timeline(self, issue_id: int):
+        stmt = (
+            select(IssueHistory)
+            .where(IssueHistory.issue_id == issue_id)
+            .order_by(IssueHistory.created_at.desc())
+        )
+
+        entries = await self.db.execute(stmt)
+        entries = entries.scalars().all()
 
         return IssueHistoryListResponse(
             total=len(entries), issue_id=issue_id,
@@ -604,12 +615,18 @@ class IssueService:
     # PRIVATE HELPERS
     # ══════════════════════════════════════════════════════
 
-    def _get_supervisor_site_ids(self, supervisor_id: int):
-        return [
-            r[0] for r in
-            self.db.query(SupervisorSite.c.site_id)
-            .filter(SupervisorSite.c.supervisor_id == supervisor_id).all()
-        ]
+    from sqlalchemy import select
+
+    async def _get_supervisor_site_ids(self, supervisor_id: int):
+
+        stmt = select(SupervisorSite.c.site_id).where(
+            SupervisorSite.c.supervisor_id == supervisor_id
+        )
+
+        result = await self.db.execute(stmt)
+        result = result.scalars().all()
+
+        return result
 
     def _match_site(self, location_name: str, sites: list) -> Optional[Site]:
         loc = location_name.lower()
