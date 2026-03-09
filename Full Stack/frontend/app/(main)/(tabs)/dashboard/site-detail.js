@@ -18,9 +18,6 @@ import { selectSiteById } from '../../../../src/store/slices/sitesSlice';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import EmptyState from '../../../../src/components/common/EmptyState';
-import { issues } from '../../../../src/mocks/issues';
-import { complaints } from '../../../../src/mocks/complaints';
-import { getUserById } from '../../../../src/mocks/users';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -30,12 +27,8 @@ export default function SiteDetailScreen() {
   const params = useLocalSearchParams();
   const id = parseInt(params.id, 10);
 
+  // ✅ Get site data from our standard Redux slice
   const site = useSelector(state => selectSiteById(state, id));
-
-  // 🕵️ DATA FLOW LOGS
-  console.log('📍 --- SITE DETAIL MOUNTED ---');
-  console.log(`Searching for Site ID: ${id}`);
-  console.log('Site Data from Redux:', site?.name);
 
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
@@ -50,48 +43,16 @@ export default function SiteDetailScreen() {
     }
   };
 
-  // ✅ REVERTED TO SNAKE CASE: site_id
-  const siteIssues = useMemo(
-    () => issues.filter(i => i.site_id === id),
-    [id]
-  );
-
-  const siteComplaints = useMemo(
-    () =>
-      complaints
-        .filter(c => {
-          // ✅ REVERTED TO SNAKE CASE: issue_id
-          const issue = issues.find(i => i.id === c.issue_id);
-          // ✅ REVERTED TO SNAKE CASE: site_id
-          return issue?.site_id === id;
-        })
-        .map(c => ({
-          ...c,
-          // ✅ REVERTED TO SNAKE CASE: raised_by_supervisor_id
-          raisedBy: getUserById(c.raised_by_supervisor_id),
-        })),
-    [id]
-  );
-
-  const recentIssues = useMemo(() => {
-    return [...siteIssues]
-      .sort(
-        (a, b) =>
-          // ✅ REVERTED TO SNAKE CASE: created_at
-          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-      )
-      .slice(0, 5);
-  }, [siteIssues]);
-
+  // ✅ Chart data mapped to real snake_case backend keys
   const chartData = useMemo(() => {
     if (!site?.analytics) return null;
     const a = site.analytics;
     const entries = [
-      { label: 'Open', value: a.openIssues, color: '#3b82f6' },
-      { label: 'In Progress', value: a.inProgressIssues, color: '#8b5cf6' },
-      { label: 'Completed', value: a.completedIssues, color: '#10a37f' },
-      { label: 'Escalated', value: a.escalatedIssues, color: '#ef4444' },
-      { label: 'Reopened', value: a.reopenedIssues, color: '#f59e0b' },
+      { label: 'Open', value: a.open_issues || 0, color: '#3b82f6' },
+      { label: 'Assigned', value: a.assigned_issues || 0, color: '#8b5cf6' },
+      { label: 'In Progress', value: a.in_progress_issues || 0, color: '#f59e0b' },
+      { label: 'Completed', value: a.completed_issues || 0, color: '#10a37f' },
+      { label: 'Reopened', value: a.reopened_issues || 0, color: '#ef4444' },
     ].filter(e => e.value > 0);
 
     if (entries.length === 0) return null;
@@ -108,13 +69,16 @@ export default function SiteDetailScreen() {
   if (!site) {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
-        <EmptyState icon="business-outline" title="Site not found" message="The requested site does not exist." />
+        <View style={styles.header}>
+           <TouchableOpacity onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color={theme.text} /></TouchableOpacity>
+        </View>
+        <EmptyState icon="business-outline" title="Site not found" message="The requested site data is unavailable." />
       </SafeAreaView>
     );
   }
 
-  const analytics = site.analytics;
-  const score = analytics?.score ?? 100;
+  const analytics = site.analytics || {};
+  const score = analytics.score ?? 100;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -137,27 +101,27 @@ export default function SiteDetailScreen() {
               <Text style={[styles.siteName, { color: theme.text }]}>{site.name}</Text>
               <Text style={[styles.siteLocation, { color: theme.textSecondary }]}>{site.location}</Text>
             </View>
-            <View style={[styles.healthBadge, { borderColor: getHealthColor(analytics?.health), backgroundColor: getHealthColor(analytics?.health) + '15' }]}>
-              <Text style={[styles.healthText, { color: getHealthColor(analytics?.health) }]}>
-                {analytics?.health || 'Unknown'}
+            <View style={[styles.healthBadge, { borderColor: getHealthColor(analytics.health), backgroundColor: getHealthColor(analytics.health) + '15' }]}>
+              <Text style={[styles.healthText, { color: getHealthColor(analytics.health) }]}>
+                {analytics.health || 'Unknown'}
               </Text>
             </View>
           </View>
 
           <View style={styles.scoreRow}>
             <View style={styles.scoreBox}>
-              <Text style={[styles.scoreValue, { color: getHealthColor(analytics?.health) }]}>{score}</Text>
+              <Text style={[styles.scoreValue, { color: getHealthColor(analytics.health) }]}>{score}</Text>
               <Text style={[styles.scoreLabel, { color: theme.textSecondary }]}>Site Score</Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.scoreBox}>
-              <Text style={[styles.scoreValue, { color: theme.text }]}>{analytics?.totalIssues || 0}</Text>
+              <Text style={[styles.scoreValue, { color: theme.text }]}>{analytics.total_issues || 0}</Text>
               <Text style={[styles.scoreLabel, { color: theme.textSecondary }]}>Total Issues</Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.scoreBox}>
-              <Text style={[styles.scoreValue, { color: analytics?.overdueCount > 0 ? '#ef4444' : theme.text }]}>
-                {analytics?.overdueCount || 0}
+              <Text style={[styles.scoreValue, { color: (analytics.overdue_count || 0) > 0 ? '#ef4444' : theme.text }]}>
+                {analytics.overdue_count || 0}
               </Text>
               <Text style={[styles.scoreLabel, { color: theme.textSecondary }]}>Overdue</Text>
             </View>
@@ -181,12 +145,12 @@ export default function SiteDetailScreen() {
               />
             </View>
           ) : (
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No issue data available for this site.</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No issues recorded for this site yet.</Text>
           )}
         </View>
 
-        {/* ASSIGNED SOLVERS */}
-        {analytics?.solvers && analytics.solvers.length > 0 && (
+        {/* ASSIGNED SOLVERS (Mapped from real backend solvers list) */}
+        {analytics.solvers && analytics.solvers.length > 0 && (
           <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Assigned Solvers</Text>
             <View style={styles.solverList}>
@@ -195,7 +159,6 @@ export default function SiteDetailScreen() {
                   key={solver.id}
                   style={[styles.solverChip, { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0' }]}
                   activeOpacity={0.7}
-                  // ✅ Routing logic added here!
                   onPress={() => router.push({
                     pathname: '/(main)/(tabs)/dashboard/solver-profile',
                     params: { id: solver.id }
@@ -211,51 +174,31 @@ export default function SiteDetailScreen() {
           </View>
         )}
 
-        {/* RECENT COMPLAINTS */}
-        {siteComplaints.length > 0 && (
-          <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Recent Complaints</Text>
-            {siteComplaints.slice(0, 3).map((complaint, index) => (
-              <View key={complaint.id || index} style={styles.issueRow}>
-                <Ionicons name="warning" size={20} color="#ef4444" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>
-                    {/* ✅ REVERTED TO SNAKE CASE: complaint_details */}
-                    {complaint.complaint_details || 'No reason provided'}
-                  </Text>
-                  <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>
-                    Raised by {complaint.raisedBy?.name || 'Unknown'}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
+        {/* RECENT COMPLAINTS PLACEHOLDER */}
+        <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Recent Complaints</Text>
+          {(analytics.complaints_count || 0) > 0 ? (
+             <View style={styles.placeholderBox}>
+                <Ionicons name="information-circle-outline" size={20} color={theme.textSecondary} />
+                <Text style={{color: theme.textSecondary, marginLeft: 8}}>Complaint details are loaded in the Complaints screen.</Text>
+             </View>
+          ) : (
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No complaints reported for this site.</Text>
+          )}
+        </View>
 
-        {/* RECENT ISSUES */}
+        {/* RECENT ISSUES PLACEHOLDER */}
         <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Recent Issues</Text>
-          {recentIssues.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No recent issues.</Text>
+          {(analytics.total_issues || 0) > 0 ? (
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => router.push({ pathname: '/(main)/(tabs)/issues', params: { site_id: id } })}
+            >
+              <Text style={{color: '#3b82f6', fontWeight: '600'}}>View all issues for this site →</Text>
+            </TouchableOpacity>
           ) : (
-            recentIssues.map(issue => (
-              <TouchableOpacity
-                key={issue.id}
-                style={styles.issueRow}
-                activeOpacity={0.7}
-                onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/issue-detail', params: { id: issue.id } })}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>
-                    {issue.title}
-                  </Text>
-                  <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>
-                    #{issue.id} · {issue.priority?.toUpperCase()}
-                  </Text>
-                </View>
-                <StatusBadge status={issue.status} />
-              </TouchableOpacity>
-            ))
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No recent activity reported.</Text>
           )}
         </View>
 
@@ -267,61 +210,29 @@ export default function SiteDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   placeholder: { width: 32 },
   content: { flex: 1 },
-  card: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
+  card: { marginHorizontal: 16, marginTop: 16, padding: 20, borderRadius: 16, borderWidth: 1 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   siteName: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
   siteLocation: { fontSize: 14 },
-  healthBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
+  healthBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
   healthText: { fontSize: 12, fontWeight: '700' },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e5e5',
-  },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.1)' },
   scoreBox: { alignItems: 'center', flex: 1 },
   scoreValue: { fontSize: 24, fontWeight: '700', marginBottom: 4 },
   scoreLabel: { fontSize: 12, fontWeight: '500' },
-  divider: { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: '#ccc' },
+  divider: { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: 'rgba(0,0,0,0.1)' },
   sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
   chartContainer: { alignItems: 'center' },
   solverList: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   solverChip: { flexDirection: 'row', alignItems: 'center', padding: 8, paddingRight: 12, borderRadius: 20, gap: 8 },
   solverName: { fontSize: 13, fontWeight: '600', maxWidth: 80 },
-  issueRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-  issueTitle: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
-  issueMeta: { fontSize: 12 },
+  placeholderBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.03)' },
+  viewAllButton: { padding: 12, alignItems: 'center' },
   emptyText: { fontSize: 13, fontStyle: 'italic' },
   bottomPadding: { height: 40 },
 });

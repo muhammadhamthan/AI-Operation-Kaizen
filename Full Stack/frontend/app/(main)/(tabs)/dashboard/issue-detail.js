@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { fetchIssueById, selectCurrentIssue, selectIssuesLoading, clearCurrentIssue } from '../../../../src/store/slices/issuesSlice';
+// ✅ ADDED: Brought over your formatters from the other file so dates look clean
+import { formatDate } from '../../../../src/utils/formatters'; 
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import Button from '../../../../src/components/common/Button';
@@ -25,7 +27,7 @@ import CallHistorySection from '../../../../src/components/issue/CallHistorySect
 import Loader from '../../../../src/components/common/Loader';
 
 export default function IssueDetailScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
+  const { theme, isDark } = useTheme(); 
   const router = useRouter();
   
   const { id, fromNotification } = useLocalSearchParams();
@@ -70,6 +72,11 @@ export default function IssueDetailScreen() {
     return <Loader message="Loading issue details..." />;
   }
 
+  // ── SAFEGUARD FOR ASSIGNMENTS (Backend sends an array now) ──
+  const currentAssignment = issue.assignments && issue.assignments.length > 0 
+    ? issue.assignments[0] 
+    : null;
+
   // ── PREMIUM PALETTE ──
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
@@ -112,9 +119,36 @@ export default function IssueDetailScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Site</Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site?.name}</Text>
+              {/* ✅ Mapped to flat site_name */}
+              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site_name || 'N/A'}</Text>
             </View>
           </View>
+
+          {/* ✅ Render site_location safely */}
+          {issue.site_location && (
+            <View style={styles.infoRow}>
+              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+                <Ionicons name="map-outline" size={18} color={theme.textSecondary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Location</Text>
+                <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site_location}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* ✅ Added Due Date from the assignment block */}
+          {currentAssignment?.due_date && (
+            <View style={styles.infoRow}>
+              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+                <Ionicons name="calendar-outline" size={18} color={theme.textSecondary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Deadline</Text>
+                <Text style={[styles.infoValue, { color: theme.text }]}>{formatDate(currentAssignment.due_date)}</Text>
+              </View>
+            </View>
+          )}
           
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
@@ -122,7 +156,7 @@ export default function IssueDetailScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Category</Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.issue_type}</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.issue_type || 'General Maintenance'}</Text>
             </View>
           </View>
         </View>
@@ -131,25 +165,32 @@ export default function IssueDetailScreen() {
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
           <View style={styles.peopleGrid}>
-            <View style={[styles.personRow, issue.solver && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-              <Avatar uri={issue.raisedBy?.avatar} name={issue.raisedBy?.name} size="medium" />
+            <View style={[styles.personRow, currentAssignment && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              {/* ✅ Mapped to flat supervisor_name */}
+              <Avatar name={issue.supervisor_name} size="medium" />
               <View style={styles.personInfo}>
                 <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
-                  {issue.raisedBy?.name}
+                  {issue.supervisor_name || 'N/A'}
                 </Text>
                 <Text style={[styles.personRole, { color: theme.textSecondary }]}>Raised By</Text>
               </View>
             </View>
             
-            {issue.solver && (
+            {/* ✅ Mapped dynamically from the assignments array */}
+            {currentAssignment && (
               <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
-                <Avatar uri={issue.solver?.avatar} name={issue.solver?.name} size="medium" />
+                <Avatar name={currentAssignment.solver_name} size="medium" />
                 <View style={styles.personInfo}>
                   <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
-                    {issue.solver?.name}
+                    {currentAssignment.solver_name}
                   </Text>
                   <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
                 </View>
+                {currentAssignment.solver_phone && (
+                   <Text style={[styles.personRole, { color: theme.textSecondary, marginTop: 4 }]}>
+                     {currentAssignment.solver_phone}
+                   </Text>
+                )}
               </View>
             )}
           </View>
@@ -158,7 +199,7 @@ export default function IssueDetailScreen() {
         {/* ── PHOTOS ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Photos</Text>
-          <ImageGallery images={issue.images} />
+          <ImageGallery images={issue.images || []} />
         </View>
 
         {/* ── TIMELINE ── */}
@@ -168,10 +209,9 @@ export default function IssueDetailScreen() {
         </View>
 
         {/* ── CALL HISTORY (Solver Only) ── */}
-        {user?.role === 'problem_solver' && issue.callLogs?.length > 0 && (
+        {user?.role === 'problem_solver' && issue.call_logs?.length > 0 && (
           <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor, padding: 0, overflow: 'hidden' }]}>
-            {/* Note: CallHistorySection handles its own padding internally in the updated version */}
-            <CallHistorySection callLogs={issue.callLogs} />
+            <CallHistorySection callLogs={issue.call_logs} />
           </View>
         )}
 

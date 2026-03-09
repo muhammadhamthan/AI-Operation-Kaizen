@@ -17,7 +17,7 @@ from app.core.enums import ActionType
 
 
 # ── Response: Single history entry ───────────────────────
-class IssueHistoryResponse(BaseModel):
+class  IssueHistoryResponse(BaseModel):
     id: int
     issue_id: int
     changed_by_user_id: Optional[int] = None
