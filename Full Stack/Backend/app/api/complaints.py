@@ -30,11 +30,11 @@ router = APIRouter()
     response_model=ComplaintListResponse,
     summary="List complaints (read-only, role-filtered)",
 )
-def list_complaints(
+async def list_complaints(
     issue_id: Optional[int] = None,
     solver_id: Optional[int] = None,
     skip: int = 0,
-    limit: int = 20,
+    # limit: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -45,12 +45,12 @@ def list_complaints(
     """
     service = ComplaintService(db)
 
-    return service.list_complaints(
+    return await service.list_complaints(
         current_user=current_user,
         issue_id=issue_id,
         solver_id=solver_id,
         skip=skip,
-        limit=limit,
+        # limit=limit,
     )
 
 
@@ -59,13 +59,13 @@ def list_complaints(
     response_model=ComplaintResponse,
     summary="Get complaint detail (read-only)",
 )
-def get_complaint(
+async def get_complaint(
     complaint_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = ComplaintService(db)
-    result = service.get_complaint(complaint_id)
+    result = await service.get_complaint(complaint_id)
 
     if not result:
         raise HTTPException(

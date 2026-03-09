@@ -29,7 +29,7 @@ export default function SitesScreen() {
   const dispatch = useDispatch();
 
   const user = useSelector(selectCurrentUser);
-  const sites = useSelector(selectAllSites);
+  const sites = useSelector(selectAllSites) || [];
   const loading = useSelector(selectSitesLoading);
 
   const [refreshing, setRefreshing] = useState(false);
