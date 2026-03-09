@@ -605,10 +605,10 @@ class IssueService:
 
         return IssueHistoryListResponse(
             total=len(entries), issue_id=issue_id,
-            entries=[IssueHistoryResponse(
+            history=[IssueHistoryResponse(
                 id=e.id, issue_id=e.issue_id,
                 changed_by_user_id=e.changed_by_user_id,
-                changed_by_name=e.changed_by.name if e.changed_by else "System",
+                changed_by_name=e.changed_by_user.name if e.changed_by_user else "System",
                 old_status=e.old_status, new_status=e.new_status,
                 action_type=e.action_type, details=e.details,
                 created_at=e.created_at,

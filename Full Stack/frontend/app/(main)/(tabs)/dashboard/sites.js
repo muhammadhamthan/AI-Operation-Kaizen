@@ -65,9 +65,12 @@ export default function SitesScreen() {
 
   const renderItem = ({ item }) => {
     const { analytics } = item || {};
-    const overdue = analytics?.overdueCount || 0;
-    const complaintsCount = analytics?.complaintsCount || 0;
+    // ✅ Extracting real backend variables
+    const overdue = analytics?.overdue_count || 0;
+    const complaintsCount = analytics?.complaints_count || 0;
     const score = analytics?.score ?? 100; 
+    const health = analytics?.health || 'Unknown';
+    const openIssues = (analytics?.open_issues || 0) + (analytics?.assigned_issues || 0) + (analytics?.in_progress_issues || 0);
 
     return (
       <TouchableOpacity
@@ -90,23 +93,22 @@ export default function SitesScreen() {
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: getHealthColor(analytics?.health) }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: getHealthColor(health) }}>
               {score}%
             </Text>
-            {analytics?.health && (
-              <View style={[styles.healthBadge, { backgroundColor: getHealthColor(analytics.health) + '22' }]}>
-                <View style={[styles.healthDot, { backgroundColor: getHealthColor(analytics.health) }]} />
-                <Text style={[styles.healthText, { color: getHealthColor(analytics.health) }]}>{analytics.health}</Text>
+            {health !== 'Unknown' && (
+              <View style={[styles.healthBadge, { backgroundColor: getHealthColor(health) + '22' }]}>
+                <View style={[styles.healthDot, { backgroundColor: getHealthColor(health) }]} />
+                <Text style={[styles.healthText, { color: getHealthColor(health) }]}>{health}</Text>
               </View>
             )}
           </View>
-
         </View>
 
         <View style={styles.metricsRow}>
           <View style={styles.metric}>
-            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Open</Text>
-            <Text style={[styles.metricValue, { color: theme.text }]}>{analytics?.openIssues ?? 0}</Text>
+            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Active Issues</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{openIssues}</Text>
           </View>
           <View style={styles.metric}>
             <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Overdue</Text>
@@ -128,7 +130,7 @@ export default function SitesScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
       
-      {/* ── UPDATED HEADER WITH BACK BUTTON ── */}
+      {/* ── HEADER WITH BACK BUTTON ── */}
       <View style={[styles.header, { borderBottomColor: borderColor, backgroundColor: 'transparent' }]}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.backButton}>
@@ -172,7 +174,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16, 
     borderBottomWidth: StyleSheet.hairlineWidth 
   },
-  /* ── NEW STYLES ── */
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',

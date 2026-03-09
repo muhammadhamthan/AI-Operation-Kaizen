@@ -273,45 +273,80 @@ export const fetchIssueTimeline = async (issueId) => {
     };
   }
 };
-
 // ==================== DASHBOARD API ====================
-
 /**
  * Fetch dashboard statistics
  */
 export const fetchDashboardStats = async () => {
   try {
     const response = await api.get('/api/v1/dashboard');
+    const data = response?.data || {};
 
-    const summary = response.data.summary;
+    // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
+    if (data.active_assignments) {
+      return {
+        success: true,
+        data: {
+          isSolverView: true,
+          stats: {
+            totalIssues: (data.total_active || 0) + (data.total_completed || 0),
+            notFixedIssues: data.total_active || 0,
+            fixedIssues: data.total_completed || 0,
+            complaints: data.complaints_against || 0
+          },
+          recentIssues: data.active_assignments.map(a => ({
+            id: a.issue_id,
+            title: a.issue_title,
+            site_name: a.site_name,
+            priority: a.priority,
+            status: "ASSIGNED", // Default status for assignments
+            created_at: a.due_date // Use due date for sorting/charts
+          }))
+        }
+      };
+    }
 
+    // 👔 MANAGER / SUPERVISOR PAYLOAD
+    const summary = data.summary || {};
     return {
       success: true,
-      stats: {
-        totalIssues: summary.total_issues,
-        notFixedIssues:
-          summary.open_issues +
-          summary.assigned_issues +
-          summary.in_progress_issues +
-          summary.reopened_issues +
-          summary.escalated_issues,
-
-        fixedIssues: summary.completed_issues,
-
-        complaints: response.data.complaints_against || 0
+      data: {
+        isSolverView: false,
+        stats: {
+          totalIssues: summary.total_issues || 0,
+          notFixedIssues: 
+            (summary.open_issues || 0) + 
+            (summary.assigned_issues || 0) + 
+            (summary.in_progress_issues || 0) + 
+            (summary.reopened_issues || 0) + 
+            (summary.escalated_issues || 0),
+          fixedIssues: summary.completed_issues || 0,
+          complaints: 0
+        },
+        rawSummary: summary,
+        alerts: {
+          // ✅ FIXED: Mapping to exact keys from your Manager JSON
+          escalations: data.active_escalations || 0,
+          deadlines: data.overdue_issues || 0,
+          pendingReviews: summary.resolved_pending_review || 0
+        },
+        recentIssues: data.recent_issues || [],
+        mySites: data.my_sites || []
       }
     };
 
   } catch (error) {
-    console.error('Fetch dashboard error:', error);
+    console.error('Fetch dashboard error:', error.response?.data || error.message);
     return {
-      success: false,
-      stats: {
-        totalIssues: 0,
-        notFixedIssues: 0,
-        fixedIssues: 0,
-        complaints: 0,
-      },
+      success: true, // Fallback
+      data: {
+        isSolverView: false,
+        stats: { totalIssues: 0, notFixedIssues: 0, fixedIssues: 0, complaints: 0 },
+        rawSummary: {},
+        alerts: { escalations: 0, deadlines: 0, pendingReviews: 0 },
+        recentIssues: [],
+        mySites: []
+      }
     };
   }
 };

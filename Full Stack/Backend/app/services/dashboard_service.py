@@ -132,7 +132,7 @@ class DashboardService:
             Issue.status.notin_([IssueStatus.COMPLETED])
         )
 
-        overdue = (await self.db.execute(overdue_stmt)).scalar#s().all()
+        overdue = (await self.db.execute(overdue_stmt)).scalar()#s().all()
 
         # Get all active problem solvers
         solvers_stmt = select(User).where(
@@ -242,7 +242,7 @@ class DashboardService:
 
     async def _build_summary(self, site_ids=None) -> DashboardSummary:
 
-        # Base query depending on role
+        # Base filter depending on role
         if site_ids:
             base = Issue.site_id.in_(site_ids)
         else:
@@ -255,38 +255,72 @@ class DashboardService:
             )
         ).scalar()
 
-        # Count open issues
+        # Open issues
         open_count = (
             await self.db.execute(
-                select(func.count()).where(
-                    Issue.status == IssueStatus.OPEN, base
+                select(func.count()).select_from(Issue).where(
+                    Issue.status == IssueStatus.OPEN,
+                    base
                 )
             )
         ).scalar()
 
-        # Count assigned issues
+        # Assigned issues
         assigned = (
             await self.db.execute(
-                select(func.count()).where(
-                    Issue.status == IssueStatus.ASSIGNED, base
+                select(func.count()).select_from(Issue).where(
+                    Issue.status == IssueStatus.ASSIGNED,
+                    base
                 )
             )
         ).scalar()
 
-        # Count issues in progress
+        # In progress issues
         in_progress = (
             await self.db.execute(
-                select(func.count()).where(
-                    Issue.status == IssueStatus.IN_PROGRESS, base
+                select(func.count()).select_from(Issue).where(
+                    Issue.status == IssueStatus.IN_PROGRESS,
+                    base
                 )
             )
         ).scalar()
 
-        # Count completed issues
+        # Completed issues
         completed = (
             await self.db.execute(
-                select(func.count()).where(
-                    Issue.status == IssueStatus.COMPLETED, base
+                select(func.count()).select_from(Issue).where(
+                    Issue.status == IssueStatus.COMPLETED,
+                    base
+                )
+            )
+        ).scalar()
+
+        # Reopened issues
+        reopened = (
+            await self.db.execute(
+                select(func.count()).select_from(Issue).where(
+                    Issue.status == IssueStatus.REOPENED,
+                    base
+                )
+            )
+        ).scalar()
+
+        # Escalated issues
+        escalated = (
+            await self.db.execute(
+                select(func.count()).select_from(Issue).where(
+                    Issue.status == IssueStatus.ESCALATED,
+                    base
+                )
+            )
+        ).scalar()
+
+        # Resolved but waiting for supervisor review
+        resolved_pending = (
+            await self.db.execute(
+                select(func.count()).select_from(Issue).where(
+                    Issue.status == IssueStatus.RESOLVED_PENDING_REVIEW,
+                    base
                 )
             )
         ).scalar()
@@ -297,4 +331,7 @@ class DashboardService:
             assigned_issues=assigned,
             in_progress_issues=in_progress,
             completed_issues=completed,
+            reopened_issues=reopened,
+            escalated_issues=escalated,
+            resolved_pending_review=resolved_pending,
         )

@@ -105,11 +105,12 @@ async def get_issue_detail(
     response_model=IssueHistoryListResponse,
     summary="Get issue audit trail (read-only)",
 )
-def get_issue_timeline(
+async def get_issue_timeline(
     issue_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Returns the complete history of status changes for an issue."""
     issue_service = IssueService(db)
-    return issue_service.get_timeline(issue_id)
+    result = await issue_service.get_timeline(issue_id)
+    return result
