@@ -14,7 +14,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { fetchIssueById, selectCurrentIssue, selectIssuesLoading, clearCurrentIssue } from '../../../../src/store/slices/issuesSlice';
+import { 
+  fetchIssueById, 
+  fetchIssueTimeline,
+  selectIssueById,
+  selectCurrentIssue,
+  selectIssueTimeline,
+  selectIssuesLoading, 
+  clearCurrentIssue 
+} from '../../../../src/store/slices/issuesSlice';
 import { calculateOverdueDays } from '../../../../src/utils/overdue';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Button from '../../../../src/components/common/Button';
@@ -23,22 +31,35 @@ import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import Loader from '../../../../src/components/common/Loader';
 
 export default function NotFixedDetailScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
+  const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
-  const issue = useSelector(selectCurrentIssue);
+  
+  // ✅ Prioritize full API response over the cached list response
+  const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
+  const fullIssue = useSelector(selectCurrentIssue);
+  const timeline = useSelector(selectIssueTimeline) || [];
   const loading = useSelector(selectIssuesLoading);
 
+  const issue = (fullIssue && fullIssue.id === parseInt(id)) ? fullIssue : cachedIssue;
+
   useEffect(() => {
-    if (id) dispatch(fetchIssueById(parseInt(id)));
+    if (id) {
+      dispatch(fetchIssueById(parseInt(id)));
+      dispatch(fetchIssueTimeline(parseInt(id)));
+    }
     return () => { dispatch(clearCurrentIssue()); };
-  }, [id]);
+  }, [id, dispatch]);
 
   const overdueDays = issue ? calculateOverdueDays(issue.deadline_at, issue.status) : null;
 
   if (loading || !issue) return <Loader message="Loading issue details..." />;
+
+  // ── SMART DATA EXTRACTION ──
+  const siteName = issue.site_name || issue.site?.name || 'N/A';
+  const siteLocation = issue.site_location || issue.site?.location || null;
 
   // ── PREMIUM PALETTE ──
   const bgColor = isDark ? '#212121' : '#f9f9f9';
@@ -96,27 +117,49 @@ export default function NotFixedDetailScreen() {
         {/* ── LOCATION ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Location</Text>
+          
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
               <Ionicons name="location-outline" size={18} color={theme.textSecondary} />
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Site</Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site?.name || 'N/A'}</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{siteName}</Text>
             </View>
           </View>
+
+          {/* ✅ ADDED: Safe location check */}
+          {siteLocation && (
+            <View style={[styles.infoRow, { marginTop: 16 }]}>
+              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+                <Ionicons name="map-outline" size={18} color={theme.textSecondary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Address</Text>
+                <Text style={[styles.infoValue, { color: theme.text }]}>{siteLocation}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
-        {/* ── PHOTOS ── */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Attached Media</Text>
-          <ImageGallery images={issue.images} />
-        </View>
+        {/* ── PHOTOS (Using ImageGallery component) ── */}
+        {issue.images && issue.images.length > 0 && (
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Attached Media</Text>
+            <ImageGallery images={issue.images} />
+          </View>
+        )}
 
-        {/* ── TIMELINE ── */}
+        {/* ── TIMELINE (Using new Redux Timeline data) ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Activity Log</Text>
-          <IssueTimeline history={issue.history || []} />
+          {timeline && timeline.length > 0 ? (
+            <IssueTimeline history={timeline} />
+          ) : (
+            <Text style={[styles.description, { color: theme.textSecondary, fontStyle: 'italic' }]}>
+              No activity recorded yet.
+            </Text>
+          )}
         </View>
 
         {/* ── ACTIONS ── */}
@@ -214,7 +257,7 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 36,
     height: 36,
-    borderRadius: 10, // Squircle shape
+    borderRadius: 10, 
     justifyContent: 'center',
     alignItems: 'center',
   },

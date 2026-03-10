@@ -63,7 +63,9 @@ export default function SolversScreen() {
     });
   }, [searchText, solvers]);
 
-  const getScoreColor = score => {
+  // Use the exact color from the backend if available, otherwise calculate it
+  const getScoreColor = (score, backendColor) => {
+    if (backendColor) return backendColor;
     if (score >= 75) return '#10a37f';
     if (score >= 50) return '#f59e0b';
     return '#ef4444';
@@ -71,18 +73,25 @@ export default function SolversScreen() {
 
   const getLabelIcon = label => {
     if (label === 'Top Performer') return 'trophy-outline';
-    if (label === 'Good') return 'speedometer-outline';
-    return 'alert-circle-outline';
+    if (label === 'Good' || label === 'Average') return 'speedometer-outline';
+    return 'alert-circle-outline'; // For "Needs Attention"
   };
 
   const renderItem = ({ item }) => {
-    const perf = item.performance;
-    const scoreColor = getScoreColor(perf.score);
+    const perf = item.performance || {};
+    const scoreColor = getScoreColor(perf.score, perf.label_color);
 
+    // ✅ FIXED: Matched exact snake_case variables from backend JSON
     const activeCount =
-      perf.inProgressCount +
-      perf.assignedNotStartedCount +
-      perf.reopenedCount;
+      (perf.in_progress_count || 0) +
+      (perf.assigned_not_started_count || 0) +
+      (perf.reopened_count || 0) +
+      (perf.active_count || 0); // Added active_count just in case
+
+    // Format skills array for display (e.g. ["electrical", "hvac"] -> "Electrical, Hvac")
+    const displaySkills = item.skills?.length > 0 
+      ? item.skills.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')
+      : 'Problem Solver';
 
     return (
       <TouchableOpacity
@@ -117,8 +126,9 @@ export default function SolversScreen() {
                   styles.skill,
                   { color: theme.textSecondary },
                 ]}
+                numberOfLines={1}
               >
-                Problem Solver
+                {displaySkills}
               </Text>
             </View>
           </View>
@@ -137,7 +147,7 @@ export default function SolversScreen() {
                 { color: scoreColor },
               ]}
             >
-              {perf.score}%
+              {perf.score || 0}%
             </Text>
           </View>
         </View>
@@ -164,7 +174,7 @@ export default function SolversScreen() {
             <Text
               style={[styles.metricValue, { color: theme.text }]}
             >
-              {perf.completedCount}
+              {perf.completed_count || 0} {/* ✅ FIXED */}
             </Text>
           </View>
           <View style={styles.metric}>
@@ -178,11 +188,11 @@ export default function SolversScreen() {
                 styles.metricValue,
                 {
                   color:
-                    perf.complaintCount > 0 ? '#ef4444' : theme.text,
+                    (perf.complaint_count || 0) > 0 ? '#ef4444' : theme.text, // ✅ FIXED
                 },
               ]}
             >
-              {perf.complaintCount}
+              {perf.complaint_count || 0} {/* ✅ FIXED */}
             </Text>
           </View>
         </View>
@@ -200,7 +210,7 @@ export default function SolversScreen() {
                 { color: theme.textSecondary },
               ]}
             >
-              {perf.label}
+              {perf.label || 'No Rating'}
             </Text>
           </View>
           <View style={styles.subStats}>
@@ -210,7 +220,7 @@ export default function SolversScreen() {
                 { color: theme.textSecondary },
               ]}
             >
-              Completion {perf.completionRate}%
+              Completion {perf.completion_rate || 0}% {/* ✅ FIXED */}
             </Text>
             <View style={styles.dot} />
             <Text
@@ -219,7 +229,7 @@ export default function SolversScreen() {
                 { color: theme.textSecondary },
               ]}
             >
-              On-time {perf.onTimeRate}%
+              On-time {perf.on_time_rate || 0}% {/* ✅ FIXED */}
             </Text>
           </View>
         </View>
@@ -227,7 +237,7 @@ export default function SolversScreen() {
     );
   };
 
-  if (loading && solvers.length === 0) return <Loader message="Loading team performance..." fullScreen />;
+  if (loading && solvers.length === 0) return <Loader message="Loading team performance..." />;
 
   return (
     <SafeAreaView
@@ -237,7 +247,7 @@ export default function SolversScreen() {
         { backgroundColor: isDark ? '#212121' : '#f9f9f9' },
       ]}
     >
-      {/* ── UPDATED HEADER WITH BACK BUTTON ── */}
+      {/* ── HEADER WITH BACK BUTTON ── */}
       <View
         style={[
           styles.header,
@@ -338,7 +348,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  /* ── NEW STYLES ── */
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -8,10 +8,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { selectSolverById, fetchSolversPerformance, selectPerformanceLoading } from '../../../../src/store/slices/performanceSlice';
-import { issues } from '../../../../src/mocks/issues';
-import { issueAssignments } from '../../../../src/mocks/issueAssignments';
-import { solverSkills } from '../../../../src/mocks/solverSkills';
-import { getSiteById } from '../../../../src/mocks/sites';
+
+// 🚨 REMOVED ALL MOCK IMPORTS 🚨
 import Avatar from '../../../../src/components/common/Avatar';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
@@ -40,68 +38,14 @@ export default function SolverProfileScreen() {
     }
   }, [dispatch, currentUser, solver]);
 
-  console.log('🧑‍🔧 --- SOLVER PROFILE MOUNTED ---');
-  console.log('Target Solver ID:', solverId);
-  console.log('Performance Data Available:', !!solver?.performance);
-
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
 
-  const assignments = useMemo(
-    // 🚨 REVERTED TO SNAKE CASE: assigned_to_solver_id
-    () => issueAssignments.filter(a => a.assigned_to_solver_id === solverId),
-    [solverId]
-  );
-
-  const activeAssignments = useMemo(
-    () => assignments.filter(a => a.status !== 'COMPLETED'),
-    [assignments]
-  );
-
-  const activeIssues = useMemo(() =>
-    activeAssignments.map(a => ({
-      assignment: a,
-      // 🚨 REVERTED TO SNAKE CASE: issue_id
-      issue: issues.find(i => i.id === a.issue_id),
-    })).filter(x => x.issue),
-    [activeAssignments]
-  );
-
-  const completedIssues = useMemo(() =>
-    assignments
-      .filter(a => a.status === 'COMPLETED')
-      // 🚨 REVERTED TO SNAKE CASE: issue_id
-      .map(a => issues.find(i => i.id === a.issue_id))
-      .filter(Boolean)
-      .slice(-5)
-      .reverse(),
-    [assignments]
-  );
-
-  const skillsAndSites = useMemo(() => {
-    // 🚨 REVERTED TO SNAKE CASE: solver_id
-    const entries = solverSkills.filter(s => s.solver_id === solverId);
-    const sitesMap = new Map();
-
-    entries.forEach(e => {
-      // 🚨 REVERTED TO SNAKE CASE: site_id
-      const site = getSiteById(e.site_id);
-      if (!site) return;
-      if (!sitesMap.has(site.id)) {
-        sitesMap.set(site.id, { ...site, skills: new Set() });
-      }
-      // 🚨 REVERTED TO SNAKE CASE: skill_type
-      sitesMap.get(site.id).skills.add(e.skill_type);
-    });
-
-    return Array.from(sitesMap.values()).map(s => ({
-      id: s.id,
-      name: s.name,
-      location: s.location,
-      skills: Array.from(s.skills),
-    }));
-  }, [solverId]);
+  // The backend doesn't currently embed issue arrays in the solvers list, 
+  // so we default to empty arrays to prevent crashes.
+  const activeIssues = [];
+  const completedIssues = [];
 
   if (loading && !solver) {
     return <Loader message="Loading profile..." fullScreen />;
@@ -110,14 +54,29 @@ export default function SolverProfileScreen() {
   if (!solver) {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
+        <View style={[styles.header, { borderBottomColor: borderColor, backgroundColor: bgColor }]}>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+        </View>
         <EmptyState icon="person-outline" title="Solver not found" message="This solver profile is not available." />
       </SafeAreaView>
     );
   }
 
-  // Add fallback empty object just in case performance data isn't fully loaded
+  // ✅ EXTRACTED REAL SNAKE_CASE PERFORMANCE DATA
   const perf = solver.performance || {};
-  const scoreColor = (perf.score || 0) >= 75 ? '#10a37f' : (perf.score || 0) >= 50 ? '#f59e0b' : '#ef4444';
+  
+  // Use exact label color from backend if available
+  const scoreColor = perf.label_color || (
+    (perf.score || 0) >= 75 ? '#10a37f' : (perf.score || 0) >= 50 ? '#f59e0b' : '#ef4444'
+  );
+
+  const activeCount = 
+    (perf.in_progress_count || 0) + 
+    (perf.assigned_not_started_count || 0) + 
+    (perf.reopened_count || 0) + 
+    (perf.active_count || 0);
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -137,8 +96,15 @@ export default function SolverProfileScreen() {
             <Avatar uri={solver.avatar} name={solver.name} size="xlarge" />
             <View style={styles.profileInfo}>
               <Text style={[styles.name, { color: theme.text }]}>{solver.name}</Text>
-              <Text style={[styles.role, { color: theme.textSecondary }]}>Problem Solver</Text>
+              <Text style={[styles.role, { color: theme.textSecondary }]}>
+                {solver.skills?.length > 0 
+                  ? solver.skills.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ') 
+                  : 'Problem Solver'}
+              </Text>
               <Text style={[styles.phone, { color: theme.textSecondary }]}>{solver.phone || 'No phone added'}</Text>
+              {solver.email && (
+                <Text style={[styles.phone, { color: theme.textSecondary, marginTop: 2 }]}>{solver.email}</Text>
+              )}
             </View>
           </View>
         </View>
@@ -154,7 +120,7 @@ export default function SolverProfileScreen() {
             <View style={styles.scoreInfo}>
               <Text style={[styles.scoreLabel, { color: theme.text }]}>{perf.label || 'Evaluating'}</Text>
               <Text style={[styles.scoreSub, { color: theme.textSecondary }]}>
-                Completion {perf.completionRate || 0}% · On-time {perf.onTimeRate || 0}% · Calls answered {perf.callAnswerRate || 0}%
+                Completion {perf.completion_rate || 0}% · On-time {perf.on_time_rate || 0}% · Calls answered {perf.call_answer_rate || 0}%
               </Text>
             </View>
           </View>
@@ -163,10 +129,10 @@ export default function SolverProfileScreen() {
         {/* STAT CARDS */}
         <View style={styles.statsRow}>
           {[
-            { label: 'Total', value: perf.totalAssigned || 0 },
-            { label: 'Completed', value: perf.completedCount || 0 },
-            { label: 'Active', value: (perf.inProgressCount || 0) + (perf.assignedNotStartedCount || 0) + (perf.reopenedCount || 0) },
-            { label: 'Escalated', value: perf.escalatedCount || 0 },
+           { label: 'Total', value: perf.total_assigned || 0 },
+            { label: 'Completed', value: perf.completed_count || 0 },
+            { label: 'Active', value: activeCount },
+            { label: 'Overdue', value: perf.overdue_count || 0 }, // ✅ NOW USING OVERDUE DATA
           ].map((stat, idx) => (
             <View key={idx} style={[styles.statCard, { backgroundColor: surfaceColor, borderColor }]}>
               <Text style={[styles.statValue, { color: theme.text }]}>{stat.value}</Text>
@@ -182,30 +148,64 @@ export default function SolverProfileScreen() {
             <View style={styles.responsiveBox}>
               <Text style={[styles.responsiveLabel, { color: theme.textSecondary }]}>Calls</Text>
               <Text style={[styles.responsiveValue, { color: theme.text }]}>
-                {perf.answeredCalls || 0} answered · {perf.missedCalls || 0} missed
+                {perf.answered_calls || 0} answered · {perf.missed_calls || 0} missed
               </Text>
             </View>
             <View style={styles.responsiveBox}>
               <Text style={[styles.responsiveLabel, { color: theme.textSecondary }]}>Complaints</Text>
-              <Text style={[styles.responsiveValue, { color: (perf.complaintCount || 0) > 0 ? '#ef4444' : theme.text }]}>
-                {perf.complaintCount || 0}
+              <Text style={[styles.responsiveValue, { color: (perf.complaint_count || 0) > 0 ? '#ef4444' : theme.text }]}>
+                {perf.complaint_count || 0}
               </Text>
             </View>
           </View>
         </View>
 
+        {/* SKILLS & SITES (Updated to handle raw arrays from backend) */}
+        {(solver.skills?.length > 0 || solver.sites?.length > 0) && (
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            
+            {solver.skills?.length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Trade Skills</Text>
+                <View style={[styles.skillChips, { marginBottom: solver.sites?.length > 0 ? 20 : 0 }]}>
+                  {solver.skills.map(skill => (
+                    <View key={skill} style={[styles.skillChip, { borderColor }]}>
+                      <Text style={[styles.skillChipText, { color: theme.textSecondary }]}>
+                        {skill.charAt(0).toUpperCase() + skill.slice(1)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {solver.sites?.length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Assigned Sites</Text>
+                <View style={styles.skillChips}>
+                  {solver.sites.map(site => (
+                    <View key={site} style={[styles.skillChip, { borderColor }]}>
+                      <Text style={[styles.skillChipText, { color: theme.textSecondary }]}>{site}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
         {/* ACTIVE ASSIGNMENTS */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Active Assignments</Text>
           {activeIssues.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No active assignments.</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No active assignments available in overview.</Text>
           ) : (
             activeIssues.map(item => (
               <TouchableOpacity
                 key={item.assignment.id}
                 style={styles.issueRow}
                 activeOpacity={0.7}
-                onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/issue-detail', params: { id: item.issue.id } })}
+                onPress={() => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: item.issue.id } })}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>{item.issue.title}</Text>
@@ -217,40 +217,18 @@ export default function SolverProfileScreen() {
           )}
         </View>
 
-        {/* SKILLS & SITES */}
-        {skillsAndSites.length > 0 && (
-          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Skills & Sites</Text>
-            {skillsAndSites.map(entry => (
-              <View key={entry.id} style={styles.siteRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.siteName, { color: theme.text }]}>{entry.name}</Text>
-                  <Text style={[styles.siteLocation, { color: theme.textSecondary }]}>{entry.location}</Text>
-                </View>
-                <View style={styles.skillChips}>
-                  {entry.skills.map(skill => (
-                    <View key={skill} style={styles.skillChip}>
-                      <Text style={[styles.skillChipText, { color: theme.textSecondary }]}>{skill}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* RECENT COMPLETED */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Recent Completed Issues</Text>
           {completedIssues.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No completed issues yet.</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No completed issues available in overview.</Text>
           ) : (
             completedIssues.map(issue => (
               <TouchableOpacity
                 key={issue.id}
                 style={styles.issueRow}
                 activeOpacity={0.7}
-                onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/issue-detail', params: { id: issue.id } })}
+                onPress={() => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } })}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>{issue.title}</Text>
@@ -302,11 +280,8 @@ const styles = StyleSheet.create({
   issueRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   issueTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   issueMeta: { fontSize: 12 },
-  siteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  siteName: { fontSize: 14, fontWeight: '600' },
-  siteLocation: { fontSize: 12 },
   skillChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  skillChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },
-  skillChipText: { fontSize: 11, fontWeight: '500' },
+  skillChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
+  skillChipText: { fontSize: 13, fontWeight: '500' },
   bottomPadding: { height: 40 },
 });

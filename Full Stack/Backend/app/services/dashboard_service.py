@@ -132,7 +132,7 @@ class DashboardService:
             Issue.status.notin_([IssueStatus.COMPLETED])
         )
 
-        overdue = (await self.db.execute(overdue_stmt)).scalar#s().all()
+        overdue = (await self.db.execute(overdue_stmt)).scalar()#s().all()
 
         # Get all active problem solvers
         solvers_stmt = select(User).where(
