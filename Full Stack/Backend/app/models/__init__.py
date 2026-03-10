@@ -16,6 +16,7 @@ from app.models.chat_history import ChatHistory
 from app.models.problem_solver_skill import ProblemSolverSkill
 from app.models.escalation_rule import EscalationRule
 from app.models.escalation import Escalation
+from app.models.chat_session import ChatSession  
 
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "ChatHistory",
     "ProblemSolverSkill",
     "EscalationRule",
+    "ChatSession",
 ]

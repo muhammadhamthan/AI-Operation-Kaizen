@@ -10,34 +10,35 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
 
-// API Base URL - Backend is on port 8001
-const getBaseUrl = () => {
-  // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || 
-                     process.env.EXPO_PUBLIC_BACKEND_URL;
+// // API Base URL - Backend is on port 8001
+// const getBaseUrl = () => {
+//   // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
+//   const backendUrl = 'http://127.0.0.1:8000';
   
-  if (backendUrl) {
-    return `${backendUrl}/api`;
-  }
+//   // if (backendUrl) {
+//   //   return `${backendUrl}/api`;
+//   // }
   
-  // For local development
-  if (Platform.OS === 'web') {
-    // Use relative URL which will be proxied
-    return 'http://localhost:8001/api';
-  }
+//   // // For local development
+//   // if (Platform.OS === 'web') {
+//   //   // Use relative URL which will be proxied
+//   //   return 'http://localhost:8001/api';
+//   // }
   
-  // Native apps need full URL
-  return 'http://localhost:8001/api';
-};
+//   // Native apps need full URL
+//   return 'http://localhost:8001/api';
+// };
 
-const API_BASE_URL = getBaseUrl();
+const backendUrl = 'http://127.0.0.1:8000';
+
+const API_BASE_URL = backendUrl;
 
 console.log('API Base URL:', API_BASE_URL);
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 30000000000, // 50 minutes - increase for long-running requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -81,16 +82,10 @@ api.interceptors.response.use(
  */
 export const loginUser = async (username, password) => {
   try {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    const response = await api.post('/auth/login', formData.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+    const response = await api.post('/api/v1/auth/login', {
+        phone: username,   // IMPORTANT: match backend field
+        password: password,
     });
-
     const { access_token, user } = response.data;
 
     // Store token and user
@@ -119,7 +114,7 @@ export const loginUser = async (username, password) => {
  */
 export const getCurrentUser = async () => {
   try {
-    const response = await api.get('/auth/me');
+    const response = await api.get('/api/v1/auth/me');
     return {
       success: true,
       user: {
@@ -184,21 +179,32 @@ export const fetchIssues = async (filters = {}) => {
     if (filters.site_id) params.append('site_id', filters.site_id);
 
     const response = await withRetry(
-      () => api.get(`/issues?${params.toString()}`),
+      () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
       { maxRetries: 2 }
     );
+    console.log(response)
 
     // Transform response to match frontend expectations
-    const issues = response.data.map(issue => ({
+    // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }
+    //   ...issue,
+    //   site: issue.site ? {
+    //     ...issue.site,
+    //     name: issue.site.name,
+    //   } : null,
+    //   raised_by: issue.raised_by ? {
+    //     ...issue.raised_by,
+    //     avatar: issue.raised_by.avatar_url,
+    //   } : null,
+    // }));
+
+    const issues = response.data.issues.map(issue => ({ // Map backend fields to frontend format
       ...issue,
-      site: issue.site ? {
-        ...issue.site,
-        name: issue.site.name,
-      } : null,
-      raised_by: issue.raised_by ? {
-        ...issue.raised_by,
-        avatar: issue.raised_by.avatar_url,
-      } : null,
+      site: {
+        name: issue.site_name,
+      },
+      raised_by: {
+        name: issue.supervisor_name,
+      }
     }));
 
     return {
@@ -220,8 +226,8 @@ export const fetchIssues = async (filters = {}) => {
  */
 export const fetchIssueById = async (issueId) => {
   try {
-    const response = await api.get(`/issues/${issueId}`);
-    
+    const response = await api.get(`/api/v1/issues/${issueId}`); // URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/{issue_id}
+
     const issue = {
       ...response.data,
       site: response.data.site ? {
@@ -247,33 +253,100 @@ export const fetchIssueById = async (issueId) => {
   }
 };
 
-// ==================== DASHBOARD API ====================
+/**
+ * Fetch single issue by ID along with its timeline entries
+ */
+export const fetchIssueTimeline = async (issueId) => {
+  try {
+    const response = await api.get(`/api/v1/issues/${issueId}/timeline`);
 
+    return {
+      success: true,
+      timeline: response.data.entries,
+    };
+  } catch (error) {
+    console.error("Timeline fetch error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      timeline: [],
+    };
+  }
+};
+// ==================== DASHBOARD API ====================
 /**
  * Fetch dashboard statistics
  */
 export const fetchDashboardStats = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/dashboard/stats'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/dashboard');
+    const data = response?.data || {};
 
+    // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
+    if (data.active_assignments) {
+      return {
+        success: true,
+        data: {
+          isSolverView: true,
+          stats: {
+            totalIssues: (data.total_active || 0) + (data.total_completed || 0),
+            notFixedIssues: data.total_active || 0,
+            fixedIssues: data.total_completed || 0,
+            complaints: data.complaints_against || 0
+          },
+          recentIssues: data.active_assignments.map(a => ({
+            id: a.issue_id,
+            title: a.issue_title,
+            site_name: a.site_name,
+            priority: a.priority,
+            status: "ASSIGNED", // Default status for assignments
+            created_at: a.due_date // Use due date for sorting/charts
+          }))
+        }
+      };
+    }
+
+    // 👔 MANAGER / SUPERVISOR PAYLOAD
+    const summary = data.summary || {};
     return {
       success: true,
-      stats: response.data,
+      data: {
+        isSolverView: false,
+        stats: {
+          totalIssues: summary.total_issues || 0,
+          notFixedIssues: 
+            (summary.open_issues || 0) + 
+            (summary.assigned_issues || 0) + 
+            (summary.in_progress_issues || 0) + 
+            (summary.reopened_issues || 0) + 
+            (summary.escalated_issues || 0),
+          fixedIssues: summary.completed_issues || 0,
+          complaints: 0
+        },
+        rawSummary: summary,
+        alerts: {
+          // ✅ FIXED: Mapping to exact keys from your Manager JSON
+          escalations: data.active_escalations || 0,
+          deadlines: data.overdue_issues || 0,
+          pendingReviews: summary.resolved_pending_review || 0
+        },
+        recentIssues: data.recent_issues || [],
+        mySites: data.my_sites || []
+      }
     };
+
   } catch (error) {
     console.error('Fetch dashboard error:', error.response?.data || error.message);
     return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch dashboard',
-      stats: {
-        totalIssues: 0,
-        notFixedIssues: 0,
-        fixedIssues: 0,
-        complaints: 0,
-      },
+      success: true, // Fallback
+      data: {
+        isSolverView: false,
+        stats: { totalIssues: 0, notFixedIssues: 0, fixedIssues: 0, complaints: 0 },
+        rawSummary: {},
+        alerts: { escalations: 0, deadlines: 0, pendingReviews: 0 },
+        recentIssues: [],
+        mySites: []
+      }
     };
   }
 };
@@ -285,22 +358,65 @@ export const fetchDashboardStats = async () => {
  */
 export const fetchComplaints = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/complaints'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/complaints');
+
+    const complaints = response.data.complaints.map(c => ({
+      ...c,
+
+      // map supervisor
+      raisedBy: {
+        name: c.supervisor_name,
+      },
+
+      // map solver
+      targetSolver: {
+        name: c.solver_name,
+      },
+
+      // issue object expected in UI
+      issue: {
+        title: c.issue_title
+      },
+
+      // temporary status since backend doesn't send it
+      status: "OPEN"
+    }));
 
     return {
       success: true,
-      complaints: response.data,
+      complaints,
     };
+
   } catch (error) {
-    console.error('Fetch complaints error:', error.response?.data || error.message);
     return {
       success: false,
-      error: error.response?.data?.detail || 'Failed to fetch complaints',
       complaints: [],
     };
+  }
+};
+
+export const fetchComplaintById = async (id) => {
+  try {
+    const response = await api.get(`/api/v1/complaints/${id}`);
+
+    const c = response.data;
+
+    return {
+      ...c,
+      raisedBy: {
+        name: c.supervisor_name,
+      },
+      targetSolver: {
+        name: c.solver_name,
+      },
+      issue: {
+        title: c.issue_title
+      },
+      status: "OPEN"
+    };
+
+  } catch (error) {
+    throw error;
   }
 };
 
@@ -326,27 +442,113 @@ export const fetchSites = async () => {
   }
 };
 
+export const fetchSitesAnalytics = async () => {
+ try {
+    const response = await api.get('/api/v1/sites/analytics');
+
+    return {
+      success: true,
+      sites: response.data.sites,
+    };
+
+  } catch (error) {
+    console.error("Fetch sites error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      sites: [],
+      error: error.response?.data?.detail || "Failed to fetch sites",
+    };
+  }
+};
+
+export const fetchSolversPerformanceAPI = async () => {
+  try {
+    const response = await api.get('/api/v1/solvers');
+
+    return {
+      success: true,
+      solvers: response.data.solvers,
+    };
+
+  } catch (error) {
+    return {
+      success: false,
+      solvers: [],
+      error: error.response?.data?.detail || "Failed to fetch solvers",
+    };
+  }
+};
+
 // ==================== CHATBOT API ====================
 
 /**
  * Send message to chatbot
  */
 // chatService.js 
-export const sendChatMessage = async (text, currentIssueId = null, imageUrl = null) => {
-  const requestBody = {
-    message: text,
-    image_url: imageUrl, // URL from ImageKit
-    issue_id: currentIssueId, 
-    metadata: {
-      screen: "chat_main",
-      timestamp: new Date().toISOString(),
-      platform: Platform.OS,
-      // You can add GPS here later if needed
-    }
-  };
+export const sendChatMessage = async (
+  text,
+  sessionId = null,
+  currentIssueId = null,
+  imageUrl = null
+) => {
+  try {
+    const requestBody = {
+      message: text,
+      session_id: sessionId,   // ✅ VERY IMPORTANT
+      image_url: imageUrl,
+      issue_id: currentIssueId,
+      metadata: {
+        platform: Platform.OS,
+        timestamp: new Date().toISOString(),
+      }
+    };
 
-  const response = await axios.post(`${API_URL}/chat`, requestBody);
-  return response.data;
+    const response = await api.post('/api/v1/chat/', requestBody);
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error("Chat send error:", error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data?.detail || "Failed to send message",
+    };
+  }
+};
+
+export const fetchChatSessions = async () => {
+  try {
+    const response = await api.get('/api/v1/chat/sessions');
+    return {
+      success: true,
+      sessions: response.data.sessions,
+    };
+  } catch (error) {
+    console.error("Fetch sessions error:", error.response?.data || error.message);
+    return {
+      success: false,
+      sessions: [],
+    };
+  }
+};
+
+export const fetchSessionDetail = async (sessionId) => {
+  try {
+    const response = await api.get(`/api/v1/chat/sessions/${sessionId}`);
+    return {
+      success: true,
+      session: response.data,
+    };
+  } catch (error) {
+    console.error("Fetch session detail error:", error.response?.data || error.message);
+    return {
+      success: false,
+      session: null,
+    };
+  }
 };
 
 // ==================== HEALTH CHECK ====================

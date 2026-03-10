@@ -33,7 +33,7 @@ router = APIRouter()
     response_model=IssueListResponse,
     summary="List issues (read-only, role-filtered)",
 )
-def list_issues(
+async def list_issues(
     status_filter: Optional[str] = None,
     priority: Optional[str] = None,
     site_id: Optional[int] = None,
@@ -66,7 +66,7 @@ def list_issues(
         except ValueError:
             raise HTTPException(400, f"Invalid priority: {priority}")
 
-    return issue_service.list_issues(
+    return await issue_service.list_issues(
         current_user=current_user,
         status_filter=status_enum,
         priority=priority_enum,
@@ -82,14 +82,14 @@ def list_issues(
     response_model=IssueDetailResponse,
     summary="Get issue detail (read-only)",
 )
-def get_issue_detail(
+async def get_issue_detail(
     issue_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Returns full issue with images, assignments, and complaint count."""
     issue_service = IssueService(db)
-    result = issue_service.get_issue_detail(issue_id)
+    result = await issue_service.get_issue_detail(issue_id)
 
     if not result:
         raise HTTPException(
@@ -105,11 +105,12 @@ def get_issue_detail(
     response_model=IssueHistoryListResponse,
     summary="Get issue audit trail (read-only)",
 )
-def get_issue_timeline(
+async def get_issue_timeline(
     issue_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Returns the complete history of status changes for an issue."""
     issue_service = IssueService(db)
-    return issue_service.get_timeline(issue_id)
+    result = await issue_service.get_timeline(issue_id)
+    return result

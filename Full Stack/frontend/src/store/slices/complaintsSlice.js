@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import {
   fetchComplaints as fetchComplaintsApi,
   fetchComplaintById as fetchComplaintByIdApi,
-} from '../../mocks/apiService';
+} from '../../services/api';
 
 const initialState = {
   complaints: [],

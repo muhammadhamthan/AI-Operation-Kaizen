@@ -3,22 +3,38 @@ import { TouchableOpacity, Text, StyleSheet, View, ActivityIndicator, Platform }
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { exportChartToPDF } from '../../utils/pdfExport';
-import { captureRef } from 'react-native-view-shot'; // 🚀 ADD THIS IMPORT
 
-// 🚀 Changed prop here
+// 🚀 Only import captureRef if we are NOT on the web to be extra safe
+let captureRef;
+if (Platform.OS !== 'web') {
+  captureRef = require('react-native-view-shot').captureRef;
+}
+
 const ChartDownloadButton = ({ viewShotRef, chartType }) => {
   const { theme, isDark } = useTheme();
   const [isExporting, setIsExporting] = useState(false);
 
-const handlePress = async () => {
-    if (!viewShotRef?.current) {
-      console.warn("No viewShotRef provided to ChartDownloadButton");
-      return;
-    }
-
+ const handlePress = async () => {
     setIsExporting(true);
+    
     try {
-      // 🚀 USE captureRef INSTEAD of .capture()
+      // 🌐 WEB: Seamlessly open the browser's native Print/Save as PDF menu
+      if (Platform.OS === 'web') {
+        // A tiny timeout allows React to update the UI (showing the loader) 
+        // before the browser freezes the DOM to open the print dialog.
+        setTimeout(() => {
+          window.print();
+          setIsExporting(false); // Reset the button after the print dialog closes
+        }, 150);
+        return;
+      }
+
+      // 📱 NATIVE LOGIC (iOS / Android)
+      if (!viewShotRef?.current) {
+        console.warn("No viewShotRef provided to ChartDownloadButton");
+        return;
+      }
+
       const uri = await captureRef(viewShotRef, {
         format: 'jpg',
         quality: 0.9,
@@ -27,8 +43,13 @@ const handlePress = async () => {
       await exportChartToPDF(uri, chartType);
     } catch (error) {
       console.error("Export failed", error);
+      if (Platform.OS !== 'web') {
+        alert("Failed to export the chart.");
+      }
     } finally {
-      setTimeout(() => setIsExporting(false), 800);
+      if (Platform.OS !== 'web') {
+        setTimeout(() => setIsExporting(false), 800);
+      }
     }
   };
 
@@ -51,7 +72,7 @@ const handlePress = async () => {
       )}
       
       <Text style={[styles.text, { color: textColor }]}>
-        {isExporting ? 'Exporting PDF...' : 'Download Chart'}
+        {isExporting && Platform.OS !== 'web' ? 'Exporting PDF...' : 'Download Chart'}
       </Text>
     </TouchableOpacity>
   );
@@ -80,6 +101,9 @@ const styles = StyleSheet.create({
       android: {
         elevation: 2,
       },
+      web: {
+        cursor: 'pointer',
+      }
     }),
   },
   loader: {

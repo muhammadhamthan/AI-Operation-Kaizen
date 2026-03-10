@@ -1,106 +1,139 @@
 """
-PURPOSE: Site management — admin/manager endpoints.
-────────────────────────────────────────────────────
-ENDPOINTS:
-  GET    /api/v1/sites          → List all sites
-  POST   /api/v1/sites          → Create site (manager only)
-  POST   /api/v1/sites/assign   → Assign supervisor to sites (manager only)
+PURPOSE: Site management + analytics endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.api.deps import get_db, get_current_user, require_role
 from app.models.user import User
 from app.models.site import Site
-from app.models.supervisor_site import supervisor_sites
+from app.models.supervisor_site import SupervisorSite
 from app.core.enums import UserRole
+from app.services.site_analytics_service import SiteAnalyticsService
 from app.schemas.site_schema import (
     SiteCreate,
     SiteResponse,
     SiteListResponse,
     SupervisorSiteAssign,
 )
+from app.schemas.site_analytics_schema import (
+    SiteAnalyticsListResponse,
+    SiteWithAnalytics,
+)
 
 router = APIRouter()
 
 
-@router.get("", response_model=SiteListResponse, summary="List all sites")
-def list_sites(
-    db: Session = Depends(get_db),
+# ══════════════════════════════════════════════════════════
+# ANALYTICS ENDPOINTS (what frontend actually needs)
+# ══════════════════════════════════════════════════════════
+
+@router.get(
+    "/analytics",
+    response_model=SiteAnalyticsListResponse,
+    summary="Get all sites with computed analytics (role-filtered)",
+)
+async def get_sites_with_analytics(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    sites = db.query(Site).order_by(Site.id).all()
+    """
+    Replaces frontend fetchSitesWithAnalytics thunk.
+    Returns sites visible to this user + health score, issue counts, solvers.
+    Includes XGBoost predictions if models are trained.
+    """
+    service = SiteAnalyticsService(db)
+    return await service.get_sites_with_analytics(current_user)
+
+
+@router.get(
+    "/analytics/{site_id}",
+    response_model=SiteWithAnalytics,
+    summary="Get single site with full analytics",
+)
+async def get_site_analytics(
+    site_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Replaces frontend site-detail screen's data computation.
+    Returns site + analytics + ML predictions.
+    """
+    service = SiteAnalyticsService(db)
+    result = await service.get_site_analytics(site_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Site {site_id} not found")
+
+    return result
+
+
+# ══════════════════════���═══════════════════════════════════
+# CRUD ENDPOINTS (existing — unchanged)
+# ══════════════════════════════════════════════════════════
+
+@router.get("", response_model=SiteListResponse, summary="List all sites")
+async def list_sites(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Site).order_by(Site.id))
+    sites = result.scalars().all()
     return SiteListResponse(
         total=len(sites),
         sites=[SiteResponse.model_validate(s) for s in sites],
     )
 
 
-@router.post(
-    "",
-    response_model=SiteResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create new site (manager only)",
-)
-def create_site(
-    site_data: SiteCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.MANAGER])),
-):
-    site = Site(
-        name=site_data.name,
-        location=site_data.location,
-        latitude=site_data.latitude,
-        longitude=site_data.longitude,
-    )
-    db.add(site)
-    db.commit()
-    db.refresh(site)
-    return site
+# @router.post(
+#     "",
+#     response_model=SiteResponse,
+#     status_code=status.HTTP_201_CREATED,
+#     summary="Create new site (manager only)",
+# )
+# async def create_site(
+#     site_data: SiteCreate,
+#     db: AsyncSession = Depends(get_db),
+#     current_user: User = Depends(require_role([UserRole.MANAGER])),
+# ):
+#     site = Site(
+#         name=site_data.name,
+#         location=site_data.location,
+#         latitude=site_data.latitude,
+#         longitude=site_data.longitude,
+#     )
+#     db.add(site)
+#     await db.flush()
+#     await db.refresh(site)
+#     return site
 
 
-@router.post(
-    "/assign",
-    summary="Assign supervisor to sites (manager only)",
-)
-def assign_supervisor_sites(
+@router.post("/assign", summary="Assign supervisor to sites (manager only)")
+async def assign_supervisor_sites(
     data: SupervisorSiteAssign,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.MANAGER])),
 ):
-    # Validate supervisor exists
-    supervisor = db.query(User).filter(
-        User.id == data.supervisor_id,
-        User.role == UserRole.SUPERVISOR,
-    ).first()
-
+    result = await db.execute(
+        select(User).where(User.id == data.supervisor_id, User.role == UserRole.SUPERVISOR)
+    )
+    supervisor = result.scalar_one_or_none()
     if not supervisor:
         raise HTTPException(404, f"Supervisor {data.supervisor_id} not found")
 
-    # Validate all sites exist
     for site_id in data.site_ids:
-        site = db.query(Site).filter(Site.id == site_id).first()
-        if not site:
+        result = await db.execute(select(Site).where(Site.id == site_id))
+        if not result.scalar_one_or_none():
             raise HTTPException(404, f"Site {site_id} not found")
 
-    # Clear existing and re-assign
-    db.execute(
-        supervisor_sites.delete().where(
-            supervisor_sites.c.supervisor_id == data.supervisor_id
-        )
+    await db.execute(
+        SupervisorSite.delete().where(SupervisorSite.c.supervisor_id == data.supervisor_id)
     )
-
     for site_id in data.site_ids:
-        db.execute(
-            supervisor_sites.insert().values(
-                supervisor_id=data.supervisor_id,
-                site_id=site_id,
-            )
-        )
-
-    db.commit()
+        await db.execute(SupervisorSite.insert().values(supervisor_id=data.supervisor_id, site_id=site_id))
 
     return {
         "message": f"Supervisor {supervisor.name} assigned to {len(data.site_ids)} sites",

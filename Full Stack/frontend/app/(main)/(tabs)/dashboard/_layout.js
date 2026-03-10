@@ -12,6 +12,11 @@ export default function DashboardLayout() {
       <Stack.Screen name="fixed-detail" />
       <Stack.Screen name="complaints" />
       <Stack.Screen name="complaint-detail" />
+      {/* ADD THESE: */}
+      <Stack.Screen name="sites" />
+      <Stack.Screen name="site-detail" />
+      <Stack.Screen name="solvers" />
+      <Stack.Screen name="solver-profile" />
     </Stack>
   );
 }

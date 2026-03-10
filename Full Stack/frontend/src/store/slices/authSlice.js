@@ -4,7 +4,7 @@ import {
   logoutUser as logoutUserApi,
   getStoredUser,
   getCurrentUser,
-} from '../../mocks/apiService';  // From slices/ → ../../mocks/
+} from '../../services/api';  // From slices/ → ../../mocks/
 
 const initialState = {
   isAuthenticated: false,
