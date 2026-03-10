@@ -29,7 +29,7 @@ import { withRetry } from '../utils/networkRetry';
 //   return 'http://localhost:8001/api';
 // };
 
-const backendUrl = 'http://127.0.0.1:8000';
+const backendUrl = 'http://13.48.25.159:8000';
 
 const API_BASE_URL = backendUrl;
 
