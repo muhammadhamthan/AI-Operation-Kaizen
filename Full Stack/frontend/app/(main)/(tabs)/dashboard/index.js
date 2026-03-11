@@ -23,13 +23,12 @@ import {
   selectCharts, 
   selectAlerts,
   selectRecentIssues,
-  selectIsSolverView, // ✅ IMPORTED PROPERLY
+  selectIsSolverView, 
   selectDashboardLoading 
 } from '../../../../src/store/slices/dashboardSlice';
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import { fetchSolversPerformance, selectAllSolvers } from '../../../../src/store/slices/performanceSlice';
 import { fetchSitesWithAnalytics, selectAllSites } from '../../../../src/store/slices/sitesSlice';
-// ✅ IMPORTED COMPLAINTS ACTIONS AND SELECTORS
 import { fetchComplaints, selectAllComplaints } from '../../../../src/store/slices/complaintsSlice';
 
 import DashboardCard from '../../../../src/components/dashboard/DashboardCard';
@@ -41,6 +40,15 @@ import StatusBadge from '../../../../src/components/common/StatusBadge';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// ── SAFE DATE FORMATTER ──
+const formatSafeDate = (dateString) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+};
+
 export default function DashboardScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -51,12 +59,12 @@ export default function DashboardScreen() {
   const charts = useSelector(selectCharts);
   const alerts = useSelector(selectAlerts) || {};
   const recentIssues = useSelector(selectRecentIssues) || [];
-  const isSolverView = useSelector(selectIsSolverView); // ✅ DETECTS IF USER IS SOLVER
+  const isSolverView = useSelector(selectIsSolverView); 
   const loading = useSelector(selectDashboardLoading);
   const isOnline = useSelector(selectIsOnline);
   const solvers = useSelector(selectAllSolvers);
   const sitesList = useSelector(selectAllSites);
-  const complaintsList = useSelector(selectAllComplaints); // ✅ SELECT COMPLAINTS LIST
+  const complaintsList = useSelector(selectAllComplaints); 
 
   const [refreshing, setRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -70,9 +78,27 @@ export default function DashboardScreen() {
       dispatch(fetchDashboardData(user));
       dispatch(fetchSolversPerformance(user));
       dispatch(fetchSitesWithAnalytics(user));
-      dispatch(fetchComplaints(user)); // ✅ FETCH COMPLAINTS ON MOUNT
+      dispatch(fetchComplaints(user)); 
     }
-  }, [user]);
+  }, [user, dispatch]);
+
+  const getDeadlineIndicator = (dateString) => {
+    if (!dateString) return null;
+    
+    const dueDate = new Date(dateString);
+    const today = new Date();
+    
+    today.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = dueDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)}d`, color: '#ef4444' };
+    if (diffDays === 0) return { text: 'Due Today', color: '#f59e0b' }; 
+    if (diffDays === 1) return { text: 'Due Tomorrow', color: '#f59e0b' }; 
+    return { text: `Due in ${diffDays}d`, color: theme.textSecondary }; 
+  };
 
   const onRefresh = useCallback(async () => {
     if (!isOnline) {
@@ -85,10 +111,10 @@ export default function DashboardScreen() {
       await dispatch(fetchDashboardData(user));
       await dispatch(fetchSolversPerformance(user));
       await dispatch(fetchSitesWithAnalytics(user));
-      await dispatch(fetchComplaints(user)); // ✅ FETCH COMPLAINTS ON REFRESH
+      await dispatch(fetchComplaints(user)); 
     }
     setRefreshing(false);
-  }, [user, isOnline]);
+  }, [user, isOnline, dispatch]);
 
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -97,28 +123,101 @@ export default function DashboardScreen() {
   // 🧮 DYNAMIC CHART DATA CALCULATIONS
   // ==========================================
 
-  // 1. Line Chart
+  // 1. SMART LINE CHART
   const calculatedLineData = useMemo(() => {
+    // 👔 MANAGER
+    if (user?.role === 'manager') {
+      if (!solvers || solvers.length === 0) {
+        return { 
+          labels: ['No Data'], 
+          datasets: [{ data: [0] }], 
+          legend: ['Solver Workload'],
+          subtitle: 'Total assignments distributed among top solvers.' 
+        };
+      }
+      
+      const topSolvers = [...solvers]
+        .sort((a, b) => (b.performance?.total_assigned || 0) - (a.performance?.total_assigned || 0))
+        .slice(0, 6);
+
+      return {
+        labels: topSolvers.map(s => (s.name || `ID:${s.id || '?'}`).split(' ')[0]),
+        datasets: [{ data: topSolvers.map(s => s.performance?.total_assigned || 0), color: () => '#8b5cf6' }],
+        legend: ['Solver Workload (Total Assignments)'],
+        subtitle: 'Total assignments distributed among top solvers.'
+      };
+    } 
+    
+    // 👷‍♂️ SOLVER & SUPERVISOR
+    if (!recentIssues || recentIssues.length === 0) {
+      return { 
+        labels: ['No Data'], 
+        datasets: [{ data: [0] }], 
+        legend: ['Recent Volume'],
+        subtitle: 'Trend over the last 7 active days.' 
+      };
+    }
+
+    // ✅ FIX: Determine which date to track based on role
+    // Solvers care about due_date. Supervisors care about updated_at (activity).
+    const validIssues = [...recentIssues].filter(i => 
+      isSolverView ? (i.due_date || i.created_at) : (i.updated_at || i.created_at)
+    );
+    
+    if (validIssues.length === 0) {
+        return { 
+          labels: ['No Dates'], 
+          datasets: [{ data: [0] }], 
+          legend: ['Missing Date Data'],
+          subtitle: 'No valid dates found to chart.'
+        };
+    }
+
+    validIssues.sort((a, b) => {
+      const dateA = isSolverView ? (a.due_date || a.created_at) : (a.updated_at || a.created_at);
+      const dateB = isSolverView ? (b.due_date || b.created_at) : (b.updated_at || b.created_at);
+      return new Date(dateB) - new Date(dateA);
+    });
+    
+    const latestDateStr = isSolverView 
+      ? (validIssues[0].due_date || validIssues[0].created_at) 
+      : (validIssues[0].updated_at || validIssues[0].created_at);
+      
+    const latestDate = new Date(latestDateStr);
+    
+    const startDate = new Date(latestDate);
+    startDate.setDate(latestDate.getDate() - 6);
+    
     const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const labels = [];
     const data = [];
     
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
+      const d = new Date(latestDate);
       d.setDate(d.getDate() - i);
       labels.push(daysOfWeek[d.getDay()]);
       
       const dateString = d.toISOString().split('T')[0];
-      const count = recentIssues.filter(issue => issue.created_at?.startsWith(dateString)).length;
+      
+      const count = recentIssues.filter(issue => {
+          // ✅ FIX: Match the exact same date logic here
+          const issueDate = isSolverView ? (issue.due_date || issue.created_at) : (issue.updated_at || issue.created_at);
+          return issueDate?.startsWith(dateString);
+      }).length;
+      
       data.push(count);
     }
 
+    const hasData = data.some(val => val > 0);
+
     return {
       labels,
-      datasets: [{ data, color: () => '#ef4444' }],
-      legend: [isSolverView ? 'Tasks Assigned' : 'Opened Issues'],
+      datasets: [{ data: hasData ? data : [0], color: () => '#ef4444' }],
+      // ✅ UI FIX: Updated Legend for Activity tracking
+      legend: [isSolverView ? 'Recent Deadlines Recorded' : 'Recent Opened Issues'],
+      subtitle: `Trend from ${formatSafeDate(startDate)} to ${formatSafeDate(latestDate)}`
     };
-  }, [recentIssues, isSolverView]);
+  }, [recentIssues, isSolverView, user?.role, solvers]);
 
   // 2. Pie Chart
   const pieData = charts?.issuesByCategory?.length > 0 
@@ -131,22 +230,21 @@ export default function DashboardScreen() {
       })) 
     : [{ name: 'No Data', population: 1, color: isDark ? '#333' : '#e5e5e5', legendFontColor: theme.text, legendFontSize: 12 }];
 
- // 3. Bar Chart
+  // 3. Bar Chart
   const calculatedBarData = useMemo(() => {
     if (!sitesList || sitesList.length === 0) {
       return { labels: ['No Data'], datasets: [{ data: [0] }] };
     }
     const topSites = [...sitesList]
-      // ✅ FIXED: Changed totalIssues to total_issues (snake_case)
       .sort((a, b) => (b.analytics?.total_issues || 0) - (a.analytics?.total_issues || 0))
       .slice(0, 5);
 
     return {
-      labels: topSites.map(s => s.name.substring(0, 5)),
-      // ✅ FIXED: Changed totalIssues to total_issues (snake_case)
+      labels: topSites.map(s => (s.name || 'Site').substring(0, 5)),
       datasets: [{ data: topSites.map(s => s.analytics?.total_issues || 0) }]
     };
   }, [sitesList]);
+
   // ==========================================
   // UI RENDER
   // ==========================================
@@ -187,7 +285,7 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
       >
 
-        {/* ── ACTION REQUIRED ALERTS (Hidden for Solvers, always shows for Managers/Supervisors) ── */}
+        {/* ── ACTION REQUIRED ALERTS ── */}
         {!isSolverView && (
           <View style={styles.statsContainer}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Action Required</Text>
@@ -222,7 +320,6 @@ export default function DashboardScreen() {
             <DashboardCard title="Resolved" count={stats?.fixedIssues || 0} icon="checkmark-done" color="#10a37f" onPress={() => router.push('/(main)/(tabs)/dashboard/fixed')} />
           </View>
 
-          {/* Role-Based Analytics Cards */}
           {isSolverView ? (
             <>
               <View style={styles.statsRow}>
@@ -233,7 +330,6 @@ export default function DashboardScreen() {
                   color="#8b5cf6" 
                   onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/solver-profile', params: { id: user?.id } })} 
                 />
-                {/* ✅ ADDED MY SITES CARD FOR SOLVERS */}
                 <DashboardCard 
                   title="My Sites" 
                   count={sitesList?.length || 0} 
@@ -273,16 +369,21 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* ── LINE CHART ── */}
+        {/* ── DYNAMIC LINE CHART ── */}
         <View style={[styles.chartCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.chartTitle, { color: theme.text }]}>{isSolverView ? "Task Volume" : "Opened Issues"}</Text>
-          <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>Volume of newly opened issues recently.</Text>
+          <Text style={[styles.chartTitle, { color: theme.text }]}>
+            {/* ✅ UI FIX: Updated Title */}
+            {user?.role === 'manager' ? 'Solver Bandwidth' : isSolverView ? 'Upcoming Deadlines' : 'Recent Activity'}
+          </Text>
+          <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>
+            {calculatedLineData.subtitle}
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View ref={lineChartRef} collapsable={false} style={{ backgroundColor: surfaceColor, paddingRight: 16 }}>
               <LineChart data={calculatedLineData} width={SCREEN_WIDTH - 32} height={220} chartConfig={chartConfig} bezier style={styles.chart} withInnerLines={true} withOuterLines={false} />
             </View>
           </ScrollView>
-          <ChartDownloadButton viewShotRef={lineChartRef} chartType="Volume Over Time" />
+          <ChartDownloadButton viewShotRef={lineChartRef} chartType={user?.role === 'manager' ? 'Solver Bandwidth' : 'Volume Over Time'} />
         </View>
 
         {/* ── PIE CHART ── */}
@@ -321,27 +422,60 @@ export default function DashboardScreen() {
         {recentIssues?.length > 0 && (
           <View style={[styles.chartCard, { backgroundColor: surfaceColor, borderColor, padding: 0, overflow: 'hidden' }]}>
             <View style={{ padding: 20, paddingBottom: 10 }}>
-              <Text style={[styles.chartTitle, { color: theme.text }]}>{isSolverView ? "My Active Tasks" : "Recent Issues"}</Text>
-              <Text style={[styles.chartSubtitle, { color: theme.textSecondary, marginBottom: 10 }]}>Latest issues reported across your sites.</Text>
+              <Text style={[styles.chartTitle, { color: theme.text }]}>{isSolverView ? "My Active Tasks" : "Recent Activity"}</Text>
+              <Text style={[styles.chartSubtitle, { color: theme.textSecondary, marginBottom: 10 }]}>Current tasks requiring attention.</Text>
             </View>
-            {recentIssues.slice(0, 5).map((issue, index) => (
-              <TouchableOpacity 
-                key={issue.id} 
-                style={[styles.issueRow, { borderTopColor: borderColor, borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth }]}
-                onPress={() => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } })}
-              >
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={1}>{issue.title}</Text>
-                  <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>{issue.site_name} · #{issue.id}</Text>
-                </View>
-                <StatusBadge status={issue.status} />
-              </TouchableOpacity>
-            ))}
+            
+            {recentIssues.map((issue, index) => {
+              // ✅ FIX: Extract the right date based on role
+              const targetDate = isSolverView 
+                ? (issue.due_date || issue.created_at) 
+                : (issue.updated_at || issue.created_at);
+                
+              const deadline = isSolverView ? getDeadlineIndicator(targetDate) : null;
+              const displayDate = targetDate ? formatSafeDate(targetDate) : '';
+              
+              // Smart Prefix: Solvers see "Due". Supervisors see "Updated" (or "Opened" if brand new)
+              const datePrefix = isSolverView ? 'Due' : (issue.updated_at ? 'Updated' : 'Opened');
+
+              return (
+                <TouchableOpacity 
+                  key={issue.id} 
+                  style={[styles.issueRow, { borderTopColor: borderColor, borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth }]}
+                  onPress={() => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } })}
+                >
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    
+                    <View style={styles.titleRow}>
+                      <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={1}>
+                        {issue.title}
+                      </Text>
+                      
+                      {deadline && (
+                        <View style={[styles.deadlineBadge, { backgroundColor: `${deadline.color}15` }]}>
+                          <Text style={[styles.deadlineText, { color: deadline.color }]}>
+                            {deadline.text}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>
+                      {issue.site_name} · #{issue.id}
+                      {/* ✅ Appends the smart date perfectly */}
+                      {displayDate ? ` · ${datePrefix}: ${displayDate}` : ''}
+                    </Text>
+                  </View>
+                  <StatusBadge status={issue.status} />
+                </TouchableOpacity>
+              );
+            })}
+
             <TouchableOpacity 
               style={[styles.viewAllButton, { borderTopColor: borderColor }]}
               onPress={() => router.push('/(main)/(tabs)/issues')}
             >
-              <Text style={[styles.viewAllText, { color: theme.textSecondary }]}>View All {isSolverView ? 'Tasks' : 'Issues'}</Text>
+              <Text style={[styles.viewAllText, { color: theme.textSecondary }]}>Manage {isSolverView ? 'Tasks' : 'Issues'} in Full View</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -372,10 +506,15 @@ const styles = StyleSheet.create({
   chartTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4 },
   chartSubtitle: { fontSize: 13, marginBottom: 24, lineHeight: 18 },
   chart: { borderRadius: 12, marginLeft: -10 },
+  
   issueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
-  issueTitle: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
-  issueMeta: { fontSize: 13 },
-  viewAllButton: { paddingVertical: 14, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' },
+  issueTitle: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
+  deadlineBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  deadlineText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
+  issueMeta: { fontSize: 13, lineHeight: 18 }, 
+  
+  viewAllButton: { paddingVertical: 16, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
   viewAllText: { fontSize: 13, fontWeight: '600' },
   bottomPadding: { height: 40 },
 });

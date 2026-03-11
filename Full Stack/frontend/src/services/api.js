@@ -283,7 +283,7 @@ export const fetchDashboardStats = async () => {
     const data = response?.data || {};
 
     // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
-    if (data.active_assignments) {
+   if (data.active_assignments) {
       return {
         success: true,
         data: {
@@ -299,13 +299,14 @@ export const fetchDashboardStats = async () => {
             title: a.issue_title,
             site_name: a.site_name,
             priority: a.priority,
-            status: "ASSIGNED", // Default status for assignments
-            created_at: a.due_date // Use due date for sorting/charts
+            status: a.status || "ASSIGNED", 
+            // ✅ FIXED: Map to actual created_at for the time-series chart
+            created_at: a.due_date || a.created_at 
           }))
         }
       };
     }
-
+      
     // 👔 MANAGER / SUPERVISOR PAYLOAD
     const summary = data.summary || {};
     return {
