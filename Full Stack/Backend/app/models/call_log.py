@@ -6,7 +6,7 @@ Used for escalation checking (count MISSED, time since first call).
 """
 
 from sqlalchemy import (
-    Column, Integer, Index, ForeignKey, func,
+    Column, Integer, Index, ForeignKey, func,String
 )
 from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP
 from sqlalchemy.orm import relationship
@@ -35,6 +35,13 @@ class CallLog(Base):
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
         comment="The problem solver who was called",
+    )
+    call_sid = Column(
+        String(64),
+        nullable=True,          # NULL for logs created before this migration
+        unique=True,
+        index=True,
+        comment="Twilio call SID — used by webhook to find the right log row",
     )
     attempt_number = Column(
         Integer,

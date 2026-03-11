@@ -1,3 +1,274 @@
+"""
+PURPOSE: Twilio webhook handler + async escalation helper.
+───────────────────────────────────────────────────────────
+This service runs INSIDE FastAPI (AsyncSession).
+
+It has exactly TWO jobs:
+  1. handle_webhook(call_sid, twilio_status, assignment_id)
+       Called by POST /api/v1/webhooks/twilio/status
+       Updates CallLog → ANSWERED or MISSED
+       On MISSED: checks if missed count >= threshold → escalates
+
+  2. escalate(assignment, missed_count, rule)
+       Creates Escalation record, marks issue ESCALATED,
+       writes IssueHistory, sends email.
+       Called by handle_webhook when threshold is reached.
+
+The Celery tasks in call_tasks.py handle:
+  - Placing Twilio calls
+  - Scheduling retries
+  - Calling escalate via _do_escalate_sync() (sync version)
+
+The webhook is the ONLY place that updates CallLog from INITIATED
+to ANSWERED/MISSED. Celery tasks read that status to decide
+whether to retry or stop.
+"""
+
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.enums import CallStatus, IssueStatus, ActionType, AssignmentStatus
+from app.models.issue import Issue
+from app.models.issue_assignment import IssueAssignment
+from app.models.call_log import CallLog
+from app.models.escalation import Escalation
+from app.models.escalation_rule import EscalationRule
+from app.models.issue_history import IssueHistory
+
+logger = logging.getLogger(__name__)
+
+# Twilio status → our internal CallStatus
+TWILIO_STATUS_MAP: dict[str, CallStatus] = {
+    "in-progress": CallStatus.ANSWERED,
+    "completed":   CallStatus.ANSWERED,
+    "busy":        CallStatus.MISSED,
+    "failed":      CallStatus.MISSED,
+    "no-answer":   CallStatus.MISSED,
+    "canceled":    CallStatus.MISSED,
+}
+
+
+class CallService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    # ══════════════════════════════════════════════════════
+    # WEBHOOK HANDLER  — called by POST /webhooks/twilio/status
+    # ══════════════════════════════════════════════════════
+
+    async def handle_webhook(
+        self,
+        call_sid: str,
+        twilio_status: str,
+        assignment_id: Optional[int] = None,
+    ) -> None:
+        """
+        Updates the CallLog for this call_sid.
+        On MISSED: checks missed count against escalation rule threshold.
+
+        Twilio sends intermediate statuses (queued, ringing) that we
+        ignore — we only act on terminal statuses in TWILIO_STATUS_MAP.
+        """
+        internal_status = TWILIO_STATUS_MAP.get(twilio_status)
+        if internal_status is None:
+            # queued / ringing — not terminal, nothing to do
+            return
+
+        # Find the CallLog by call_sid (set when Celery placed the call)
+        stmt = select(CallLog).where(CallLog.call_sid == call_sid)
+        log: Optional[CallLog] = (
+            await self.db.execute(stmt)
+        ).scalar_one_or_none()
+
+        if not log:
+            # Fallback: find by assignment_id if call_sid lookup fails
+            # (can happen if Celery worker crashed before logging)
+            if assignment_id:
+                fallback = (await self.db.execute(
+                    select(CallLog)
+                    .where(
+                        CallLog.assignment_id == assignment_id,
+                        CallLog.status == CallStatus.INITIATED,
+                    )
+                    .order_by(CallLog.initiated_at.desc())
+                )).scalars().first()
+                log = fallback
+
+            if not log:
+                logger.warning(
+                    "No INITIATED CallLog for SID=%s assignment_id=%s — ignoring webhook",
+                    call_sid, assignment_id,
+                )
+                return
+
+        now = datetime.now(timezone.utc)
+        log.status = internal_status
+
+        if internal_status == CallStatus.ANSWERED:
+            log.answered_at = now
+            log.ended_at    = now
+            logger.info(
+                "Call ANSWERED — SID=%s assignment #%s attempt #%s",
+                call_sid, log.assignment_id, log.attempt_number,
+            )
+        else:
+            log.ended_at = now
+            logger.info(
+                "Call MISSED (%s) — SID=%s assignment #%s attempt #%s",
+                twilio_status, call_sid, log.assignment_id, log.attempt_number,
+            )
+            # Check if escalation threshold is now reached.
+            # The Celery retry task is already scheduled; if threshold is
+            # reached here we escalate immediately rather than waiting for
+            # the retry task to fire and discover this.
+            await self._check_and_escalate_if_needed(log.assignment_id)
+
+        await self.db.commit()
+
+    # ══════════════════════════════════════════════════════
+    # ESCALATION CHECK — called after every MISSED webhook
+    # ══════════════════════════════════════════════════════
+
+    async def _check_and_escalate_if_needed(self, assignment_id: int) -> None:
+        """
+        After a missed call, count total misses and compare to rule threshold.
+        If threshold is reached, escalate immediately.
+        The Celery retry task will then find the open escalation and skip.
+        """
+        # Load assignment with relations needed for escalation
+        assignment = (await self.db.execute(
+            select(IssueAssignment)
+            .where(IssueAssignment.id == assignment_id)
+            .options(
+                selectinload(IssueAssignment.assigned_solver),
+                selectinload(IssueAssignment.issue).selectinload(Issue.site),
+            )
+        )).scalar_one_or_none()
+
+        if not assignment:
+            return
+
+        # Already escalated? Skip.
+        existing_esc = (await self.db.execute(
+            select(Escalation).where(
+                Escalation.assignment_id == assignment_id,
+                Escalation.resolved == False,
+            )
+        )).scalar_one_or_none()
+        if existing_esc:
+            return
+
+        # Count missed calls
+        missed_count: int = len((await self.db.execute(
+            select(CallLog).where(
+                CallLog.assignment_id == assignment_id,
+                CallLog.status == CallStatus.MISSED,
+            )
+        )).scalars().all())
+
+        # Get rule for this priority
+        rule: Optional[EscalationRule] = (await self.db.execute(
+            select(EscalationRule)
+            .where(EscalationRule.priority == assignment.issue.priority)
+            .order_by(EscalationRule.max_call_attempts.asc())
+        )).scalars().first()
+
+        threshold = rule.max_call_attempts if rule else 3
+
+        if missed_count >= threshold:
+            await self.escalate(assignment, missed_count, rule)
+
+    # ══════════════════════════════════════════════════════
+    # ESCALATION  — async version (used by webhook handler)
+    # ══════════════════════════════════════════════════════
+
+    async def escalate(
+        self,
+        assignment: IssueAssignment,
+        missed_count: int,
+        rule: Optional[EscalationRule],
+    ) -> None:
+        """
+        Creates Escalation record, marks issue ESCALATED, writes history,
+        sends email. Idempotent — safe to call multiple times.
+        """
+        issue = assignment.issue
+        escalate_to = rule.escalate_to_role if rule else "MANAGER"
+        threshold   = rule.max_call_attempts if rule else missed_count
+
+        esc = Escalation(
+            issue_id=issue.id,
+            assignment_id=assignment.id,
+            escalation_type="NO_RESPONSE",
+            escalated_to_role=escalate_to,
+            reason=(
+                f"Solver '{assignment.assigned_solver.name}' missed "
+                f"{missed_count} call(s) (threshold: {threshold})"
+            ),
+            total_missed_calls=missed_count,
+            notification_sent=False,
+            resolved=False,
+        )
+        self.db.add(esc)
+
+        self.db.add(IssueHistory(
+            issue_id=issue.id,
+            changed_by_user_id=None,
+            old_status=issue.status.value,
+            new_status="ESCALATED",
+            action_type=ActionType.ASSIGN,
+            details=f"Auto-escalated after {missed_count} missed call(s) → {escalate_to}",
+        ))
+
+        issue.status = IssueStatus.ESCALATED
+        await self.db.commit()
+        await self.db.refresh(esc)
+
+        logger.warning(
+            "ESCALATION #%s — issue #%s → %s (%d missed calls)",
+            esc.id, issue.id, escalate_to, missed_count,
+        )
+
+        try:
+            from app.services.notification_service import NotificationService
+            NotificationService(self.db).send_escalation_email(esc)
+        except Exception:
+            logger.exception("Escalation email failed for escalation #%s", esc.id)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # """
 # PURPOSE: Twilio call logic + retry + webhook handling.
 # ───────────────────────────────────────────────────────
