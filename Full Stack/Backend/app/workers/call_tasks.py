@@ -42,7 +42,6 @@ logger = logging.getLogger(__name__)
 
 # ── Retry delays per priority (seconds) ─────────────────────
 RETRY_DELAY: dict[str, int] = {
-    "critical": 5 * 60,
     "high":     10 * 60,
     "medium":   15 * 60,
     "low":      30 * 60,
@@ -205,7 +204,7 @@ def place_solver_call(self, assignment_id: int) -> None:
         retry_solver_call.apply_async(args=[assignment_id], eta=eta)
         logger.info(
             "Retry scheduled for assignment #%s at %s (%ds from now)",
-            assignment_id, eta.isoformat(), delay,
+            assignment_id, eta.isoformat(), delay
         )
 
     finally:

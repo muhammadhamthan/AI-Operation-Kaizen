@@ -69,7 +69,7 @@ app.add_middleware(
         "http://localhost:8081",    # Expo web
         "http://localhost:19006",   # Expo web alt
         "http://localhost:3000",    # React dev
-        "http://127.0.0.1:8081",
+        "http://127.0.0.1:8082",
         "http://127.0.0.1:8000",
         "*",                        # Allow all for dev (remove in production)
     ],
