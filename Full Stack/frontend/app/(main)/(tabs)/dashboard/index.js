@@ -125,7 +125,6 @@ export default function DashboardScreen() {
 
   // 1. SMART LINE CHART
   const calculatedLineData = useMemo(() => {
-    // 👔 MANAGER
     if (user?.role === 'manager') {
       if (!solvers || solvers.length === 0) {
         return { 
@@ -148,7 +147,6 @@ export default function DashboardScreen() {
       };
     } 
     
-    // 👷‍♂️ SOLVER & SUPERVISOR
     if (!recentIssues || recentIssues.length === 0) {
       return { 
         labels: ['No Data'], 
@@ -158,8 +156,6 @@ export default function DashboardScreen() {
       };
     }
 
-    // ✅ FIX: Determine which date to track based on role
-    // Solvers care about due_date. Supervisors care about updated_at (activity).
     const validIssues = [...recentIssues].filter(i => 
       isSolverView ? (i.due_date || i.created_at) : (i.updated_at || i.created_at)
     );
@@ -200,7 +196,6 @@ export default function DashboardScreen() {
       const dateString = d.toISOString().split('T')[0];
       
       const count = recentIssues.filter(issue => {
-          // ✅ FIX: Match the exact same date logic here
           const issueDate = isSolverView ? (issue.due_date || issue.created_at) : (issue.updated_at || issue.created_at);
           return issueDate?.startsWith(dateString);
       }).length;
@@ -213,8 +208,7 @@ export default function DashboardScreen() {
     return {
       labels,
       datasets: [{ data: hasData ? data : [0], color: () => '#ef4444' }],
-      // ✅ UI FIX: Updated Legend for Activity tracking
-      legend: [isSolverView ? 'Recent Deadlines Recorded' : 'Recent Opened Issues'],
+      legend: [isSolverView ? 'Recent Deadlines Recorded' : 'Recent Issues'],
       subtitle: `Trend from ${formatSafeDate(startDate)} to ${formatSafeDate(latestDate)}`
     };
   }, [recentIssues, isSolverView, user?.role, solvers]);
@@ -244,6 +238,26 @@ export default function DashboardScreen() {
       datasets: [{ data: topSites.map(s => s.analytics?.total_issues || 0) }]
     };
   }, [sitesList]);
+
+  // ==========================================
+  // 📏 SMART GRID ALIGNMENT LOGIC (THE FIX!)
+  // ==========================================
+  
+  // Helper to ensure small whole numbers don't create fractional grid lines
+  const getOptimalSegments = (maxVal) => {
+    if (maxVal === 0) return 1; // Prevent NaN errors
+    if (maxVal <= 8) return maxVal; // Locks grid strictly to integers (1, 2, 3...)
+    return 4; // Defaults back to standard 4 segments for large numbers
+  };
+
+  const lineDataMax = Math.max(...calculatedLineData.datasets[0].data);
+  const lineSegments = getOptimalSegments(lineDataMax);
+
+  const barDataMax = calculatedBarData.datasets[0].data.length > 0 
+    ? Math.max(...calculatedBarData.datasets[0].data) 
+    : 0;
+  const barSegments = getOptimalSegments(barDataMax);
+
 
   // ==========================================
   // UI RENDER
@@ -372,15 +386,25 @@ export default function DashboardScreen() {
         {/* ── DYNAMIC LINE CHART ── */}
         <View style={[styles.chartCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.chartTitle, { color: theme.text }]}>
-            {/* ✅ UI FIX: Updated Title */}
-            {user?.role === 'manager' ? 'Solver Bandwidth' : isSolverView ? 'Upcoming Deadlines' : 'Recent Activity'}
+            {user?.role === 'manager' ? 'Solver Bandwidth' : isSolverView ? 'Upcoming Deadlines' : 'Recent Issues'}
           </Text>
           <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>
             {calculatedLineData.subtitle}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View ref={lineChartRef} collapsable={false} style={{ backgroundColor: surfaceColor, paddingRight: 16 }}>
-              <LineChart data={calculatedLineData} width={SCREEN_WIDTH - 32} height={220} chartConfig={chartConfig} bezier style={styles.chart} withInnerLines={true} withOuterLines={false} />
+              <LineChart 
+                data={calculatedLineData} 
+                width={SCREEN_WIDTH - 32} 
+                height={220} 
+                chartConfig={chartConfig} 
+                bezier 
+                style={styles.chart} 
+                withInnerLines={true} 
+                withOuterLines={false} 
+                fromZero={true} // 📍 FIXED: Prevents random bottom scaling
+                segments={lineSegments} // 📍 FIXED: Locks grid to whole numbers
+              />
             </View>
           </ScrollView>
           <ChartDownloadButton viewShotRef={lineChartRef} chartType={user?.role === 'manager' ? 'Solver Bandwidth' : 'Volume Over Time'} />
@@ -411,6 +435,8 @@ export default function DashboardScreen() {
                   style={styles.chart}
                   showValuesOnTopOfBars
                   withInnerLines={false}
+                  fromZero={true} // 📍 FIXED: Applies math fix to Bar Chart too
+                  segments={barSegments} 
                 />
               </View>
             </ScrollView>
@@ -427,7 +453,6 @@ export default function DashboardScreen() {
             </View>
             
             {recentIssues.map((issue, index) => {
-              // ✅ FIX: Extract the right date based on role
               const targetDate = isSolverView 
                 ? (issue.due_date || issue.created_at) 
                 : (issue.updated_at || issue.created_at);
@@ -435,7 +460,6 @@ export default function DashboardScreen() {
               const deadline = isSolverView ? getDeadlineIndicator(targetDate) : null;
               const displayDate = targetDate ? formatSafeDate(targetDate) : '';
               
-              // Smart Prefix: Solvers see "Due". Supervisors see "Updated" (or "Opened" if brand new)
               const datePrefix = isSolverView ? 'Due' : (issue.updated_at ? 'Updated' : 'Opened');
 
               return (
@@ -462,7 +486,6 @@ export default function DashboardScreen() {
 
                     <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>
                       {issue.site_name} · #{issue.id}
-                      {/* ✅ Appends the smart date perfectly */}
                       {displayDate ? ` · ${datePrefix}: ${displayDate}` : ''}
                     </Text>
                   </View>
