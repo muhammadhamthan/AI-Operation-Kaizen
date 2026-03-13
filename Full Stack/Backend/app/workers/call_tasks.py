@@ -449,11 +449,6 @@ def _build_twiml(solver_name: str, issue_title: str, site_name: str) -> str:
         f"You have been assigned a facility issue at {site_name}. "
         f"Issue: {issue_title}. "
         "Please open your app and begin work immediately. "
-        "Press any key to acknowledge."
-        "</Say>"
-        "<Gather numDigits='1' timeout='10'/>"
-        "<Say voice='alice' language='en-IN'>"
-        "No response recorded. Please check your app immediately."
         "</Say>"
         "</Response>"
     )
@@ -631,7 +626,7 @@ def retry_solver_call(assignment_id: int, call_sid: str, round_start: str) -> No
         # If webhook hasn't arrived yet, call is still INITIATED.
         # Don't count it as missed — just retry. The webhook will
         # update it to ANSWERED or MISSED independently.
-        if this_call_log.status == CallStatus.INITIATED:
+        if this_call_log.status == CallStatus.INITIATED: # IMPORTANT: check THIS call, THIS MIGHT THROW EXTRA CALLS WHEN THE DELAY IN WEBHOOKS
             logger.info(
                 "[retry_solver_call] SID=%s still INITIATED (webhook pending) "
                 "— placing next call anyway for assignment #%s",

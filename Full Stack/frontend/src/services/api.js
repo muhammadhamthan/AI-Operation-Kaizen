@@ -26,10 +26,11 @@ import { withRetry } from '../utils/networkRetry';
 //   // }
   
 //   // Native apps need full URL
-//   return 'http://localhost:8001/api';
+//   return 'http://13.48.25.159:8000/api';
 // };
 
 const backendUrl = 'http://13.48.25.159:8000';
+const backendUrl = 'http://localhost:8000';
 
 const API_BASE_URL = backendUrl;
 
