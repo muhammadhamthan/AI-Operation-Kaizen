@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a04e96d5-b6e6-4cd1-abb0-ab2065ac6071"
+      }
+    },
+    "android": {
+      "package": "com.kairox.app"
+    }
+  }
+}

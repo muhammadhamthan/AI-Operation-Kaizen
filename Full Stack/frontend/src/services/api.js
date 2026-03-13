@@ -29,6 +29,7 @@ import { withRetry } from '../utils/networkRetry';
 //   return 'http://13.48.25.159:8000/api';
 // };
 
+const backendUrl = 'http://13.48.25.159:8000';
 const backendUrl = 'http://localhost:8000';
 
 const API_BASE_URL = backendUrl;
@@ -283,7 +284,7 @@ export const fetchDashboardStats = async () => {
     const data = response?.data || {};
 
     // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
-    if (data.active_assignments) {
+   if (data.active_assignments) {
       return {
         success: true,
         data: {
@@ -299,13 +300,14 @@ export const fetchDashboardStats = async () => {
             title: a.issue_title,
             site_name: a.site_name,
             priority: a.priority,
-            status: "ASSIGNED", // Default status for assignments
-            created_at: a.due_date // Use due date for sorting/charts
+            status: a.status || "ASSIGNED", 
+            // ✅ FIXED: Map to actual created_at for the time-series chart
+            created_at: a.due_date || a.created_at 
           }))
         }
       };
     }
-
+      
     // 👔 MANAGER / SUPERVISOR PAYLOAD
     const summary = data.summary || {};
     return {
@@ -360,27 +362,9 @@ export const fetchComplaints = async () => {
   try {
     const response = await api.get('/api/v1/complaints');
 
-    const complaints = response.data.complaints.map(c => ({
-      ...c,
-
-      // map supervisor
-      raisedBy: {
-        name: c.supervisor_name,
-      },
-
-      // map solver
-      targetSolver: {
-        name: c.solver_name,
-      },
-
-      // issue object expected in UI
-      issue: {
-        title: c.issue_title
-      },
-
-      // temporary status since backend doesn't send it
-      status: "OPEN"
-    }));
+    // 📍 EXACT DATA: Pass the backend response directly without mutating it
+    // Handle both { complaints: [...] } or direct array [...] responses
+    const complaints = response.data.complaints || response.data || [];
 
     return {
       success: true,
@@ -388,38 +372,23 @@ export const fetchComplaints = async () => {
     };
 
   } catch (error) {
+    console.error("Fetch complaints error:", error);
     return {
       success: false,
       complaints: [],
     };
   }
 };
-
 export const fetchComplaintById = async (id) => {
   try {
     const response = await api.get(`/api/v1/complaints/${id}`);
-
-    const c = response.data;
-
-    return {
-      ...c,
-      raisedBy: {
-        name: c.supervisor_name,
-      },
-      targetSolver: {
-        name: c.solver_name,
-      },
-      issue: {
-        title: c.issue_title
-      },
-      status: "OPEN"
-    };
-
+    // 📍 EXACT DATA: Return the raw object exactly as backend sent it
+    // No more mapping raisedBy or status="OPEN"
+    return response.data;
   } catch (error) {
     throw error;
   }
 };
-
 // ==================== SITES API ====================
 
 /**

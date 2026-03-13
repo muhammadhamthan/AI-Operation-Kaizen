@@ -102,17 +102,18 @@ export const selectFilters = (state) => state.complaints.filters;
 export const selectFilteredComplaints = (state) => {
   const { complaints, filters } = state.complaints;
   let filtered = [...complaints];
+  
   if (filters.search) {
     const searchLower = filters.search.toLowerCase();
     filtered = filtered.filter(complaint =>
+      // 📍 Match exact backend keys for searching
+      complaint.issue_title?.toLowerCase().includes(searchLower) ||
       complaint.complaint_details?.toLowerCase().includes(searchLower) ||
-      complaint.id?.toString().includes(searchLower)
+      complaint.id?.toString().includes(searchLower) ||
+      complaint.issue_id?.toString().includes(searchLower)
     );
   }
-  if (filters.status) {
-    filtered = filtered.filter(complaint => complaint.status === filters.status);
-  }
+  
   return filtered;
 };
-
 export default complaintsSlice.reducer;
