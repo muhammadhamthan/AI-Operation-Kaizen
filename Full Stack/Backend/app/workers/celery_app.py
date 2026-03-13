@@ -19,14 +19,21 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
+    broker_transport_options={
+        # Remove the complex dictionary that's causing the TypeError
+        'socket_timeout': 30,
+        'socket_connect_timeout': 30,
+        'retry_on_timeout': True,
+    },
+    broker_connection_retry_on_startup=True,
+    broker_connection_retry=True,
+    broker_connection_max_retries=10,
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
-    # Retry delivery on worker crash
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    # Route all call tasks to dedicated queue
     task_routes={"call_tasks.*": {"queue": "calls"}},
 )

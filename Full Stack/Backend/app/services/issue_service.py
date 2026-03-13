@@ -98,17 +98,19 @@ class IssueService:
         site_names = [s.name for s in sites]
 
         # ── 2. AI extraction ─────────────────────────────
-        extraction = await ai_service.extract_issue_details(
+        from app.services.ai_service import extract_issue
+
+        extraction = await extract_issue(
             message=message,
             available_sites=site_names,
         )
 
         # ── 3. Site matching ─────────────────────────────
-        site = self._match_site(extraction.location, sites)
+        site = self._match_site(extraction['site_location'], sites)
         if not site:
             return ChatResponse(
                 message=(
-                    f"❌ Couldn't find site '{extraction.location}'. "
+                    f"❌ Couldn't find site '{extraction['site_location']}'. "
                     f"Available: {', '.join(site_names)}"
                 ),
                 intent="create_issue",
@@ -116,13 +118,13 @@ class IssueService:
             )
 
         # ── 4. Create Issue ──────────────────────────────
-        deadline = datetime.now(timezone.utc) + timedelta(days=extraction.days_to_fix)
+        deadline = datetime.now(timezone.utc) + timedelta(days=extraction['days_to_fix'])
         issue = Issue(
             site_id=site.id,
             raised_by_supervisor_id=user.id,
-            title=extraction.title,
-            description=extraction.description,
-            priority=extraction.priority,
+            title=extraction['title'],
+            description=extraction['description'],
+            priority=extraction['priority'],
             deadline_at=deadline,
             status=IssueStatus.OPEN,
             track_status="awaiting_solver",
@@ -157,7 +159,7 @@ class IssueService:
         assignment_svc = AssignmentService(self.db)
         solver, assignment = await assignment_svc.auto_assign(
             issue=issue,
-            problem_type=extraction.problem_type,
+            problem_type=extraction['skill_name'],
             site_id=site.id,
             supervisor=user,
         )
@@ -182,8 +184,8 @@ class IssueService:
         lines = [
             f"✅ Issue #{issue.id} created!",
             f"📍 Site: {site.name}",
-            f"🔧 Type: {extraction.problem_type}",
-            f"⚡ Priority: {extraction.priority.value}",
+            f"🔧 Type: {extraction['skill_name']}",
+            f"⚡ Priority: {extraction['priority']}",
             f"📅 Deadline: {deadline.strftime('%Y-%m-%d %H:%M')} UTC",
         ]
         if solver:
@@ -200,8 +202,8 @@ class IssueService:
             data={
                 "issue_id": issue.id,
                 "site": site.name,
-                "problem_type": extraction.problem_type,
-                "priority": extraction.priority.value,
+                "problem_type": extraction['skill_name'],
+                "priority": extraction['priority'],
                 "solver_name": solver.name if solver else None,
             },
         )

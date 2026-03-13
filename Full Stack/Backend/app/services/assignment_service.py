@@ -101,7 +101,7 @@ class AssignmentService:
             skills_stmt = (
                 select(ProblemSolverSkill)
                 .where(
-                    ProblemSolverSkill.skill_type == problem_type,
+                    ProblemSolverSkill.skill_type == problem_type.lower(),
                     ProblemSolverSkill.is_available == True,
                     ProblemSolverSkill.site_id.is_(None),
                 )

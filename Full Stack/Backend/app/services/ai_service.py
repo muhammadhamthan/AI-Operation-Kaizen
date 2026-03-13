@@ -75,6 +75,243 @@ awaiting_deadline = False
 # GREETING
 # ==================================================
 
+async def route_intent(user_input: str):
+    """
+    AI decides which function should handle the request.
+    Returns a JSON response describing the function to call.
+    """
+
+    prompt = f"""
+You are an AI router.
+
+Decide which function should handle the user request.
+
+Available functions:
+
+create_issue
+query_issues
+check_status
+update_issue
+extend_deadline
+approve_completion
+solver_update_status
+solver_complete_work
+report_blocker
+query_escalations
+query_overdue
+sql_query
+
+Rules:
+- If user wants to CREATE issue → create_issue
+- If user asks about issues list → query_issues
+- If user asks status of issue → check_status
+- If user asks to change something → update_issue
+- If user asks extend deadline → extend_deadline
+- If supervisor approves issue → approve_completion
+- If solver updates progress → solver_update_status
+- If solver completes work → solver_complete_work
+- If solver reports problem → report_blocker
+- If asking escalations → query_escalations
+- If asking overdue issues → query_overdue
+- If general data question → sql_query
+
+Return JSON only:
+
+{{
+ "function": "...",
+ "issue_id": number or null
+}}
+
+User message:
+{user_input}
+"""
+
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    return safe_json_parse(response.choices[0].message.content)
+
+
+# ==================================================
+# TOOL DEFINITIONS
+# ==================================================
+
+TOOLS = [
+
+# ISSUE MANAGEMENT
+{
+"type":"function",
+"function":{
+"name":"create_issue",
+"description":"Create a new issue when a user reports a problem.",
+"parameters":{
+"type":"object",
+"properties":{
+"message":{"type":"string"}
+},
+"required":["message"]
+}
+}
+},
+
+{
+"type":"function",
+"function":{
+"name":"approve_completion",
+"description":"Supervisor approves solver completed work.",
+"parameters":{
+"type":"object",
+"properties":{
+"issue_id":{"type":"integer"}
+},
+"required":["issue_id"]
+}
+}
+},
+
+{
+"type":"function",
+"function":{
+"name":"update_priority",
+"description":"Update issue priority.",
+"parameters":{
+"type":"object",
+"properties":{
+"issue_id":{"type":"integer"},
+"priority":{"type":"string"}
+},
+"required":["issue_id","priority"]
+}
+}
+},
+
+{
+"type":"function",
+"function":{
+"name":"extend_deadlines",
+"description":"Extend issue deadline.",
+"parameters":{
+"type":"object",
+"properties":{
+"issue_id":{"type":"integer"},
+"days":{"type":"integer"}
+},
+"required":["issue_id"]
+}
+}
+},
+
+{
+"type":"function",
+"function":{
+"name":"solver_update_status",
+"description":"Solver updates the status of an issue.",
+"parameters":{
+"type":"object",
+"properties":{
+"issue_id":{"type":"integer"},
+"message":{"type":"string"}
+},
+"required":["message","issue_id"]
+}
+}
+},
+
+{
+"type":"function",
+"function":{
+"name":"solver_complete_work",
+"description":"Solver marks issue work as completed.",
+"parameters":{
+"type":"object",
+"properties":{
+"issue_id":{"type":"integer"},
+"message":{"type":"string"}
+},
+"required":["issue_id"]
+}
+}
+},
+
+{
+"type":"function",
+"function":{
+"name":"solver_report_blocker",
+"description":"Solver reports blocker preventing work.",
+"parameters":{
+"type":"object",
+"properties":{
+"issue_id":{"type":"integer"},
+"message":{"type":"string"}
+},
+"required":["issue_id"]
+}
+}
+},
+
+{
+"type":"function",
+"function":{
+"name":"raise_complaint",
+"description":"Raise complaint about issue.",
+"parameters":{
+"type":"object",
+"properties":{
+"issue_id":{"type":"integer"},
+"message":{"type":"string"}
+},
+"required":["issue_id","message"]
+}
+}
+},
+
+# DATABASE QUERY
+{
+"type":"function",
+"function":{
+"name":"query_function",
+"description":"Query database for issues, sites, users, reports or analytics.",
+"parameters":{
+"type":"object",
+"properties":{
+"query":{"type":"string"}
+},
+"required":["query"]
+}
+}
+},
+
+# NORMAL LLM CHAT
+{
+"type":"function",
+"function":{
+"name":"llm_function",
+"description":"General conversation not related to issues or database.",
+"parameters":{
+"type":"object",
+"properties":{
+"message":{"type":"string"}
+},
+"required":["message"]
+}
+}
+}
+
+]
+
+def check_missing_required(tool_name, args):
+    for tool in TOOLS:
+        if tool["function"]["name"] == tool_name:
+            required = tool["function"]["parameters"].get("required", [])
+            missing = [param for param in required if param not in args]
+            return missing
+    return []
+
+
+
 def is_greeting(message):
 
     greetings = [
@@ -116,20 +353,27 @@ def safe_json_parse(text):
 # ISSUE EXTRACTION
 # ==================================================
 
-def extract_issue(user_input):
+async def extract_issue(message: str,available_sites = None):
 
     prompt = f"""
-Extract fields from the message.
+Extract issue details from the message.
 
-Fields:
-skill_name
-site_location
-days_to_fix
+Available Sites:
+{available_sites}
 
-Message:
-{user_input}
+User Message:
+{message}
 
-Return JSON only.
+Return ONLY JSON in this format:
+
+{{
+  "skill_name": "string",
+  "site_location": "string",
+  "days_to_fix": "integer",
+  "title": "string",
+    "description": "string",
+    "priority": "LOW, MEDIUM or HIGH BASED ON CURRENT DATE AND DEADLINE"
+}}
 """
 
     response = groq_client.chat.completions.create(
@@ -440,115 +684,84 @@ Reply: ISSUE or QUERY
 # MASTER AGENT
 # ==================================================
 
-def master_agent(user_input):
+async def master_agent(user_input: str):
 
-    global pending_issue_context
-    global pending_issue_data
-    global awaiting_deadline
+    messages = [
+        {
+            "role":"system",
+            "content":f"""
+You are an AI operations assistant.
 
-    chat_history.add_user_message(user_input)
+You must choose the correct function.
 
-    if awaiting_deadline:
+Available intents:
 
-        try:
+create_issue
+approve_completion
+update_priority
+extend_deadlines
+solver_complete_work
+solver_report_blocker
+raise_complaint
+query_function
+llm_function
 
-            days = int(re.findall(r"\d+",user_input)[0])
+Rules:
 
-        except:
+issue id must be in a interger format.
 
-            return "Please provide deadline in days."
+If user reports problem → create_issue
 
-        pending_issue_data["days_to_fix"] = days
+If supervisor approves issue → approve_completion
 
-        awaiting_deadline = False
+If user wants priority change → update_priority
 
-        result = create_issue_from_data(pending_issue_data)
+If user wants deadline extension → extend_deadlines
 
-        pending_issue_context = None
-        pending_issue_data = None
+If solver finished work → solver_complete_work
 
-        chat_history.add_ai_message(result)
+If solver reports blocker → solver_report_blocker
 
-        return result
+If user complains about issue → raise_complaint
 
-    if pending_issue_context and not awaiting_deadline:
+If question requires database information → query_function
 
-        msg = user_input.lower()
-
-        if "issue" in msg:
-
-            awaiting_deadline = True
-
-            return "📅 How many days to fix this issue?"
-
-        if "query" in msg:
-
-            pending_issue_context = None
-            pending_issue_data = None
-
-            agent = sql_agent_executor()
-
-            response = agent.invoke({"input":user_input})
-
-            result = response.get("output",str(response))
-
-            chat_history.add_ai_message(result)
-
-            return result
-
-        return "Please reply ISSUE or QUERY."
-
-    intent = detect_intent(user_input)
-
-    print("🧠 Intent:",intent)
-
-    if intent == "greeting":
-
-        result = greeting_response()
-
-    elif intent == "issue":
-
-        data = extract_issue(user_input)
-
-        result = create_issue_from_data(data)
-
-    elif intent == "clarify":
-
-        result = ask_issue_or_query(user_input)
-
-    else:
-
-        context = get_buffer_context()
-
-        query_prompt = f"""
-{DB_CONTEXT}
-
-Conversation History:
-{context}
-
-User Question:
-{user_input}
-
-Only generate SELECT queries.
+If question is general conversation → llm_function
 """
+        },
+        {
+            "role":"user",
+            "content":user_input
+        }
+    ]
 
-        agent = sql_agent_executor()
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=messages,
+        tools=TOOLS,
+        tool_choice="auto",
+        temperature=0
+    )
 
-        try:
+    msg = response.choices[0].message
 
-            response = agent.invoke({"input":query_prompt})
+    if msg.tool_calls:
 
-            result = response.get("output",str(response))
+        tool = msg.tool_calls[0]
 
-        except Exception as e:
+        name = tool.function.name
+        args = json.loads(tool.function.arguments)
 
-            print("SQL Agent Error:",e)
+        return {
+            "intent":"function_call",
+            "function":name,
+            "args":args
+        }
 
-            result = "❌ AI query failed."
-
-    chat_history.add_ai_message(result)
-
-    return result
+    return {
+        "intent":"llm_function",
+        "message":msg.content
+    }
 
 # ==================================================
 # CLI
