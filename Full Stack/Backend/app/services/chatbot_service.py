@@ -70,31 +70,87 @@ class ChatbotService:
         )
 
         # ── 3. Call AI agent ─────────────────────────────
-        try:
-            from app.services.ai_service import master_agent
-            agent_response = master_agent(message)
+        from app.services.ai_service import master_agent, sql_agent_executor
+        from app.services.issue_service import IssueService
 
-            response = ChatResponse(
-                message=agent_response,
-                intent="fetch",
-                session_id=session.id,
-                actions_taken=["sql_agent"],
-            )
+        agent_response = await master_agent(message)
+        intent = agent_response.get("intent")
+        
+        # Initialize response variable to capture it for logging later
+        response = None
+        issue_service = IssueService(self.db)
 
-        except Exception as e:
-            logger.error(f"Agent error: {e}", exc_info=True)
-            response = ChatResponse(
-                message=f"❌ Something went wrong: {str(e)}",
-                intent="error",
-                session_id=session.id,
-                actions_taken=[f"error: {str(e)}"],
-            )
+        if intent == "function_call":
+            func = agent_response.get("function")
+            args = agent_response.get("args", {})
+
+            if func == "create_issue":
+                response = await issue_service.create_from_chat(
+                    user=user,
+                    message=args.get("message"),
+                    image_url=image_url,
+                    ai_service=None
+                )
+
+            elif func == "approve_completion":
+                response = await issue_service.approve_completion(user, args.get("issue_id"))
+
+            elif func == "update_priority":
+                response = await issue_service.update_priority(
+                    user, args.get("issue_id"), {"priority": args.get("priority")}
+                )
+
+            elif func == "extend_deadlines":
+                response = await issue_service.extend_deadline(
+                    user, args.get("issue_id"), args.get("days", 3)
+                )
+
+            elif func == "solver_complete_work":
+                response = await issue_service.solver_complete_work(
+                    user, args.get("message", "completed work"), image_url, args.get("issue_id"), None
+                )
+
+            elif func == "solver_report_blocker":
+                response = await issue_service.solver_report_blocker(
+                    user, args.get("message", "blocker reported"), args.get("issue_id")
+                )
+
+            elif func == "query_function":
+                agent = sql_agent_executor()
+                result = agent.invoke({"input": args.get("query")})
+                response = ChatResponse(
+                    message=result["output"],
+                    intent="query_function",
+                    actions_taken=["sql_agent"]
+                )
+
+            elif func == "llm_function":
+                response = ChatResponse(
+                    message=args.get("message"),
+                    intent="llm_function",
+                    actions_taken=["llm_response"]
+                )
+
+            elif func == "raise_complaint":
+                from app.services.complaint_service import ComplaintService
+                complaint_service = ComplaintService(self.db)
+                response = await complaint_service.create_from_chat(
+                    user=user,
+                    issue_id=args.get("issue_id"),
+                    message=args.get("message"),
+                    image_url=image_url
+                )
+
+        # Fallback if no function was called or intent wasn't recognized
+        if not response:
+            response = ChatResponse(message="I'm sorry, I couldn't process that request.", intent="error")
 
         # ── 4. Log AI response ──────────────────────────
+        # Now this code actually runs!
         await self._log_chat(
             session_id=session.id,
             user_id=None,
-            issue_id=response.issue_id or issue_id,
+            issue_id=getattr(response, 'issue_id', None) or issue_id,
             role=ChatRole.AI,
             message=response.message,
             attachments=[],
@@ -145,7 +201,7 @@ class ChatbotService:
             is_active=True,
         )
         self.db.add(session)
-        self.db.flush()  # Get the ID without committing
+        await self.db.flush()  # Get the ID without committing
 
         logger.info(
             f"New session #{session.id} created for user {user.name}: '{title}'"

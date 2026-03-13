@@ -1,0 +1,481 @@
+"id","user_id","issue_id","role_in_chat","message","attachments","created_at","updated_at","session_id"
+"1","1","1","USER","pipe broken in vepery site need to fix in 5 days","[]","2026-01-31 10:25:13.703505+00","2026-03-10 09:15:06.327997+00","11"
+"2",,"1","AI","✅ Issue #1 created: 'Pipe Leakage'. Solver Ramesh assigned.","[]","2026-01-31 10:25:16.703505+00","2026-03-10 09:15:06.327997+00","11"
+"3","2","2","USER","electrical panel fault in ambattur, urgent","[]","2026-02-03 09:25:13.703505+00","2026-03-10 09:15:06.327997+00","14"
+"4",,"2","AI","✅ Issue #2 created: 'Electrical Panel Fault'. Priority: HIGH.","[]","2026-02-03 09:25:16.703505+00","2026-03-10 09:15:06.327997+00","14"
+"5","1","3","USER","AC not cooling in guindy factory","[]","2026-02-01 08:25:13.703505+00","2026-03-10 09:15:06.327997+00","8"
+"6",,"3","AI","✅ Issue #3 created: 'AC Unit Not Cooling'. Solver Mohan assigned.","[]","2026-02-01 08:25:16.703505+00","2026-03-10 09:15:06.327997+00","8"
+"7","3","4","USER","broken window in perungudi conference room","[]","2026-02-05 07:25:13.703505+00","2026-03-10 09:15:06.327997+00","6"
+"8",,"4","AI","✅ Issue #4 created: 'Broken Window'. Solver Kavitha assigned.","[]","2026-02-05 07:25:16.703505+00","2026-03-10 09:15:06.327997+00","6"
+"9","1","5","USER","network switch down in taramani, critical!","[]","2026-02-04 06:25:13.703505+00","2026-03-10 09:15:06.327997+00","13"
+"10",,"5","AI","✅ Issue #5 created: 'Network Switch Failure'. Priority: HIGH.","[]","2026-02-04 06:25:16.703505+00","2026-03-10 09:15:06.327997+00","13"
+"11","6","26","USER","Started ceiling water stain repair","[]","2026-02-18 04:25:13.703505+00","2026-03-10 09:15:06.327997+00","17"
+"12",,"26","AI","✅ Issue #26 updated to IN_PROGRESS.","[]","2026-02-18 04:25:15.703505+00","2026-03-10 09:15:06.327997+00","17"
+"13","7","27","USER","Working on power socket replacement","[]","2026-02-18 03:25:13.703505+00","2026-03-10 09:15:06.327997+00","19"
+"14",,"27","AI","✅ Issue #27 updated to IN_PROGRESS.","[]","2026-02-18 03:25:15.703505+00","2026-03-10 09:15:06.327997+00","19"
+"15","8","28","USER","Inspecting chiller vibration","[]","2026-02-18 02:25:13.703505+00","2026-03-10 09:15:06.327997+00","9"
+"16",,"28","AI","✅ Issue #28 updated to IN_PROGRESS.","[]","2026-02-18 02:25:15.703505+00","2026-03-10 09:15:06.327997+00","9"
+"17","9","29","USER","Started handrail repair","[]","2026-02-18 01:25:13.703505+00","2026-03-10 09:15:06.327997+00","4"
+"18",,"29","AI","✅ Issue #29 updated to IN_PROGRESS.","[]","2026-02-18 01:25:15.703505+00","2026-03-10 09:15:06.327997+00","4"
+"19","10","30","USER","Replacing WiFi access point","[]","2026-02-18 00:25:13.703505+00","2026-03-10 09:15:06.327997+00","7"
+"20",,"30","AI","✅ Issue #30 updated to IN_PROGRESS.","[]","2026-02-18 00:25:15.703505+00","2026-03-10 09:15:06.327997+00","7"
+"21","1","76","USER","work not done properly, still leaking","[]","2026-02-19 06:25:13.703505+00","2026-03-10 09:15:06.327997+00","12"
+"22",,"76","AI","⚠️ Complaint filed for Issue #76. Reopened.","[]","2026-02-19 06:25:16.703505+00","2026-03-10 09:15:06.327997+00","12"
+"23","2","77","USER","electrical short is back again","[]","2026-02-19 05:25:13.703505+00","2026-03-10 09:15:06.327997+00","3"
+"24",,"77","AI","⚠️ Complaint filed for Issue #77. Reopened.","[]","2026-02-19 05:25:16.703505+00","2026-03-10 09:15:06.327997+00","3"
+"25","3","78","USER","water heater repair didn't work","[]","2026-02-19 04:25:13.703505+00","2026-03-10 09:15:06.327997+00","20"
+"26",,"78","AI","⚠️ Complaint filed for Issue #78. Reopened.","[]","2026-02-19 04:25:16.703505+00","2026-03-10 09:15:06.327997+00","20"
+"27",,"84","SYSTEM","⚠️ ESCALATION: Issue #84 escalated to manager.","[]","2026-02-20 09:25:13.703505+00","2026-03-10 09:15:06.327997+00","16"
+"28",,"85","SYSTEM","⚠️ ESCALATION: Issue #85 escalated to manager.","[]","2026-02-20 08:25:13.703505+00","2026-03-10 09:15:06.327997+00","18"
+"29",,"86","SYSTEM","⚠️ ESCALATION: Issue #86 escalated to manager.","[]","2026-02-20 07:25:13.703505+00","2026-03-10 09:15:06.327997+00","15"
+"30",,"87","SYSTEM","⚠️ ESCALATION: Issue #87 escalated to manager.","[]","2026-02-20 06:25:13.703505+00","2026-03-10 09:15:06.327997+00","2"
+"31",,"88","SYSTEM","⚠️ ESCALATION: Issue #88 escalated to manager.","[]","2026-02-20 05:25:13.703505+00","2026-03-10 09:15:06.327997+00","5"
+"32",,"89","SYSTEM","⚠️ ESCALATION: Issue #89 escalated to manager.","[]","2026-02-20 04:25:13.703505+00","2026-03-10 09:15:06.327997+00","1"
+"33",,"90","SYSTEM","⚠️ ESCALATION: Issue #90 escalated to manager.","[]","2026-02-20 03:25:13.703505+00","2026-03-10 09:15:06.327997+00","10"
+"34","1",,"USER","what are my open issues?","[]","2026-02-20 07:25:13.703505+00","2026-02-20 07:25:13.703505+00",
+"35",,,"AI","📋 You have 8 open issues.","[]","2026-02-20 07:25:15.703505+00","2026-02-20 07:25:15.703505+00",
+"36","4",,"USER","show escalated issues","[]","2026-02-20 07:25:13.703505+00","2026-02-20 07:25:13.703505+00",
+"37",,,"AI","⚠️ 7 escalated issues.","[]","2026-02-20 07:25:15.703505+00","2026-02-20 07:25:15.703505+00",
+"38","6",,"USER","what is my assignment?","[]","2026-02-20 07:25:13.703505+00","2026-02-20 07:25:13.703505+00",
+"39",,,"AI","👷 4 active assignments.","[]","2026-02-20 07:25:15.703505+00","2026-02-20 07:25:15.703505+00",
+"40","1",,"USER","Pipe Leakage in Main Halle","[]","2026-02-20 12:57:45.10009+00","2026-02-20 12:57:45.10009+00",
+"41",,,"AI","❌ Something went wrong: cannot unpack non-iterable NoneType object. Please try again.","[]","2026-02-20 12:57:45.3968+00","2026-02-20 12:57:45.3968+00",
+"42","1",,"USER","Pipe Leakage in Main Halle","[]","2026-02-20 12:58:08.508356+00","2026-02-20 12:58:08.508356+00",
+"43",,,"AI","❌ Something went wrong: cannot unpack non-iterable NoneType object. Please try again.","[]","2026-02-20 12:58:08.742562+00","2026-02-20 12:58:08.742562+00",
+"44","1",,"USER","Pipe Leakage in Main Halle","[]","2026-02-20 13:01:04.285704+00","2026-02-20 13:01:04.285704+00",
+"45",,,"AI","❌ Couldn't find site 'Main Halle'. Available: Vepery Site, Taramani Tech Park, OMR Tech Hub, Adyar Research Lab, Nungambakkam Office, Anna Nagar Complex, Thiruvanmiyur Site","[]","2026-02-20 13:01:04.541244+00","2026-02-20 13:01:04.541244+00",
+"46","1",,"USER","what works have done today","[]","2026-02-20 13:02:36.596255+00","2026-02-20 13:02:36.596255+00",
+"47",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:02:36.845491+00","2026-02-20 13:02:36.845491+00",
+"48","1",,"USER","what all supervisor id's","[]","2026-02-20 13:05:16.284924+00","2026-02-20 13:05:16.284924+00",
+"49",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:05:16.606262+00","2026-02-20 13:05:16.606262+00",
+"50","1",,"USER","what all supervisor id's","[]","2026-02-20 13:05:28.763868+00","2026-02-20 13:05:28.763868+00",
+"51",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:05:29.087149+00","2026-02-20 13:05:29.087149+00",
+"52","1",,"USER","give superviosr id's","[]","2026-02-20 13:05:46.659139+00","2026-02-20 13:05:46.659139+00",
+"53",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:05:46.988251+00","2026-02-20 13:05:46.988251+00",
+"54","1",,"USER","whoru","[]","2026-02-20 13:06:21.035851+00","2026-02-20 13:06:21.035851+00",
+"55",,,"AI","Hello Priya Sharma, I'm a facility management assistant chatbot 🙋. I'm here to help you with any issues or questions you may have regarding the facilities. You can report issues, check the status of ongoing work, view your assignments, or file a complaint. How can I assist you today?","[]","2026-02-20 13:06:21.357134+00","2026-02-20 13:06:21.357134+00",
+"56","1",,"USER","i need to know all the superviosr namesand their contact details","[]","2026-02-20 13:06:52.346136+00","2026-02-20 13:06:52.346136+00",
+"57",,,"AI","Hello Priya Sharma, I'm happy to help you. However, I need to clarify that I don't have direct access to real-time contact information. But I can guide you on how to obtain the list of supervisor names and their contact details.
+
+You can try the following options:
+
+1. Check the company's internal directory or employee database.
+2. Visit the facility management website or portal to see if they have a list of supervisors and their contact information.
+3. Reach out to the HR department or administrative office to request the list of supervisors and their contact details.
+
+If you're still having trouble finding the information, you can also try filing a request through our system, and I'll do my best to assist you further. 😊","[]","2026-02-20 13:06:52.700997+00","2026-02-20 13:06:52.700997+00",
+"58","1",,"USER","supervisor id 1 phone number","[]","2026-02-20 13:07:47.197316+00","2026-02-20 13:07:47.197316+00",
+"59",,,"AI","Hello Priya Sharma, I'd be happy to help you with that. 📞 Unfortunately, I don't have direct access to real-time contact information. However, I can guide you on how to find the supervisor's phone number. 
+
+You can try checking the facility management portal or the company directory for the supervisor's contact details. If you're unable to find the information, you can also report an issue or submit a request, and I'll do my best to assist you further. Would you like to proceed with reporting an issue or checking the status of an existing request?","[]","2026-02-20 13:07:47.516477+00","2026-02-20 13:07:47.516477+00",
+"60","1",,"USER","phone number of supervisor id 1","[]","2026-02-20 13:08:23.658785+00","2026-02-20 13:08:23.658785+00",
+"61",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:08:23.985741+00","2026-02-20 13:08:23.985741+00",
+"62","1",,"USER","status of all issues","[]","2026-02-20 13:13:47.103078+00","2026-02-20 13:13:47.103078+00",
+"63",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:13:47.433678+00","2026-02-20 13:13:47.433678+00",
+"64","1",,"USER","query_issues of site id 1","[]","2026-02-20 13:14:36.730082+00","2026-02-20 13:14:36.730082+00",
+"65",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:14:36.984772+00","2026-02-20 13:14:36.984772+00",
+"66","1",,"USER","query_issues of site id 4","[]","2026-02-20 13:15:06.502169+00","2026-02-20 13:15:06.502169+00",
+"67",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:15:06.753439+00","2026-02-20 13:15:06.753439+00",
+"68","1",,"USER","query_issues of site id 4","[]","2026-02-20 13:37:00.925168+00","2026-02-20 13:37:00.925168+00",
+"69",,,"AI","❌ Could not fetch data: connection to server at ""localhost"" (::1), port 5432 failed: FATAL:  password authentication failed for user ""postgres""
+. Please try rephrasing your question.","[]","2026-02-20 13:37:01.190795+00","2026-02-20 13:37:01.190795+00",
+"70","1",,"USER","query_issues of site id 4","[]","2026-02-20 13:37:49.208931+00","2026-02-20 13:37:49.208931+00",
+"71",,,"AI","📋 31 issue(s):
+
+🟡 #92 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🟡 #91 — Pipe Leakage in Main Halle [medium] (ASSIGNED)
+🔴 #55 — Fiber Optic Cable Damage [high] (OPEN)
+🔴 #58 — Coolant Pipe Leak Lab [high] (OPEN)
+🔴 #59 — Reception Desk Repair [low] (OPEN)
+🔴 #60 — Exterior Painting Needed [low] (OPEN)
+🔴 #61 — Emergency Generator Test Fail [high] (OPEN)
+🔴 #66 — Cafeteria Sink Clogged [medium] (OPEN)
+🟡 #41 — Pantry Microwave Repair [low] (ASSIGNED)
+🟡 #46 — Overhead Tank Cleaning [medium] (ASSIGNED)
+🟡 #50 — CCTV Camera Realignment [medium] (ASSIGNED)
+🔵 #26 — Ceiling Water Stain Repair [medium] (IN_PROGRESS)
+🔵 #30 — WiFi Access Point Replacement [medium] (IN_PROGRESS)
+🔵 #35 — Server Room AC Backup Install [high] (IN_PROGRESS)
+🔵 #38 — Transformer Oil Top-up [high] (IN_PROGRESS)","[]","2026-02-20 13:37:49.487556+00","2026-02-20 13:37:49.487556+00",
+"72","1",,"USER","use sql command to get the superviosr 1 details","[]","2026-02-20 13:38:26.554005+00","2026-02-20 13:38:26.554005+00",
+"73",,,"AI","To get the Supervisor 1 details, you can use the following SQL command:
+
+```sql
+SELECT * 
+FROM Employees 
+WHERE EmployeeID = (SELECT Supervisor1ID 
+                    FROM Employees 
+                    WHERE EmployeeName = 'Priya Sharma');
+```
+
+Alternatively, if you have a separate table for supervisors, you can use:
+
+```sql
+SELECT S.* 
+FROM Supervisors S 
+JOIN Employees E ON S.SupervisorID = E.Supervisor1ID 
+WHERE E.EmployeeName = 'Priya Sharma';
+```
+
+Please replace the table and column names with the actual names used in your database. 
+
+If you need help with the exact syntax or have further questions, feel free to ask 📊.","[]","2026-02-20 13:38:26.814377+00","2026-02-20 13:38:26.814377+00",
+"74","1",,"USER","use sql command to get the superviosr 1 details","[]","2026-02-20 13:51:32.401865+00","2026-02-20 13:51:32.401865+00",
+"75",,,"AI","To get the Supervisor 1 details, you can use the following SQL command:
+
+```sql
+SELECT * 
+FROM Employees 
+WHERE EmployeeID = (SELECT Supervisor1ID 
+                    FROM Employees 
+                    WHERE EmployeeName = 'Priya Sharma');
+```
+
+This command assumes that you have a table named `Employees` with columns `EmployeeID`, `EmployeeName`, and `Supervisor1ID`. 
+
+If you want to get the details of Priya Sharma's supervisor, you would need to replace `'Priya Sharma'` with the actual `EmployeeName` or `EmployeeID` of Priya Sharma.
+
+Alternatively, if you have a separate table for supervisors, the query would be:
+
+```sql
+SELECT S.* 
+FROM Supervisors S 
+JOIN Employees E ON S.SupervisorID = E.Supervisor1ID 
+WHERE E.EmployeeName = 'Priya Sharma';
+```
+
+Please replace the table and column names according to your actual database schema. 😊","[]","2026-02-20 13:51:32.719155+00","2026-02-20 13:51:32.719155+00",
+"76","1",,"USER","use sql command to get the superviosr 1 details","[]","2026-02-20 13:54:31.062659+00","2026-02-20 13:54:31.062659+00",
+"77",,,"AI","❌ Something went wrong: connection to server at ""localhost"" (::1), port 5432 failed: FATAL:  password authentication failed for user ""postgres""
+. Please try again.","[]","2026-02-20 13:54:31.371797+00","2026-02-20 13:54:31.371797+00",
+"78","1",,"USER","use sql command to get the superviosr 1 details","[]","2026-02-20 13:55:09.681217+00","2026-02-20 13:55:09.681217+00",
+"79",,,"AI","❌ Something went wrong: connection to server at ""localhost"" (::1), port 5432 failed: FATAL:  password authentication failed for user ""postgres""
+. Please try again.","[]","2026-02-20 13:55:09.97774+00","2026-02-20 13:55:09.97774+00",
+"80","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:05:13.109581+00","2026-02-20 14:05:13.109581+00",
+"81",,,"AI","❌ Something went wrong: cannot access local variable 'result' where it is not associated with a value. Please try again.","[]","2026-02-20 14:05:13.375024+00","2026-02-20 14:05:13.375024+00",
+"82","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:07:08.642079+00","2026-02-20 14:07:08.642079+00",
+"83","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:08:38.751899+00","2026-02-20 14:08:38.751899+00",
+"84","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:13:20.458269+00","2026-02-20 14:13:20.458269+00",
+"85","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:17:50.332753+00","2026-02-20 14:17:50.332753+00",
+"86",,,"AI","❌ Something went wrong: connection to server at ""localhost"" (::1), port 5432 failed: FATAL:  password authentication failed for user ""postgres""
+","[]","2026-02-20 14:17:50.476547+00","2026-02-20 14:17:50.476547+00",
+"87","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:20:40.171041+00","2026-02-20 14:20:40.171041+00",
+"88",,,"AI","❌ Something went wrong: psycopg2.connect() argument after ** must be a mapping, not str","[]","2026-02-20 14:20:40.190449+00","2026-02-20 14:20:40.190449+00",
+"89","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:31:06.527754+00","2026-02-20 14:31:06.527754+00",
+"90",,,"AI","❌ Something went wrong: 'str' object has no attribute 'chat'","[]","2026-02-20 14:31:06.564969+00","2026-02-20 14:31:06.564969+00",
+"91","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:32:49.840787+00","2026-02-20 14:32:49.840787+00",
+"92",,,"AI","❌ Something went wrong: 'str' object has no attribute 'chat'","[]","2026-02-20 14:32:49.862898+00","2026-02-20 14:32:49.862898+00",
+"93","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:37:12.614947+00","2026-02-20 14:37:12.614947+00",
+"94",,,"AI","❌ Something went wrong: 'str' object has no attribute 'chat'","[]","2026-02-20 14:37:12.634194+00","2026-02-20 14:37:12.634194+00",
+"95","1",,"USER","issue in a vepary siote","[]","2026-02-20 14:38:59.448997+00","2026-02-20 14:38:59.448997+00",
+"96",,,"AI","No issues found in Vepary site.","[]","2026-02-20 14:39:00.595812+00","2026-02-20 14:39:00.595812+00",
+"97","1",,"USER","name of supervisor id 2","[]","2026-02-20 14:39:35.736078+00","2026-02-20 14:39:35.736078+00",
+"98",,,"AI","The name of the supervisor with id 2 is Anil Kumar.","[]","2026-02-20 14:39:37.219402+00","2026-02-20 14:39:37.219402+00",
+"99","1",,"USER","hi","[]","2026-03-10 09:16:01.588892+00","2026-03-10 09:16:01.588892+00",
+"100",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 09:16:01.588892+00","2026-03-10 09:16:01.588892+00","21"
+"101","1",,"USER","hi","[]","2026-03-10 09:16:40.307735+00","2026-03-10 09:16:40.307735+00","21"
+"102",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 09:16:40.307735+00","2026-03-10 09:16:40.307735+00","21"
+"103","1",,"USER","hi","[]","2026-03-10 09:19:30.610298+00","2026-03-10 09:19:30.610298+00",
+"104",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 09:19:30.610298+00","2026-03-10 09:19:30.610298+00","22"
+"105","1",,"USER","user id","[]","2026-03-10 09:21:41.16711+00","2026-03-10 09:21:41.16711+00","22"
+"106",,,"AI","❌ Something went wrong: (psycopg2.OperationalError) connection to server on socket ""@ep-fancy-leaf-a1fqov5g-pooler.ap-southeast-1.aws.neon.tech/.s.PGSQL.5432"" failed: Invalid argument (0x00002726/10022)
+	Is the server running locally and accepting connections on that socket?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)","[]","2026-03-10 09:21:41.16711+00","2026-03-10 09:21:41.16711+00","22"
+"107","1",,"USER","user id 5","[]","2026-03-10 09:22:27.658985+00","2026-03-10 09:22:27.658985+00","22"
+"108",,,"AI","❌ Something went wrong: (psycopg2.OperationalError) connection to server on socket ""@ep-fancy-leaf-a1fqov5g-pooler.ap-southeast-1.aws.neon.tech/.s.PGSQL.5432"" failed: Invalid argument (0x00002726/10022)
+	Is the server running locally and accepting connections on that socket?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)","[]","2026-03-10 09:22:27.658985+00","2026-03-10 09:22:27.658985+00","22"
+"109","1",,"USER","user id 5","[]","2026-03-10 09:24:15.231825+00","2026-03-10 09:24:15.231825+00","22"
+"110",,,"AI","❌ Something went wrong: (psycopg2.OperationalError) connection to server on socket ""@ep-fancy-leaf-a1fqov5g-pooler.ap-southeast-1.aws.neon.tech/.s.PGSQL.5432"" failed: Invalid argument (0x00002726/10022)
+	Is the server running locally and accepting connections on that socket?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)","[]","2026-03-10 09:24:15.231825+00","2026-03-10 09:24:15.231825+00","22"
+"111","1",,"USER","hi","[]","2026-03-10 09:26:57.149215+00","2026-03-10 09:26:57.149215+00","22"
+"112",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 09:26:57.149215+00","2026-03-10 09:26:57.149215+00","22"
+"113","1",,"USER","user id 5","[]","2026-03-10 09:27:02.593461+00","2026-03-10 09:27:02.593461+00","22"
+"114",,,"AI","❌ Something went wrong: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)","[]","2026-03-10 09:27:02.593461+00","2026-03-10 09:27:02.593461+00","22"
+"115","1",,"USER","user id 5","[]","2026-03-10 09:28:47.637761+00","2026-03-10 09:28:47.637761+00","22"
+"116",,,"AI","❌ Something went wrong: (psycopg2.OperationalError) connection to server on socket ""@ep-fancy-leaf-a1fqov5g-pooler.ap-southeast-1.aws.neon.tech/.s.PGSQL.5432"" failed: Invalid argument (0x00002726/10022)
+	Is the server running locally and accepting connections on that socket?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)","[]","2026-03-10 09:28:47.637761+00","2026-03-10 09:28:47.637761+00","22"
+"117","1",,"USER","user id 5","[]","2026-03-10 09:29:35.958487+00","2026-03-10 09:29:35.958487+00","22"
+"118",,,"AI","❌ Something went wrong: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)","[]","2026-03-10 09:29:35.958487+00","2026-03-10 09:29:35.958487+00","22"
+"119","1",,"USER","user id 5","[]","2026-03-10 09:31:02.147264+00","2026-03-10 09:31:02.147264+00","22"
+"120",,,"AI","❌ Something went wrong: (psycopg2.ProgrammingError) invalid dsn: invalid connection option ""ssl""
+
+(Background on this error at: https://sqlalche.me/e/20/f405)","[]","2026-03-10 09:31:02.147264+00","2026-03-10 09:31:02.147264+00","22"
+"121","1",,"USER","user id 5","[]","2026-03-10 09:31:24.541041+00","2026-03-10 09:31:24.541041+00","22"
+"122",,,"AI","❌ Something went wrong: (psycopg2.OperationalError) connection to server on socket ""@ep-fancy-leaf-a1fqov5g-pooler.ap-southeast-1.aws.neon.tech/.s.PGSQL.5432"" failed: Invalid argument (0x00002726/10022)
+	Is the server running locally and accepting connections on that socket?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)","[]","2026-03-10 09:31:24.541041+00","2026-03-10 09:31:24.541041+00","22"
+"123","1",,"USER","user id 5","[]","2026-03-10 09:33:29.912388+00","2026-03-10 09:33:29.912388+00","22"
+"124",,,"AI","The user with id 5 is Lakshmi Narayanan, their phone number is 9100000005, and they are a MANAGER.","[]","2026-03-10 09:33:29.912388+00","2026-03-10 09:33:29.912388+00","22"
+"125","1",,"USER","hi","[]","2026-03-10 09:59:18.894764+00","2026-03-10 09:59:18.894764+00",
+"126",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 09:59:18.894764+00","2026-03-10 09:59:18.894764+00","23"
+"127","1",,"USER","Weekly analytics report","[]","2026-03-10 09:59:36.672072+00","2026-03-10 09:59:36.672072+00",
+"128",,,"AI","There were 2 issues raised in week 4, 8 issues raised in week 5, 12 issues raised in week 6, 22 issues raised in week 7, and 48 issues raised in week 8.","[]","2026-03-10 09:59:36.672072+00","2026-03-10 09:59:36.672072+00","24"
+"129","1",,"USER","hi","[]","2026-03-10 11:09:05.292466+00","2026-03-10 11:09:05.292466+00",
+"130",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 11:09:05.292466+00","2026-03-10 11:09:05.292466+00","25"
+"131","1",,"USER","Hi","[]","2026-03-10 11:13:24.495739+00","2026-03-10 11:13:24.495739+00",
+"132",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 11:13:24.495739+00","2026-03-10 11:13:24.495739+00","26"
+"133","1",,"USER","Hi","[]","2026-03-10 11:13:25.096813+00","2026-03-10 11:13:25.096813+00",
+"134",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 11:13:25.096813+00","2026-03-10 11:13:25.096813+00","27"
+"135","1",,"USER","Show overdue issues","[]","2026-03-10 11:14:01.087324+00","2026-03-10 11:14:01.087324+00",
+"136",,,"AI","The overdue issues are:
+- Issue 10: HVAC Duct Cleaning, deadline was 2026-01-31 10:25:13
+- Issue 11: Office Wall Painting, deadline was 2026-02-03 10:25:13
+- Issue 6: Generator Annual Maintenance, deadline was 2026-02-05 10:25:13
+- Issue 20: Air Compressor Servicing, deadline was 2026-02-05 10:25:13
+- Issue 7: Bathroom Tiles Replacement, deadline was 2026-02-07 10:25:13","[]","2026-03-10 11:14:01.087324+00","2026-03-10 11:14:01.087324+00","28"
+"137","1",,"USER","Give a detail of supervisor id 5","[]","2026-03-10 11:14:45.910789+00","2026-03-10 11:14:45.910789+00","28"
+"138",,,"AI","The details of supervisor id 5 are: 
+id: 5 
+name: None 
+phone: None 
+email: None 
+role: SUPERVISOR 
+
+Please note that the actual values for name, phone, and email are not provided in the observation. If the observation provided the actual values, they would be included in the final answer.","[]","2026-03-10 11:14:45.910789+00","2026-03-10 11:14:45.910789+00","28"
+"139","1",,"USER","Whats the open issues","[]","2026-03-10 11:15:35.360167+00","2026-03-10 11:15:35.360167+00","26"
+"140",,,"AI","The open issues are:
+- Issue 26: Ceiling Water Stain Repair, status: IN_PROGRESS
+- Issue 27: Power Socket Replacement Block-A, status: IN_PROGRESS
+- Issue 28: Chiller Plant Vibration Issue, status: IN_PROGRESS
+- Issue 29: Stairwell Handrail Loose, status: IN_PROGRESS
+- Issue 30: WiFi Access Point Replacement, status: IN_PROGRESS","[]","2026-03-10 11:15:35.360167+00","2026-03-10 11:15:35.360167+00","26"
+"141","1",,"USER","What are the issues thelatbare close to deadlines","[]","2026-03-10 11:16:36.121869+00","2026-03-10 11:16:36.121869+00","26"
+"142",,,"AI","The issues that are close to their deadlines are:
+- Issue 10: HVAC Duct Cleaning, deadline is 2026-01-31 10:25:13
+- Issue 11: Office Wall Painting, deadline is 2026-02-03 10:25:13
+- Issue 6: Generator Annual Maintenance, deadline is 2026-02-05 10:25:13
+- Issue 20: Air Compressor Servicing, deadline is 2026-02-05 10:25:13
+- Issue 7: Bathroom Tiles Replacement, deadline is 2026-02-07 10:25:13","[]","2026-03-10 11:16:36.121869+00","2026-03-10 11:16:36.121869+00","26"
+"144","5",,"USER","Weekly analytics report","[]","2026-03-10 11:21:52.174199+00","2026-03-10 11:21:52.174199+00",
+"145",,,"AI","There were 0 issues raised, 0 issues completed, 0 complaints, and 0 calls made in the last week.","[]","2026-03-10 11:21:52.174199+00","2026-03-10 11:21:52.174199+00","29"
+"146","5",,"USER","Givegive me overall analytics report and plan on how to get done all oocerduesvthis week","[]","2026-03-10 11:23:26.884812+00","2026-03-10 11:23:26.884812+00","29"
+"147",,,"AI","❌ AI query failed.","[]","2026-03-10 11:23:26.884812+00","2026-03-10 11:23:26.884812+00","29"
+"148","5",,"USER","Give me the analytics of this month plan0","[]","2026-03-10 11:41:47.761668+00","2026-03-10 11:41:47.761668+00",
+"149",,,"AI","I don't know","[]","2026-03-10 11:41:47.761668+00","2026-03-10 11:41:47.761668+00","30"
+"150","5",,"USER","Give me the data of this month","[]","2026-03-10 11:42:30.498617+00","2026-03-10 11:42:30.498617+00","30"
+"151",,,"AI","The data from this month is:
+
+ Issue # | Title | Created At
+---------+-------+-------------------------------
+       1 | Pipe Leakage in Main Hall | 2026-02-19 10:25:13.703505+00
+       2 | Electrical Panel Fault Block-B | 2026-02-20 09:25:13.703505+00
+       3 | AC Unit Not Cooling Properly | 2026-02-21 08:25:13.703505+00
+       4 | Water Heater Not Working | 2026-02-22 07:25:13.703505+00
+       5 | Toilet Leak in Bathroom | 2026-02-23 06:25:13.703505+00
+
+Note: The actual data may vary based on the current month and year.","[]","2026-03-10 11:42:30.498617+00","2026-03-10 11:42:30.498617+00","30"
+"152","5",,"USER","I need to know the plan for future based on the pased data give amlme analytics for issue","[]","2026-03-10 11:46:40.638845+00","2026-03-10 11:46:40.638845+00","30"
+"153",,,"AI","Based on the past data, the plan for the future could involve:
+
+1. Prioritizing issues related to 'Pipe Leakage in Main Hall' and 'Fiber Optic Cable Damage' as they have been raised with 'MEDIUM' and 'HIGH' priority respectively.
+2. Focusing on sites with id 1, 8, 9, and 10 as they have had recent issues raised.
+3. Ensuring that supervisors with id 1 and 3 are aware of the issues and are assigning them to solvers in a timely manner.
+
+Here are 5 recent issues for reference:
+
+| Title | Priority | Site ID | Raised By Supervisor ID | Created At |
+| --- | --- | --- | --- | --- |
+| Pipe Leakage in Main Halle | MEDIUM | 1 | 1 | 2026-02-20 12:58:08+00:00 |
+| Pipe Leakage in Main Halle | MEDIUM | 1 | 1 | 2026-02-20 12:57:45+00:00 |
+| Sewage Pump Failure | HIGH | 8 | 3 | 2026-02-19 10:25:13+00:00 |
+| Parking Barrier Malfunction | MEDIUM | 9 | 3 | 2026-02-19 09:25:13+00:00 |
+| Fiber Optic Cable Damage | HIGH | 10 | 1 | 2026-02-19 08:25:13+00:00 |","[]","2026-03-10 11:46:40.638845+00","2026-03-10 11:46:40.638845+00","30"
+"154","5",,"USER","Based on this give me the plans","[]","2026-03-10 11:48:31.018901+00","2026-03-10 11:48:31.018901+00","30"
+"155",,,"AI","Based on past issues, the plans could involve:
+
+1. Assigning solvers with IDs 6, 7, 8, and 9 to issues with high priority.
+2. Focusing on issues with titles 'Pipe Leakage in Main Hall', 'Electrical Panel Fault Block-B', 'AC Unit Not Cooling Properly', 'Network Switch Failure', and 'Fire Alarm System Test'.
+3. Ensuring that supervisors are aware of the issues and are assigning them to solvers in a timely manner.
+
+Note: The actual plans may vary based on the specific requirements and needs of the facility.","[]","2026-03-10 11:48:31.018901+00","2026-03-10 11:48:31.018901+00","30"
+"156","5",,"USER","I need full report","[]","2026-03-10 11:50:04.311942+00","2026-03-10 11:50:04.311942+00","30"
+"157",,,"AI","Here are 5 recent issues: 
+1. Pipe Leakage in Main Hall at Vepery Site - Major water leak from ceiling pipe joint in main hall affecting work area
+2. Electrical Panel Fault Block-B at Ambattur Industrial Park - Panel B3 showing intermittent failures and tripping breakers
+3. AC Unit Not Cooling Properly at Guindy Factory - Central AC in Block A not maintaining set temperature of 24°C
+4. Network Switch Failure at Taramani Tech Park - Core network switch in server room lost connectivity
+5. Broken Window Conference Room at Perungudi Site - Glass cracked in 3rd floor conference room posing safety hazard","[]","2026-03-10 11:50:04.311942+00","2026-03-10 11:50:04.311942+00","30"
+"158","1",,"USER","hi","[]","2026-03-10 12:03:02.369931+00","2026-03-10 12:03:02.369931+00",
+"159",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 12:03:02.369931+00","2026-03-10 12:03:02.369931+00","31"
+"160","1",,"USER","hi","[]","2026-03-10 12:07:36.613787+00","2026-03-10 12:07:36.613787+00","31"
+"161",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-10 12:07:36.613787+00","2026-03-10 12:07:36.613787+00","31"
+"162","1",,"USER","hi","[]","2026-03-11 11:13:14.428904+00","2026-03-11 11:13:14.428904+00",
+"163",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-11 11:13:14.428904+00","2026-03-11 11:13:14.428904+00","32"
+"164","1",,"USER","ok can u help me","[]","2026-03-11 11:13:38.503801+00","2026-03-11 11:13:38.503801+00","32"
+"165",,,"AI","❌ AI query failed.","[]","2026-03-11 11:13:38.503801+00","2026-03-11 11:13:38.503801+00","32"
+"166","1",,"USER","what is ur favorite coloer","[]","2026-03-11 11:16:38.569329+00","2026-03-11 11:16:38.569329+00",
+"167","1",,"USER","give a approval of issue 3","[]","2026-03-11 11:17:19.933716+00","2026-03-11 11:17:19.933716+00",
+"190","1",,"USER","Pipe leakage in velachery need fix in 5 days","[]","2026-03-11 11:44:43.490338+00","2026-03-11 11:44:43.490338+00",
+"191",,,"AI","❌ Database error: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)","[]","2026-03-11 11:44:43.490338+00","2026-03-11 11:44:43.490338+00","57"
+"192","1",,"USER","broken pipe in velachery need to fix in 4 days","[]","2026-03-11 11:48:10.886099+00","2026-03-11 11:48:10.886099+00",
+"193","1",,"USER","extend the deadline of issue id 2","[]","2026-03-11 11:51:58.280714+00","2026-03-11 11:51:58.280714+00",
+"194","1",,"USER","hi","[]","2026-03-11 11:53:59.757057+00","2026-03-11 11:53:59.757057+00","57"
+"195",,,"AI","👋 Hello! How can I assist you today?
+You can ask about issues, sites, supervisors, or create a new issue.","[]","2026-03-11 11:53:59.757057+00","2026-03-11 11:53:59.757057+00","57"
+"196","1",,"USER","extend the deadline of issue id 3","[]","2026-03-11 12:01:18.556513+00","2026-03-11 12:01:18.556513+00",
+"197","1",,"USER","extend the deadline of issue id 4","[]","2026-03-11 12:01:56.569837+00","2026-03-11 12:01:56.569837+00",
+"201","1",,"USER","update the priority of the issue id 3 into high","[]","2026-03-11 12:08:46.405354+00","2026-03-11 12:08:46.405354+00",
+"202","1",,"USER","update the priority of the issue id 3 into medium","[]","2026-03-11 12:10:11.134718+00","2026-03-11 12:10:11.134718+00",
+"203","1",,"USER","approve solver id 7","[]","2026-03-11 12:11:04.396547+00","2026-03-11 12:11:04.396547+00",
+"204","1",,"USER","approve issue id 32","[]","2026-03-11 12:13:57.686689+00","2026-03-11 12:13:57.686689+00",
+"205","1",,"USER","approve issue id 31","[]","2026-03-11 12:18:03.762374+00","2026-03-11 12:18:03.762374+00",
+"206","1",,"USER","approve issue id 30","[]","2026-03-11 12:24:19.357493+00","2026-03-11 12:24:19.357493+00",
+"207","1",,"USER","approve issue id 30","[]","2026-03-11 15:19:52.512762+00","2026-03-11 15:19:52.512762+00",
+"208",,,"AI","Issue with id 30 exists and its current status is 'IN_PROGRESS'.","[]","2026-03-11 15:19:52.512762+00","2026-03-11 15:19:52.512762+00","71"
+"210","1",,"USER","pipe broken in velachery need to fix in 5 days","[]","2026-03-11 15:25:53.226526+00","2026-03-11 15:25:53.226526+00",
+"211",,,"AI","❌ Database error: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)","[]","2026-03-11 15:25:53.226526+00","2026-03-11 15:25:53.226526+00","72"
+"212","1",,"USER","pipe broken in velachery need to fix in 5 days","[]","2026-03-11 15:26:28.255434+00","2026-03-11 15:26:28.255434+00","72"
+"213",,,"AI","❌ Database error: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)","[]","2026-03-11 15:26:28.255434+00","2026-03-11 15:26:28.255434+00","72"
+"214","1",,"USER","approve issue 32","[]","2026-03-11 15:33:54.053335+00","2026-03-11 15:33:54.053335+00",
+"215",,,"AI","Issue 32 is currently in progress.","[]","2026-03-11 15:33:54.053335+00","2026-03-11 15:33:54.053335+00","73"
+"216","1",,"USER","approve issue 45","[]","2026-03-11 15:35:31.51665+00","2026-03-11 15:35:31.51665+00",
+"217",,,"AI","The status of issue 45 is ASSIGNED.","[]","2026-03-11 15:35:31.51665+00","2026-03-11 15:35:31.51665+00","74"
+"218","1",,"USER","hello brew can u explain me","[]","2026-03-11 15:36:49.78247+00","2026-03-11 15:36:49.78247+00","74"
+"219",,,"AI","I don't know","[]","2026-03-11 15:36:49.78247+00","2026-03-11 15:36:49.78247+00","74"

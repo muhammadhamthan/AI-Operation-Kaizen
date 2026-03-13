@@ -1,0 +1,75 @@
+id,issue_id,assignment_id,raised_by_supervisor_id,target_solver_id,complaint_details,complaint_image_url,created_at,updated_at
+31,145,130,1,7,Switch config causing packet loss,https://ik.imagekit.io/facility/complaints/145.jpg,2026-01-05 13:27:19.000000+00,2026-01-05 13:27:19.000000+00
+32,151,136,1,6,Conveyor belt misalignment returning,,2025-12-07 10:26:44.000000+00,2025-12-07 10:26:44.000000+00
+33,187,172,2,10,CCTV camera misaligned again,https://ik.imagekit.io/facility/complaints/187.jpg,2025-01-28 11:37:25.000000+00,2025-01-28 11:37:25.000000+00
+34,190,175,2,10,Forklift hydraulic leak persists,https://ik.imagekit.io/facility/complaints/190.jpg,2025-08-19 10:04:30.000000+00,2025-08-19 10:04:30.000000+00
+35,233,218,2,10,Exhaust fan still noisy after service,https://ik.imagekit.io/facility/complaints/233.jpg,2025-09-24 17:19:49.000000+00,2025-09-24 17:19:49.000000+00
+36,239,224,2,10,Network still dropping intermittently,https://ik.imagekit.io/facility/complaints/239.jpg,2025-10-07 11:29:41.000000+00,2025-10-07 11:29:41.000000+00
+37,244,229,2,6,Handrail repair not to standard,https://ik.imagekit.io/facility/complaints/244.jpg,2025-11-20 18:23:26.000000+00,2025-11-20 18:23:26.000000+00
+38,261,246,2,8,Chiller vibration returned worse,,2025-07-31 14:43:21.000000+00,2025-07-31 14:43:21.000000+00
+39,265,250,2,8,Exhaust fan still noisy after service,,2025-09-27 11:39:33.000000+00,2025-09-27 11:39:33.000000+00
+40,280,265,2,7,Power socket using low-quality parts,,2025-10-13 11:16:42.000000+00,2025-10-13 11:16:42.000000+00
+41,282,267,2,9,Wall crack reappearing,,2025-08-26 14:48:21.000000+00,2025-08-26 14:48:21.000000+00
+42,284,269,2,8,Chiller vibration returned worse,https://ik.imagekit.io/facility/complaints/284.jpg,2025-09-03 15:46:09.000000+00,2025-09-03 15:46:09.000000+00
+43,287,272,2,6,Tiles cracked again at same spot,https://ik.imagekit.io/facility/complaints/287.jpg,2025-10-19 13:24:00.000000+00,2025-10-19 13:24:00.000000+00
+44,304,288,3,10,Chiller vibration returned worse,https://ik.imagekit.io/facility/complaints/304.jpg,2024-11-19 09:56:00.000000+00,2024-11-19 09:56:00.000000+00
+45,310,294,3,6,Water heater still not producing hot water,https://ik.imagekit.io/facility/complaints/310.jpg,2025-10-11 14:36:40.000000+00,2025-10-11 14:36:40.000000+00
+46,346,330,3,10,Network still dropping intermittently,,2025-12-27 16:02:32.000000+00,2025-12-27 16:02:32.000000+00
+47,358,342,1,6,Drainage still backing up after cleaning,https://ik.imagekit.io/facility/complaints/358.jpg,2024-08-17 16:11:18.000000+00,2024-08-17 16:11:18.000000+00
+48,394,378,1,10,Coolant leak not fully sealed,https://ik.imagekit.io/facility/complaints/394.jpg,2025-10-27 11:50:45.000000+00,2025-10-27 11:50:45.000000+00
+49,420,404,2,9,"Window sealing incomplete, still leaking",https://ik.imagekit.io/facility/complaints/420.jpg,2025-11-27 11:00:45.000000+00,2025-11-27 11:00:45.000000+00
+50,433,417,2,10,Same circuit breaker tripping within hours,https://ik.imagekit.io/facility/complaints/433.jpg,2025-10-31 10:12:53.000000+00,2025-10-31 10:12:53.000000+00
+51,436,420,2,8,"Pipe repair looks patchy, leaking again",,2025-12-31 13:20:44.000000+00,2025-12-31 13:20:44.000000+00
+52,441,425,2,9,Exterior paint fading prematurely,https://ik.imagekit.io/facility/complaints/441.jpg,2025-10-25 11:35:59.000000+00,2025-10-25 11:35:59.000000+00
+53,451,435,2,10,Distribution board still humming,https://ik.imagekit.io/facility/complaints/451.jpg,2026-01-03 15:35:23.000000+00,2026-01-03 15:35:23.000000+00
+54,452,436,2,7,Network still dropping intermittently,https://ik.imagekit.io/facility/complaints/452.jpg,2026-01-10 13:51:58.000000+00,2026-01-10 13:51:58.000000+00
+55,459,443,3,9,"Waterproofing not effective, seepage continues",https://ik.imagekit.io/facility/complaints/459.jpg,2024-03-25 14:42:34.000000+00,2024-03-25 14:42:34.000000+00
+56,464,448,3,7,Network still dropping intermittently,https://ik.imagekit.io/facility/complaints/464.jpg,2025-09-30 17:35:47.000000+00,2025-09-30 17:35:47.000000+00
+57,467,451,3,6,Pump still making excessive noise,https://ik.imagekit.io/facility/complaints/467.jpg,2025-01-05 13:56:19.000000+00,2025-01-05 13:56:19.000000+00
+58,475,459,3,9,Exterior paint fading prematurely,https://ik.imagekit.io/facility/complaints/475.jpg,2025-07-11 18:39:52.000000+00,2025-07-11 18:39:52.000000+00
+59,479,463,3,8,Chiller vibration returned worse,https://ik.imagekit.io/facility/complaints/479.jpg,2025-09-05 11:06:01.000000+00,2025-09-05 11:06:01.000000+00
+60,482,466,3,6,Crane rope inspection report incomplete,,2025-06-06 14:05:46.000000+00,2025-06-06 14:05:46.000000+00
+61,505,489,3,10,Fiber splice showing packet errors,https://ik.imagekit.io/facility/complaints/505.jpg,2024-06-04 12:51:30.000000+00,2024-06-04 12:51:30.000000+00
+62,518,502,3,10,UPS not providing full backup time,https://ik.imagekit.io/facility/complaints/518.jpg,2025-08-08 13:00:48.000000+00,2025-08-08 13:00:48.000000+00
+63,536,520,3,9,Wall crack reappearing,https://ik.imagekit.io/facility/complaints/536.jpg,2025-07-03 09:38:42.000000+00,2025-07-03 09:38:42.000000+00
+64,549,533,3,10,Coolant leak not fully sealed,,2025-12-27 18:43:25.000000+00,2025-12-27 18:43:25.000000+00
+65,586,570,3,10,Fiber splice showing packet errors,https://ik.imagekit.io/facility/complaints/586.jpg,2025-09-07 10:28:56.000000+00,2025-09-07 10:28:56.000000+00
+66,601,585,3,9,Door still not closing properly,https://ik.imagekit.io/facility/complaints/601.jpg,2026-01-07 16:19:56.000000+00,2026-01-07 16:19:56.000000+00
+67,602,586,3,10,Crane rope inspection report incomplete,https://ik.imagekit.io/facility/complaints/602.jpg,2025-12-12 13:34:36.000000+00,2025-12-12 13:34:36.000000+00
+68,617,601,1,9,"Waterproofing not effective, seepage continues",https://ik.imagekit.io/facility/complaints/617.jpg,2025-10-20 15:19:13.000000+00,2025-10-20 15:19:13.000000+00
+69,633,617,1,10,Forklift hydraulic leak persists,https://ik.imagekit.io/facility/complaints/633.jpg,2025-05-04 13:36:11.000000+00,2025-05-04 13:36:11.000000+00
+70,638,622,1,6,Crane rope inspection report incomplete,https://ik.imagekit.io/facility/complaints/638.jpg,2026-01-04 12:12:31.000000+00,2026-01-04 12:12:31.000000+00
+71,639,623,1,6,Water heater still not producing hot water,,2025-07-24 12:27:05.000000+00,2025-07-24 12:27:05.000000+00
+72,656,640,2,9,Pipe joint still leaking after repair,,2025-05-08 18:10:27.000000+00,2025-05-08 18:10:27.000000+00
+73,685,669,2,9,Handrail repair not to standard,,2025-08-02 08:17:43.000000+00,2025-08-02 08:17:43.000000+00
+74,693,677,2,10,Boiler pressure gauge reading off,,2025-12-31 09:02:24.000000+00,2025-12-31 09:02:24.000000+00
+75,707,691,3,9,Door still not closing properly,,2024-11-22 10:14:16.000000+00,2024-11-22 10:14:16.000000+00
+76,710,694,3,10,Crane rope inspection report incomplete,,2024-12-23 15:09:55.000000+00,2024-12-23 15:09:55.000000+00
+77,742,726,3,9,"Window sealing incomplete, still leaking",,2025-12-29 12:31:19.000000+00,2025-12-29 12:31:19.000000+00
+78,746,730,3,10,Switch config causing packet loss,,2025-12-21 12:44:19.000000+00,2025-12-21 12:44:19.000000+00
+79,757,741,1,7,Switch config causing packet loss,,2024-11-25 08:03:37.000000+00,2024-11-25 08:03:37.000000+00
+80,768,752,1,10,Crane rope inspection report incomplete,,2025-12-05 12:41:44.000000+00,2025-12-05 12:41:44.000000+00
+81,771,755,1,10,Chiller vibration returned worse,,2025-08-19 18:32:19.000000+00,2025-08-19 18:32:19.000000+00
+82,774,758,1,6,"Window sealing incomplete, still leaking",https://ik.imagekit.io/facility/complaints/774.jpg,2025-09-27 13:16:24.000000+00,2025-09-27 13:16:24.000000+00
+83,810,794,1,6,"Pipe repair looks patchy, leaking again",https://ik.imagekit.io/facility/complaints/810.jpg,2025-09-07 13:00:50.000000+00,2025-09-07 13:00:50.000000+00
+84,825,809,1,7,Same circuit breaker tripping within hours,https://ik.imagekit.io/facility/complaints/825.jpg,2025-08-27 12:08:47.000000+00,2025-08-27 12:08:47.000000+00
+85,829,813,1,6,Crane rope inspection report incomplete,https://ik.imagekit.io/facility/complaints/829.jpg,2025-12-28 12:20:48.000000+00,2025-12-28 12:20:48.000000+00
+86,837,819,1,10,Lights flickering after replacement,,2024-04-09 11:27:30.000000+00,2024-04-09 11:27:30.000000+00
+87,863,845,1,9,"Waterproofing not effective, seepage continues",https://ik.imagekit.io/facility/complaints/863.jpg,2025-08-28 14:23:09.000000+00,2025-08-28 14:23:09.000000+00
+88,888,869,1,10,Same circuit breaker tripping within hours,,2025-04-17 12:49:35.000000+00,2025-04-17 12:49:35.000000+00
+89,889,870,1,6,False ceiling sagging again,,2025-03-13 17:15:51.000000+00,2025-03-13 17:15:51.000000+00
+90,892,873,1,6,Water heater still not producing hot water,,2025-07-01 12:26:29.000000+00,2025-07-01 12:26:29.000000+00
+91,910,891,2,9,Handrail repair not to standard,https://ik.imagekit.io/facility/complaints/910.jpg,2024-05-18 17:57:39.000000+00,2024-05-18 17:57:39.000000+00
+92,920,901,2,6,Gate motor burned out again,https://ik.imagekit.io/facility/complaints/920.jpg,2026-01-10 10:11:42.000000+00,2026-01-10 10:11:42.000000+00
+93,936,917,2,8,Forklift hydraulic leak persists,https://ik.imagekit.io/facility/complaints/936.jpg,2025-10-25 15:57:11.000000+00,2025-10-25 15:57:11.000000+00
+94,950,931,2,8,Coolant leak not fully sealed,https://ik.imagekit.io/facility/complaints/950.jpg,2025-12-20 10:26:44.000000+00,2025-12-20 10:26:44.000000+00
+95,972,953,2,8,Coolant leak not fully sealed,https://ik.imagekit.io/facility/complaints/972.jpg,2025-11-30 12:30:20.000000+00,2025-11-30 12:30:20.000000+00
+96,976,957,2,8,"Pipe repair looks patchy, leaking again",,2025-05-18 17:32:58.000000+00,2025-05-18 17:32:58.000000+00
+97,979,960,2,7,Switch config causing packet loss,https://ik.imagekit.io/facility/complaints/979.jpg,2025-09-03 09:06:54.000000+00,2025-09-03 09:06:54.000000+00
+98,1011,992,2,10,Network still dropping intermittently,https://ik.imagekit.io/facility/complaints/1011.jpg,2025-10-14 13:40:20.000000+00,2025-10-14 13:40:20.000000+00
+99,1037,1018,2,9,Exterior paint fading prematurely,https://ik.imagekit.io/facility/complaints/1037.jpg,2025-11-07 17:30:59.000000+00,2025-11-07 17:30:59.000000+00
+100,1038,1019,2,9,"Waterproofing not effective, seepage continues",,2026-01-10 12:26:00.000000+00,2026-01-10 12:26:00.000000+00
+101,1039,1020,2,8,Chiller vibration returned worse,,2025-12-31 10:45:16.000000+00,2025-12-31 10:45:16.000000+00
+102,1045,1026,3,10,Conveyor belt misalignment returning,,2024-05-27 11:39:53.000000+00,2024-05-27 11:39:53.000000+00
+103,1050,1031,3,7,UPS not providing full backup time,,2025-06-11 13:10:48.000000+00,2025-06-11 13:10:48.000000+00
+104,1059,1040,3,6,False ceiling sagging again,,2025-04-03 15:09:14.000000+00,2025-04-03 15:09:14.000000+00

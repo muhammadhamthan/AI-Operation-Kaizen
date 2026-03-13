@@ -361,27 +361,9 @@ export const fetchComplaints = async () => {
   try {
     const response = await api.get('/api/v1/complaints');
 
-    const complaints = response.data.complaints.map(c => ({
-      ...c,
-
-      // map supervisor
-      raisedBy: {
-        name: c.supervisor_name,
-      },
-
-      // map solver
-      targetSolver: {
-        name: c.solver_name,
-      },
-
-      // issue object expected in UI
-      issue: {
-        title: c.issue_title
-      },
-
-      // temporary status since backend doesn't send it
-      status: "OPEN"
-    }));
+    // 📍 EXACT DATA: Pass the backend response directly without mutating it
+    // Handle both { complaints: [...] } or direct array [...] responses
+    const complaints = response.data.complaints || response.data || [];
 
     return {
       success: true,
@@ -389,38 +371,23 @@ export const fetchComplaints = async () => {
     };
 
   } catch (error) {
+    console.error("Fetch complaints error:", error);
     return {
       success: false,
       complaints: [],
     };
   }
 };
-
 export const fetchComplaintById = async (id) => {
   try {
     const response = await api.get(`/api/v1/complaints/${id}`);
-
-    const c = response.data;
-
-    return {
-      ...c,
-      raisedBy: {
-        name: c.supervisor_name,
-      },
-      targetSolver: {
-        name: c.solver_name,
-      },
-      issue: {
-        title: c.issue_title
-      },
-      status: "OPEN"
-    };
-
+    // 📍 EXACT DATA: Return the raw object exactly as backend sent it
+    // No more mapping raisedBy or status="OPEN"
+    return response.data;
   } catch (error) {
     throw error;
   }
 };
-
 // ==================== SITES API ====================
 
 /**
