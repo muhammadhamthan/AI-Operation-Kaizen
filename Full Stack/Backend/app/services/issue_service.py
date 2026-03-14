@@ -67,23 +67,35 @@ class IssueService:
     # 1. CREATE ISSUE FROM CHAT  (Stage 1 → 2 → 3)
     # ══════════════════════════════════════════════════════
 
+    # ══════════════════════════════════════════════════════
+    # 1. CREATE ISSUE FROM CHAT  (Stage 1 → 2 → 3)
+    # ══════════════════════════════════════════════════════
+
     async def create_from_chat(
         self,
         user: User,
         message: str,
         image_url: Optional[str],
         ai_service,
+        # ── NEW: Pre-extracted fields from ai_service (ONE LLM call) ──
+        skill_name: Optional[str] = None,
+        site_location: Optional[str] = None,
+        days_to_fix: int = 3,
+        priority_str: str = "MEDIUM",
+        title: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> ChatResponse:
         """
-        Full flow:
+        Full flow — NO second LLM call.
+        All fields are pre-extracted by ai_service.detect_and_route().
+
           1. Resolve supervisor's sites
-          2. AI extracts issue details
-          3. Match site by name
-          4. Persist Issue
-          5. Persist BEFORE image (if provided)
-          6. Add OPEN history entry
-          7. Auto-assign best solver
-          8. Return ChatResponse
+          2. Match site by name (from pre-extracted site_location)
+          3. Persist Issue
+          4. Persist BEFORE image (if provided)
+          5. Add OPEN history entry
+          6. Auto-assign best solver
+          7. Return ChatResponse
         """
         actions: list[str] = []
 
@@ -97,34 +109,34 @@ class IssueService:
         sites: list[Site] = result.scalars().all()
         site_names = [s.name for s in sites]
 
-        # ── 2. AI extraction ─────────────────────────────
-        from app.services.ai_service import extract_issue
-
-        extraction = await extract_issue(
-            message=message,
-            available_sites=site_names,
-        )
-
-        # ── 3. Site matching ─────────────────────────────
-        site = self._match_site(extraction['site_location'], sites)
+        # ── 2. Site matching (using pre-extracted location) ──
+        site = self._match_site(site_location or message, sites)
         if not site:
             return ChatResponse(
                 message=(
-                    f"❌ Couldn't find site '{extraction['site_location']}'. "
+                    f"❌ Couldn't find site '{site_location}'. "
                     f"Available: {', '.join(site_names)}"
                 ),
                 intent="create_issue",
                 actions_taken=["Site matching failed"],
             )
 
+        # ── 3. Use pre-extracted fields (no second LLM call!) ──
+        issue_title = title or f"{(skill_name or 'General').title()} Issue"
+        issue_desc = description or message
+        issue_skill = skill_name or "mechanical"
+        issue_priority = priority_str.upper()
+        if issue_priority not in ("LOW", "MEDIUM", "HIGH"):
+            issue_priority = "MEDIUM"
+
         # ── 4. Create Issue ──────────────────────────────
-        deadline = datetime.now(timezone.utc) + timedelta(days=extraction['days_to_fix'])
+        deadline = datetime.now(timezone.utc) + timedelta(days=days_to_fix)
         issue = Issue(
             site_id=site.id,
             raised_by_supervisor_id=user.id,
-            title=extraction['title'],
-            description=extraction['description'],
-            priority=extraction['priority'],
+            title=issue_title,
+            description=issue_desc,
+            priority=issue_priority,
             deadline_at=deadline,
             status=IssueStatus.OPEN,
             track_status="awaiting_solver",
@@ -132,7 +144,7 @@ class IssueService:
             longitude=site.longitude,
         )
         self.db.add(issue)
-        await self.db.flush()          # gets issue.id without committing
+        await self.db.flush()
         actions.append(f"Issue #{issue.id} created: '{issue.title}'")
 
         # ── 5. BEFORE image ──────────────────────────────
@@ -154,12 +166,11 @@ class IssueService:
         )
 
         # ── 7. Auto-assign ───────────────────────────────
-        # Import here to avoid circular import at module level
         from app.services.assignment_service import AssignmentService
         assignment_svc = AssignmentService(self.db)
         solver, assignment = await assignment_svc.auto_assign(
             issue=issue,
-            problem_type=extraction['skill_name'],
+            problem_type=issue_skill,
             site_id=site.id,
             supervisor=user,
         )
@@ -172,20 +183,17 @@ class IssueService:
         await self.db.commit()
         await self.db.refresh(issue)
 
-        # ── 8. Enqueue call chain (after commit so IDs are persisted in DB) ───
-        # Celery calls the solver immediately, then retries with priority-based
-        # delays until answered or escalation threshold is reached.
+        # ── 8. Enqueue call chain ─────────────────────────
         if solver and assignment:
             self._enqueue_call(assignment.id)
             actions.append(f"📞 Call chain queued → {solver.phone}")
 
-
-        # ── Build response ───────────────────────────────
+        # ── Build response ────────────────────────────────
         lines = [
             f"✅ Issue #{issue.id} created!",
             f"📍 Site: {site.name}",
-            f"🔧 Type: {extraction['skill_name']}",
-            f"⚡ Priority: {extraction['priority']}",
+            f"🔧 Type: {issue_skill}",
+            f"⚡ Priority: {issue_priority}",
             f"📅 Deadline: {deadline.strftime('%Y-%m-%d %H:%M')} UTC",
         ]
         if solver:
@@ -202,12 +210,11 @@ class IssueService:
             data={
                 "issue_id": issue.id,
                 "site": site.name,
-                "problem_type": extraction['skill_name'],
-                "priority": extraction['priority'],
+                "problem_type": issue_skill,
+                "priority": issue_priority,
                 "solver_name": solver.name if solver else None,
             },
         )
-
     # ══════════════════════════════════════════════════════
     # 2. APPROVE COMPLETION  (Supervisor)
     # ══════════════════════════════════════════════════════
@@ -227,7 +234,7 @@ class IssueService:
                 message=f"Issue #{issue_id} not found.",
                 intent="approve_completion", actions_taken=[],
             )
-        if issue.status != IssueStatus.RESOLVED_PENDING_REVIEW:
+        if issue.status != IssueStatus.RESOLVED_PENDING_REVIEW and issue.status != IssueStatus.REOPENED:
             return ChatResponse(
                 message=f"Issue #{issue_id} is '{issue.status.value}', not awaiting review.",
                 intent="approve_completion", actions_taken=[],

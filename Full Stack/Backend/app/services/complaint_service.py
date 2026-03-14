@@ -236,6 +236,28 @@ class ComplaintService:
             per_page=limit,
             complaints=[self._to_response(c) for c in complaints],
         )
+        
+        
+    async def get_complaint(self, complaint_id: int) -> Optional[ComplaintResponse]:
+        """
+        Returns single complaint detail by ID.
+        Returns None if not found.
+        """
+        stmt = (
+            select(Complaint)
+            .options(
+                selectinload(Complaint.issue),
+                selectinload(Complaint.raised_by_supervisor),
+                selectinload(Complaint.target_solver),
+            )
+            .where(Complaint.id == complaint_id)
+        )
+        complaint = (await self.db.execute(stmt)).scalar_one_or_none()
+
+        if not complaint:
+            return None
+
+        return self._to_response(complaint)
 
     # ══════════════════════════════════════════════════════
     # PRIVATE HELPERS

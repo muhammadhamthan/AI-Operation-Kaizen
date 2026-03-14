@@ -30,7 +30,7 @@ import { withRetry } from '../utils/networkRetry';
 // };
 
 const backendUrl = 'http://13.48.25.159:8000';
-const backendUrl = 'http://localhost:8000';
+
 
 const API_BASE_URL = backendUrl;
 

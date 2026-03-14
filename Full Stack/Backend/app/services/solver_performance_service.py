@@ -15,6 +15,7 @@ from sqlalchemy import func as sql_func,select
 from app.models.user import User
 from app.models.issue import Issue
 from app.models.issue_assignment import IssueAssignment
+from app.models.issue_history import IssueHistory
 from app.models.call_log import CallLog
 from app.models.complaint import Complaint
 from app.models.problem_solver_skill import ProblemSolverSkill
@@ -117,65 +118,77 @@ class SolverPerformanceService:
     async def _calculate_score(self, solver_id: int) -> SolverPerformanceDetail:
         now = datetime.now(timezone.utc)
 
-        # ── All assignments for this solver ─────────────
-        result = (await self.db.execute(
+        # ── All assignments ───────────────────────────────────
+        all_assignments = (await self.db.execute(
             select(IssueAssignment).where(
                 IssueAssignment.assigned_to_solver_id == solver_id
             )
-        )
-        ).scalars().all()
+        )).scalars().all()
 
-        all_assignments = result
         total_assigned = len(all_assignments)
 
-        # ── Completed assignments ────────────────────────
+        # ── Completed assignments ─────────────────────────────
         completed_assignments = [
             a for a in all_assignments
             if a.status == AssignmentStatus.COMPLETED
         ]
         completed_count = len(completed_assignments)
 
-        # ── Completion rate (40% weight) ─────────────────
-        completion_rate = completed_count / total_assigned if total_assigned > 0 else 0
+        # ── Completion rate (40% weight) ──────────────────────
+        completion_rate  = completed_count / total_assigned if total_assigned > 0 else 0
         completion_score = completion_rate * 40
 
-        # ── On-time rate (30% weight) ────────────────────
+        # ── On-time rate (30% weight) ─────────────────────────
         on_time_count = 0
         for a in completed_assignments:
-            if a.due_date and a.updated_at:
-                if a.updated_at <= a.due_date:
-                    on_time_count += 1
+            if not a.due_date:
+                continue
+            completion_event = (await self.db.execute(
+                select(IssueHistory.created_at)
+                .where(
+                    IssueHistory.issue_id == a.issue_id,
+                    IssueHistory.new_status == IssueStatus.COMPLETED,
+                )
+                .order_by(IssueHistory.created_at.asc())
+                .limit(1)
+            )).scalar_one_or_none()
 
-        on_time_rate = on_time_count / completed_count if completed_count > 0 else 0
+            if completion_event and completion_event <= a.due_date:
+                on_time_count += 1
+
+        on_time_rate  = on_time_count / completed_count if completed_count > 0 else 10
         on_time_score = on_time_rate * 30
+        # ADD THIS
+        print(f"due_date: {a.due_date} tzinfo={a.due_date.tzinfo}")
+        print(f"completion_event: {completion_event} tzinfo={getattr(completion_event, 'tzinfo', 'NO ATTR')}")
+        print(f"comparison result: {completion_event <= a.due_date if completion_event else 'no event'}")
 
-        # ── Call answer rate (20% weight) ────────────────
-        solver_calls = (
-            await self.db.execute(
-                select(CallLog).where(CallLog.solver_id == solver_id)
-            )
-        ).scalars().all()
-        total_calls = len(solver_calls)
+        # ── Call answer rate (20% weight) ─────────────────────
+        solver_calls = (await self.db.execute(
+            select(CallLog).where(CallLog.solver_id == solver_id)
+        )).scalars().all()
+
+        total_calls    = len(solver_calls)
         answered_calls = len([c for c in solver_calls if c.status == CallStatus.ANSWERED])
         call_answer_rate = answered_calls / total_calls if total_calls > 0 else 1.0
         call_score = call_answer_rate * 20
 
-        # ── Complaint penalty (10% weight) ───────────────
-        result = await self.db.execute(
-            select(sql_func.count()).where(
-                Complaint.target_solver_id == solver_id
-            )
-        )
+        # ── Complaint penalty (10% weight) ────────────────────
+        complaint_count = (await self.db.execute(
+            select(sql_func.count())
+            .select_from(Complaint)                          # ← Bug 3 fix
+            .where(Complaint.target_solver_id == solver_id)
+        )).scalar() or 0
 
-        complaint_count = result.scalar() or 0
         complaint_penalty = min(complaint_count * 3, 10)
-        complaint_score = 10 - complaint_penalty
+        complaint_score   = 10 - complaint_penalty
 
-        # ── Total score ──────────────────────────────────
-        total_score = round(completion_score + on_time_score + call_score + complaint_score)
-        total_score = max(0, min(100, total_score))
+        # ── Total score ───────────────────────────────────────
+        total_score = max(0, min(100, round(
+            completion_score + on_time_score + call_score + complaint_score
+        )))
 
-        # ── Label ────────────────────────────────────────
+        # ── Label ─────────────────────────────────────────────
         if total_score >= 80:
             label, label_color = "Top Performer", "#10a37f"
         elif total_score >= 55:
@@ -183,28 +196,40 @@ class SolverPerformanceService:
         else:
             label, label_color = "Needs Attention", "#ef4444"
 
-        # ── Status counts ────────────────────────────────
-        in_progress = len([a for a in all_assignments if a.status == AssignmentStatus.ACTIVE
-                           and self._get_issue_status(a.issue_id) == IssueStatus.IN_PROGRESS])
-        assigned_not_started = len([a for a in all_assignments if a.status == AssignmentStatus.ACTIVE
-                                     and self._get_issue_status(a.issue_id) in [IssueStatus.ASSIGNED, IssueStatus.OPEN]])
-        reopened = len([a for a in all_assignments if a.status == AssignmentStatus.REOPENED])
+        # ── Issue statuses (single query, not N queries) ──────
+        issue_ids = [a.issue_id for a in all_assignments]
+        issue_statuses: dict = {}
+        if issue_ids:
+            rows = (await self.db.execute(
+                select(Issue.id, Issue.status).where(Issue.id.in_(issue_ids))
+            )).all()
+            issue_statuses = {row.id: row.status for row in rows}
 
+        # ── Status counts ─────────────────────────────────────
+        in_progress = len([
+            a for a in all_assignments
+            if a.status == AssignmentStatus.ACTIVE
+            and issue_statuses.get(a.issue_id) == IssueStatus.IN_PROGRESS
+        ])
+        assigned_not_started = len([
+            a for a in all_assignments
+            if a.status == AssignmentStatus.ACTIVE
+            and issue_statuses.get(a.issue_id) in (IssueStatus.ASSIGNED, IssueStatus.OPEN)
+        ])
+        reopened  = len([a for a in all_assignments if a.status == AssignmentStatus.REOPENED])
         escalated = len([
             a for a in all_assignments
-            if self._get_issue_status(a.issue_id) == IssueStatus.ESCALATED
+            if issue_statuses.get(a.issue_id) == IssueStatus.ESCALATED
         ])
-
         overdue = len([
             a for a in all_assignments
             if a.due_date and a.due_date < now
             and a.status != AssignmentStatus.COMPLETED
         ])
-
         active_count = in_progress + assigned_not_started + reopened
 
-        # ── ML predictions ───────────────────────────────
-        predicted_days = None
+        # ── ML predictions ────────────────────────────────────
+        predicted_days  = None
         escalation_prob = None
         try:
             from app.ml.predictor import MLPredictor
@@ -212,7 +237,7 @@ class SolverPerformanceService:
             predicted_days = predictor.predict_completion_time(
                 solver_id=solver_id,
                 completion_rate=round(completion_rate * 100),
-                on_time_rate=round(on_time_rate * 100),
+                on_time_rate=round(on_time_rate * 100),      # ← Bug 2 fix
                 call_answer_rate=round(call_answer_rate * 100),
                 active_count=active_count,
                 complaint_count=complaint_count,
@@ -250,7 +275,6 @@ class SolverPerformanceService:
             predicted_completion_days=predicted_days,
             escalation_probability=escalation_prob,
         )
-
     # ══════════════════════════════════════════════════════
     # HELPERS
     # ══════════════════════════════════════════════════════

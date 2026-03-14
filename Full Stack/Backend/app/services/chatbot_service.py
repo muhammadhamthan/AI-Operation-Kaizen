@@ -41,126 +41,54 @@ class ChatbotService:
     # MAIN: Process message with session tracking
     # ══════════════════════════════════════════════════════
 
-    async def process_message(
+    async def log_conversation(
         self,
         user: User,
-        message: str,
-        session_id: Optional[int] = None,
-        image_url: Optional[str] = None,
+        session_id: Optional[int],
+        user_message: str,
+        ai_response: str,
         issue_id: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> ChatResponse:
-
-        # ── 1. Get or create session ────────────────────
+        image_url: Optional[str] = None,
+    ) -> None:
+        """
+        Logs both user message and AI response to chat_history.
+        Creates or reuses a chat session.
+        
+        Called by api/chatbot.py AFTER orchestrator.execute() returns.
+        This keeps logging separate from execution.
+        """
+        # Get or create session
         session = await self._get_or_create_session(
             user=user,
             session_id=session_id,
-            first_message=message,
+            first_message=user_message,
             issue_id=issue_id,
         )
 
-        # ── 2. Log user message ─────────────────────────
+        # Log user message
         await self._log_chat(
             session_id=session.id,
             user_id=user.id,
             issue_id=issue_id,
             role=ChatRole.USER,
-            message=message,
+            message=user_message,
             attachments=[image_url] if image_url else [],
         )
 
-        # ── 3. Call AI agent ─────────────────────────────
-        from app.services.ai_service import master_agent, sql_agent_executor
-        from app.services.issue_service import IssueService
-
-        agent_response = await master_agent(message)
-        intent = agent_response.get("intent")
-        
-        # Initialize response variable to capture it for logging later
-        response = None
-        issue_service = IssueService(self.db)
-
-        if intent == "function_call":
-            func = agent_response.get("function")
-            args = agent_response.get("args", {})
-
-            if func == "create_issue":
-                response = await issue_service.create_from_chat(
-                    user=user,
-                    message=args.get("message"),
-                    image_url=image_url,
-                    ai_service=None
-                )
-
-            elif func == "approve_completion":
-                response = await issue_service.approve_completion(user, args.get("issue_id"))
-
-            elif func == "update_priority":
-                response = await issue_service.update_priority(
-                    user, args.get("issue_id"), {"priority": args.get("priority")}
-                )
-
-            elif func == "extend_deadlines":
-                response = await issue_service.extend_deadline(
-                    user, args.get("issue_id"), args.get("days", 3)
-                )
-
-            elif func == "solver_complete_work":
-                response = await issue_service.solver_complete_work(
-                    user, args.get("message", "completed work"), image_url, args.get("issue_id"), None
-                )
-
-            elif func == "solver_report_blocker":
-                response = await issue_service.solver_report_blocker(
-                    user, args.get("message", "blocker reported"), args.get("issue_id")
-                )
-
-            elif func == "query_function":
-                agent = sql_agent_executor()
-                result = agent.invoke({"input": args.get("query")})
-                response = ChatResponse(
-                    message=result["output"],
-                    intent="query_function",
-                    actions_taken=["sql_agent"]
-                )
-
-            elif func == "llm_function":
-                response = ChatResponse(
-                    message=args.get("message"),
-                    intent="llm_function",
-                    actions_taken=["llm_response"]
-                )
-
-            elif func == "raise_complaint":
-                from app.services.complaint_service import ComplaintService
-                complaint_service = ComplaintService(self.db)
-                response = await complaint_service.create_from_chat(
-                    user=user,
-                    issue_id=args.get("issue_id"),
-                    message=args.get("message"),
-                    image_url=image_url
-                )
-
-        # Fallback if no function was called or intent wasn't recognized
-        if not response:
-            response = ChatResponse(message="I'm sorry, I couldn't process that request.", intent="error")
-
-        # ── 4. Log AI response ──────────────────────────
-        # Now this code actually runs!
+        # Log AI response
         await self._log_chat(
             session_id=session.id,
             user_id=None,
-            issue_id=getattr(response, 'issue_id', None) or issue_id,
+            issue_id=issue_id,
             role=ChatRole.AI,
-            message=response.message,
+            message=ai_response,
             attachments=[],
         )
 
-        # ── 5. Update session timestamp ──────────────────
+        # Update session timestamp
+        from sqlalchemy import func as sql_func
         session.updated_at = sql_func.now()
         await self.db.commit()
-
-        return response
 
     # ══════════════════════════════════════════════════════
     # SESSION MANAGEMENT
