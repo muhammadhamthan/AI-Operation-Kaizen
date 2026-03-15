@@ -73,7 +73,9 @@ app.add_middleware(
     #     "http://127.0.0.1:8000",
     #     "*",                        # Allow all for dev (remove in production)
     # ],
-    allow_origins=["http://localhost:8081"],  # The URL of your frontend
+    allow_origins=["http://localhost:8081",
+                  "https://ai-operation-kaizen123.vercel.app",
+                  ],  # The URL of your frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
