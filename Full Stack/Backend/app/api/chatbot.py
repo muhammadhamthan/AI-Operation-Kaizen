@@ -16,6 +16,8 @@ from typing import Optional
 from app.db.session import get_db
 from app.core.security import get_current_user
 from app.models.user import User
+from app.services.ai_service import detect_and_route
+from app.services.ai_orchestrator import AIOrchestrator
 from app.services.chatbot_service import ChatbotService
 from app.schemas.chatbot_schema import (
     ChatRequest,
@@ -35,40 +37,46 @@ router = APIRouter()
 # PRIMARY: Send chat message
 # ══════════════════════════════════════════════════════════
 
-@router.post("/", response_model=ChatResponse)
-async def send_chat_message(
+@router.post("", response_model=ChatResponse)
+async def chat(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    THE main endpoint. Now with session tracking.
+    THE main endpoint. All user interaction flows through here.
 
-    FIRST message in a conversation:
-      POST /api/v1/chat/
-      Body: {"message": "show overdue issues"}
-      → Backend creates new session, returns session_id=7
-
-    SUBSEQUENT messages (same conversation):
-      POST /api/v1/chat/
-      Body: {"message": "show details of issue 3", "session_id": 7}
-      → Backend adds to existing session #7
-
-    Frontend MUST:
-      1. Store session_id from first response
-      2. Send session_id in all subsequent messages
-      3. When user clicks "New Chat" → send without session_id
+    1. AI detects intent from free text
+    2. Orchestrator executes the right function(s)
+    3. Chat is logged to DB with session tracking
     """
-    chatbot_service = ChatbotService(db)
+    session_id = str(request.session_id or current_user.id)
 
-    response = await chatbot_service.process_message(
-        user=current_user,
-        message=request.message,
-        session_id=request.session_id,
+    # Step 1: AI routing
+    route = await detect_and_route(session_id, request.message)
+
+    # Step 2: Execute (orchestrator handles greeting/clarification/single/multi)
+    orchestrator = AIOrchestrator(db)
+    response = await orchestrator.execute(
+        route=route,
+        current_user=current_user,
+        session_id=session_id,
         image_url=request.image_url,
-        issue_id=request.issue_id,
-        metadata=request.metadata,
     )
+
+    # Step 3: Log to DB (session management + chat history)
+    chatbot_service = ChatbotService(db)
+    await chatbot_service.log_conversation(
+        user=current_user,
+        session_id=request.session_id,
+        user_message=request.message,
+        ai_response=response.message,
+        issue_id=response.issue_id or request.issue_id,
+        image_url=request.image_url,
+    )
+
+    # Step 4: Attach session_id to response
+    response.session_id = request.session_id
 
     return response
 

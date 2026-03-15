@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     """
     All env variables loaded from .env file.
     """
+    BASE_URL: str = "http://localhost:8000"  # Default for local development; override in .env for production
     # ── Database ──
     DATABASE_URL: str
     SQL_ECHO: bool = False

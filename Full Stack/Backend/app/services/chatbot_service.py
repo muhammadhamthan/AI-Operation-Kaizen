@@ -41,70 +41,54 @@ class ChatbotService:
     # MAIN: Process message with session tracking
     # ══════════════════════════════════════════════════════
 
-    async def process_message(
+    async def log_conversation(
         self,
         user: User,
-        message: str,
-        session_id: Optional[int] = None,
-        image_url: Optional[str] = None,
+        session_id: Optional[int],
+        user_message: str,
+        ai_response: str,
         issue_id: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> ChatResponse:
-
-        # ── 1. Get or create session ────────────────────
+        image_url: Optional[str] = None,
+    ) -> None:
+        """
+        Logs both user message and AI response to chat_history.
+        Creates or reuses a chat session.
+        
+        Called by api/chatbot.py AFTER orchestrator.execute() returns.
+        This keeps logging separate from execution.
+        """
+        # Get or create session
         session = await self._get_or_create_session(
             user=user,
             session_id=session_id,
-            first_message=message,
+            first_message=user_message,
             issue_id=issue_id,
         )
 
-        # ── 2. Log user message ─────────────────────────
+        # Log user message
         await self._log_chat(
             session_id=session.id,
             user_id=user.id,
             issue_id=issue_id,
             role=ChatRole.USER,
-            message=message,
+            message=user_message,
             attachments=[image_url] if image_url else [],
         )
 
-        # ── 3. Call AI agent ─────────────────────────────
-        try:
-            from app.services.ai_service import master_agent
-            agent_response = master_agent(message)
-
-            response = ChatResponse(
-                message=agent_response,
-                intent="fetch",
-                session_id=session.id,
-                actions_taken=["sql_agent"],
-            )
-
-        except Exception as e:
-            logger.error(f"Agent error: {e}", exc_info=True)
-            response = ChatResponse(
-                message=f"❌ Something went wrong: {str(e)}",
-                intent="error",
-                session_id=session.id,
-                actions_taken=[f"error: {str(e)}"],
-            )
-
-        # ── 4. Log AI response ──────────────────────────
+        # Log AI response
         await self._log_chat(
             session_id=session.id,
             user_id=None,
-            issue_id=response.issue_id or issue_id,
+            issue_id=issue_id,
             role=ChatRole.AI,
-            message=response.message,
+            message=ai_response,
             attachments=[],
         )
 
-        # ── 5. Update session timestamp ──────────────────
+        # Update session timestamp
+        from sqlalchemy import func as sql_func
         session.updated_at = sql_func.now()
         await self.db.commit()
-
-        return response
 
     # ══════════════════════════════════════════════════════
     # SESSION MANAGEMENT
@@ -145,7 +129,7 @@ class ChatbotService:
             is_active=True,
         )
         self.db.add(session)
-        self.db.flush()  # Get the ID without committing
+        await self.db.flush()  # Get the ID without committing
 
         logger.info(
             f"New session #{session.id} created for user {user.name}: '{title}'"

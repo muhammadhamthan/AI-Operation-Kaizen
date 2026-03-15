@@ -1,32 +1,55 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from app.core.config import settings
 
-# Sync engine (for Alembic migrations)
-SYNC_DATABASE_URL = settings.DATABASE_URL
-engine = create_engine(SYNC_DATABASE_URL)
-
-# Async engine (for FastAPI)
+# ── URL construction ─────────────────────────────────────
+SYNC_DATABASE_URL  = settings.DATABASE_URL.replace("+asyncpg", "")
 ASYNC_DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=True)
 
-# Session factories
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-AsyncSessionLocal = sessionmaker(
+# ── Sync engine (Alembic + Celery tasks) ─────────────────
+engine = create_engine(
+    SYNC_DATABASE_URL,
+    pool_pre_ping=True,      # ← must be on engine, not sessionmaker
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=1800,
+    pool_timeout=30,
+    echo=True,
+)
+
+# ── Async engine (FastAPI requests) ──────────────────────
+async_engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    pool_pre_ping=True,      # ← must be on engine, not sessionmaker
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=1800,       # recycle every 30 min (before provider closes them)
+    pool_timeout=30,
+    echo=True,              # set True only when debugging SQL
+)
+
+# ── Session factories ─────────────────────────────────────
+# sessionmaker only accepts session-level config, NOT pool config
+SessionLocal = sessionmaker(
+    bind=engine,
+    autocommit=False,
+    autoflush=False,
+)
+
+AsyncSessionLocal = async_sessionmaker(   # use async_sessionmaker, not sessionmaker
     bind=async_engine,
     class_=AsyncSession,
     autocommit=False,
     autoflush=False,
-    expire_on_commit=False, #Flase help we have a object state in memory even after commit , so no db reload needed
+    expire_on_commit=False,
 )
 
-# Dependency to get DB session
+# ── FastAPI dependency ────────────────────────────────────
 async def get_db():
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise

@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Alert, // 📍 Added Alert for ghost sessions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -24,7 +25,8 @@ import {
   loadChatHistory,
   loadConversation,
   startNewConversation,
-  selectCurrentConversationId
+  selectCurrentConversationId,
+  selectConversationLoading // 📍 FIX: Using the main screen loader
 } from '../../../src/store/slices/chatSlice';
 import { selectUnreadCount, selectNotifications, markAllAsRead, markAsRead, setNotifications } from '../../../src/store/slices/notificationsSlice';
 import NotificationBanner from '../../../src/components/chat/NotificationBanner';
@@ -49,22 +51,26 @@ export default function ChatScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch();
+  
   const user = useSelector(selectCurrentUser);
   const messages = useSelector(selectAllMessages);
   const chatHistory = useSelector(selectChatHistory);
   const unreadCount = useSelector(selectUnreadCount);
   const notifications = useSelector(selectNotifications);
+  const currentSessionId = useSelector(selectCurrentConversationId);
+  const isConversationLoading = useSelector(selectConversationLoading); // 📍 FIX
+
   const scrollViewRef = useRef(null);
-  const [isLoading, setIsLoading] = useState(false); // 👈 ADD THIS
+  const [isLoading, setIsLoading] = useState(false); 
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const drawerAnimation = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
-  const currentSessionId = useSelector(selectCurrentConversationId);
 
   useEffect(() => {
     if (user?.id) {
       dispatch(loadChatHistory());
+      dispatch(startNewConversation()); // 📍 FIX: Guarantees a blank screen on startup
       setSelectedConversation(null);
     }
 
@@ -87,10 +93,26 @@ export default function ChatScreen() {
     if (!drawerOpen) setDrawerOpen(true);
   }, [drawerOpen, drawerAnimation]);
 
-  const handleSelectConversation = (conversationId) => {
-    dispatch(loadConversation(conversationId));
-    setSelectedConversation(conversationId);
-    toggleDrawer();
+  // 📍 FIX: Ghost Session handling!
+  const handleSelectConversation = async (conversationId) => {
+    toggleDrawer(); // Close drawer immediately for snappy UX
+    
+    try {
+      // .unwrap() allows us to catch the 404 error from the backend
+      await dispatch(loadConversation(conversationId)).unwrap();
+      setSelectedConversation(conversationId);
+    } catch (error) {
+      console.warn("Failed to load session:", error);
+      
+      // Reset the screen back to empty state
+      dispatch(startNewConversation());
+      setSelectedConversation(null);
+      
+      // Refresh the sidebar to delete the ghost session
+      dispatch(loadChatHistory());
+      
+      Alert.alert("Session Not Found", "This conversation no longer exists or was deleted.");
+    }
   };
 
   const handleNewChat = () => {
@@ -98,42 +120,6 @@ export default function ChatScreen() {
     setSelectedConversation(null);
     toggleDrawer();
   };
-
-  // 🚀 THE FIX: Now accepts text, image, AND location!
-  // const handleSendMessage = (text, image = null, location = null) => {
-  //   const userMessage = {
-  //     id: Date.now(),
-  //     message: text || '', 
-  //     image: image,        
-  //     location: location,  // 📍 NEW: Store the location payload in Redux
-  //     role_in_chat: 'user',
-  //     user_id: user?.id,
-  //     created_at: new Date().toISOString(),
-  //   };
-  //   console.log("message dispatched ",userMessage)
-  //   dispatch(addMessage(userMessage));
-
-  //   // Smart AI response logic acknowledging the new data types
-  //   setTimeout(() => {
-  //     let responseText = '';
-
-  //     if (image || location) {
-  //       responseText = `I received your ${image ? 'image' : ''}${image && location ? ' and ' : ''}${location ? 'location data' : ''}${text ? ` along with your message: "${text}"` : '.'}\n\nIn Phase 2-3, this will automatically generate a fully enriched maintenance ticket.`;
-  //     } else {
-  //       responseText = `I understand you asked about: "${text}"\n\nThis is a placeholder response. In Phase 2-3, this will be connected to an actual AI assistant.`;
-  //     }
-
-  //     const aiMessage = {
-  //       id: Date.now() + 1,
-  //       message: responseText,
-  //       role_in_chat: 'assistant',
-  //       user_id: null,
-  //       created_at: new Date().toISOString(),
-  //     };
-  //     dispatch(addMessage(aiMessage));
-  //   }, 1000);
-  // };
-
 
   const handleSendMessage = async (text) => {
     const userMessage = {
@@ -144,20 +130,18 @@ export default function ChatScreen() {
     };
 
     dispatch(addMessage(userMessage));
-    setIsLoading(true); // 👈 START LOADING ANIMATION
+    setIsLoading(true); 
 
     try {
       const result = await sendChatMessage(
         text,
-        currentSessionId // ✅ SEND SESSION ID
+        currentSessionId 
       );
 
       if (!result.success) return;
 
       const response = result.data;
 
-      // ✅ VERY IMPORTANT
-      // Store session_id if this was first message
       if (!currentSessionId && response.session_id) {
         dispatch({
           type: 'chat/setCurrentConversationId',
@@ -177,8 +161,7 @@ export default function ChatScreen() {
       console.error(error);
     }
     finally {
-
-      setIsLoading(false); // 👈 STOP LOADING ANIMATION
+      setIsLoading(false); 
     }
   };
 
@@ -237,12 +220,20 @@ export default function ChatScreen() {
           style={styles.messagesContainer}
           contentContainerStyle={[
             styles.messagesContent,
-            messages.length === 0 && styles.messagesContentEmpty,
+            (messages.length === 0 || isConversationLoading) && styles.messagesContentEmpty,
           ]}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         >
-          {messages.length === 0 ? (
+          {/* 📍 FIX: Dynamic State rendering using the correct loader */}
+          {isConversationLoading ? (
+            <View style={styles.loadingHistoryContainer}>
+              <ActivityIndicator size="large" color={theme.textSecondary} />
+              <Text style={[styles.loadingHistoryText, { color: theme.textSecondary }]}>
+                Loading conversation...
+              </Text>
+            </View>
+          ) : messages.length === 0 ? (
             <View style={styles.emptyChat}>
               <View style={[styles.emptyLogo, { backgroundColor: logoBg }]}>
                 <Ionicons name="sparkles" size={28} color={logoIconColor} />
@@ -284,21 +275,21 @@ export default function ChatScreen() {
               <ChatMessage
                 key={msg.id}
                 message={msg.message}
-                image={msg.image}
-                location={msg.location} // 📍 THE FIX: Pass the location down!
-                isUser={msg.role_in_chat === 'user'}
+                image={msg.image || (msg.attachments?.length > 0 ? msg.attachments[0] : null)}
+                location={msg.location} 
+                // 📍 FIX: Case insensitive check fixes the left/right alignment!
+                isUser={msg.role_in_chat?.toLowerCase() === 'user'} 
                 timestamp={msg.created_at}
               />
             ))
           )}
 
-          {/* 👈 ADD THIS CONDITIONAL RENDER */}
-              {isLoading && (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color={theme.textSecondary} />
-                  <Text style={[styles.loadingText, { color: theme.textSecondary }]}>AI is typing...</Text>
-                </View>
-              )}
+          {isLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={theme.textSecondary} />
+              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>AI is typing...</Text>
+            </View>
+          )}
         </ScrollView>
 
         <ChatInput onSend={handleSendMessage} showCamera={showCamera} />
@@ -351,7 +342,19 @@ const styles = StyleSheet.create({
   suggestionText: { fontSize: 14, fontWeight: '500', lineHeight: 20 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10 },
   drawer: { position: 'absolute', top: 0, left: 0, bottom: 0, width: DRAWER_WIDTH, zIndex: 20, paddingTop: Platform.OS === 'ios' ? 50 : 30 },
-  // Add these to your existing styles
+  
+  loadingHistoryContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingHistoryText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
   loadingContainer: { 
     flexDirection: 'row', 
     alignItems: 'center', 
