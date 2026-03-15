@@ -43,6 +43,12 @@ class User(Base):
         nullable=False,
         comment="supervisor | problemsolver | manager",
     )
+    password_hash = Column(
+        String(255),
+        nullable=False,
+        server_default="",
+        comment="Hashed password for authentication",
+    )
     #IT IS ADDITIONL
     is_active = Column(
         Boolean,
@@ -145,6 +151,14 @@ class User(Base):
         "IssueHistory",
         back_populates="changed_by_user",
         lazy="dynamic",
+    )
+    
+    # Chat sessions owned by this user
+    chat_sessions = relationship(
+        "ChatSession",
+        back_populates="user",
+        lazy="dynamic",
+        order_by="ChatSession.updated_at.desc()",
     )
 
     # ── Indexes ──────────────────────────────────────────

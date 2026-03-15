@@ -3,10 +3,11 @@ import {
   loginUser as loginUserApi, 
   logoutUser as logoutUserApi,
   getStoredUser,
-  getCurrentUser,
-} from '../../mocks/apiService';  // From slices/ → ../../mocks/
+  isAuthenticated as checkAuthToken // ✅ Imported to quickly check disk
+} from '../../services/api'; 
 
 const initialState = {
+  isInitialized: false, // ✅ NEW: Tracks if we've checked local storage
   isAuthenticated: false,
   user: null,
   token: null,
@@ -31,18 +32,18 @@ export const loginUser = createAsyncThunk(
     }
   }
 );
+
+// ✅ OPTIMISTIC HYDRATION: Check disk (fast), don't wait for server (slow)
 export const checkAuthStatus = createAsyncThunk(
   'auth/checkStatus',
   async (_, { rejectWithValue }) => {
     try {
-      // First check stored user
+      const hasToken = await checkAuthToken();
       const storedUser = await getStoredUser();
-      if (storedUser) {
-        // Verify with server
-        const result = await getCurrentUser();
-        if (result.success) {
-          return { user: result.user };
-        }
+      
+      if (hasToken && storedUser) {
+        // Boom! We have a user on disk. Log them in instantly.
+        return { user: storedUser };
       }
       return null;
     } catch (error) {
@@ -102,11 +103,13 @@ const authSlice = createSlice({
         } else {
           state.isAuthenticated = false;
         }
+        state.isInitialized = true; // ✅ Done checking storage
         state.loading = false;
       })
       .addCase(checkAuthStatus.rejected, (state) => {
-        state.loading = false;
         state.isAuthenticated = false;
+        state.isInitialized = true; // ✅ Done checking storage, even if it failed
+        state.loading = false;
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
@@ -114,6 +117,7 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.loading = false;
         state.error = null;
+        // Note: isInitialized stays true because the app is already booted up
       });
   },
 });
@@ -121,6 +125,7 @@ const authSlice = createSlice({
 export const { setUser, setLoading, setError, clearError } = authSlice.actions;
 
 // Selectors
+export const selectIsInitialized = (state) => state.auth.isInitialized; // ✅ NEW Selector for layout
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 export const selectCurrentUser = (state) => state.auth.user;
 export const selectUserRole = (state) => state.auth.user?.role;

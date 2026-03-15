@@ -1,6 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 /**
  * Exports a chart or data to a PDF
@@ -9,13 +9,19 @@ import { Alert } from 'react-native';
  */
 export const exportChartToPDF = async (chartUri, chartType) => {
   try {
-    // 1. Check if a chart image was provided
+    // 1. Web Protection Check
+    if (Platform.OS === 'web') {
+      window.print(); // Triggers browser's native print-to-pdf dialog
+      return;
+    }
+
+    // 2. Check if a chart image was provided
     if (!chartUri) {
       Alert.alert("Error", "No chart data found to export.");
       return;
     }
 
-    // 2. Create the HTML Template
+    // 3. Create the HTML Template
     const htmlContent = `
       <html>
         <head>
@@ -47,15 +53,20 @@ export const exportChartToPDF = async (chartUri, chartType) => {
       </html>
     `;
 
-    // 3. Generate the PDF file
+    // 4. Generate the PDF file
     const { uri } = await Print.printToFileAsync({ html: htmlContent, base64: false });
 
-    // 4. Share the file (Opens native iOS/Android save dialog)
-    await Sharing.shareAsync(uri, { 
-      mimeType: 'application/pdf', 
-      dialogTitle: `Download ${chartType} Report`,
-      UTI: 'com.adobe.pdf' 
-    });
+    // 5. Check if sharing is available (protects against some Android simulators)
+    const isSharingAvailable = await Sharing.isAvailableAsync();
+    if (isSharingAvailable) {
+      await Sharing.shareAsync(uri, { 
+        mimeType: 'application/pdf', 
+        dialogTitle: `Download ${chartType} Report`,
+        UTI: 'com.adobe.pdf' 
+      });
+    } else {
+      Alert.alert("Export Successful", "The PDF was generated but your device doesn't support sharing right now.");
+    }
 
   } catch (error) {
     console.error("PDF Export Error:", error);
@@ -67,5 +78,9 @@ export const exportChartToPDF = async (chartUri, chartType) => {
  * Placeholder for table-based reports (Phase 2-3 logic)
  */
 export const exportReportToPDF = async (reportData) => {
+  if (Platform.OS === 'web') {
+    window.print();
+    return;
+  }
   Alert.alert("Coming Soon", "Detailed tabular reports are being optimized for Phase 2.");
 };

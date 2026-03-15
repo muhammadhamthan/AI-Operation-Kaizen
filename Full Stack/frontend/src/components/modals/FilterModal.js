@@ -189,12 +189,7 @@ const FilterModal = ({
                   </View>
                 </View>
 
-                <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Category</Text>
-                  <View style={styles.chipsContainer}>
-                    {CATEGORY_OPTIONS.map(option => renderChip(option, selectedCategories.includes(option.value), () => toggleCategory(option.value)))}
-                  </View>
-                </View>
+               
 
                 {sites.length > 0 && (
                   <View style={styles.section}>

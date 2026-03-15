@@ -40,7 +40,7 @@ console.log('API Base URL:', API_BASE_URL);
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 30000000000, // 50 minutes - increase for long-running requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -84,16 +84,10 @@ api.interceptors.response.use(
  */
 export const loginUser = async (username, password) => {
   try {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    const response = await api.post('/auth/login', formData.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+    const response = await api.post('/api/v1/auth/login', {
+        phone: username,   // IMPORTANT: match backend field
+        password: password,
     });
-
     const { access_token, user } = response.data;
 
     // Store token and user
@@ -122,7 +116,7 @@ export const loginUser = async (username, password) => {
  */
 export const getCurrentUser = async () => {
   try {
-    const response = await api.get('/auth/me');
+    const response = await api.get('/api/v1/auth/me');
     return {
       success: true,
       user: {
@@ -187,21 +181,32 @@ export const fetchIssues = async (filters = {}) => {
     if (filters.site_id) params.append('site_id', filters.site_id);
 
     const response = await withRetry(
-      () => api.get(`/issues?${params.toString()}`),
+      () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
       { maxRetries: 2 }
     );
+    console.log(response)
 
     // Transform response to match frontend expectations
-    const issues = response.data.map(issue => ({
+    // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }
+    //   ...issue,
+    //   site: issue.site ? {
+    //     ...issue.site,
+    //     name: issue.site.name,
+    //   } : null,
+    //   raised_by: issue.raised_by ? {
+    //     ...issue.raised_by,
+    //     avatar: issue.raised_by.avatar_url,
+    //   } : null,
+    // }));
+
+    const issues = response.data.issues.map(issue => ({ // Map backend fields to frontend format
       ...issue,
-      site: issue.site ? {
-        ...issue.site,
-        name: issue.site.name,
-      } : null,
-      raised_by: issue.raised_by ? {
-        ...issue.raised_by,
-        avatar: issue.raised_by.avatar_url,
-      } : null,
+      site: {
+        name: issue.site_name,
+      },
+      raised_by: {
+        name: issue.supervisor_name,
+      }
     }));
 
     return {
@@ -223,8 +228,8 @@ export const fetchIssues = async (filters = {}) => {
  */
 export const fetchIssueById = async (issueId) => {
   try {
-    const response = await api.get(`/issues/${issueId}`);
-    
+    const response = await api.get(`/api/v1/issues/${issueId}`); // URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/{issue_id}
+
     const issue = {
       ...response.data,
       site: response.data.site ? {
@@ -250,33 +255,101 @@ export const fetchIssueById = async (issueId) => {
   }
 };
 
-// ==================== DASHBOARD API ====================
+/**
+ * Fetch single issue by ID along with its timeline entries
+ */
+export const fetchIssueTimeline = async (issueId) => {
+  try {
+    const response = await api.get(`/api/v1/issues/${issueId}/timeline`);
 
+    return {
+      success: true,
+      timeline: response.data.entries,
+    };
+  } catch (error) {
+    console.error("Timeline fetch error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      timeline: [],
+    };
+  }
+};
+// ==================== DASHBOARD API ====================
 /**
  * Fetch dashboard statistics
  */
 export const fetchDashboardStats = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/dashboard/stats'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/dashboard');
+    const data = response?.data || {};
 
+    // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
+   if (data.active_assignments) {
+      return {
+        success: true,
+        data: {
+          isSolverView: true,
+          stats: {
+            totalIssues: (data.total_active || 0) + (data.total_completed || 0),
+            notFixedIssues: data.total_active || 0,
+            fixedIssues: data.total_completed || 0,
+            complaints: data.complaints_against || 0
+          },
+          recentIssues: data.active_assignments.map(a => ({
+            id: a.issue_id,
+            title: a.issue_title,
+            site_name: a.site_name,
+            priority: a.priority,
+            status: a.status || "ASSIGNED", 
+            // ✅ FIXED: Map to actual created_at for the time-series chart
+            created_at: a.due_date || a.created_at 
+          }))
+        }
+      };
+    }
+      
+    // 👔 MANAGER / SUPERVISOR PAYLOAD
+    const summary = data.summary || {};
     return {
       success: true,
-      stats: response.data,
+      data: {
+        isSolverView: false,
+        stats: {
+          totalIssues: summary.total_issues || 0,
+          notFixedIssues: 
+            (summary.open_issues || 0) + 
+            (summary.assigned_issues || 0) + 
+            (summary.in_progress_issues || 0) + 
+            (summary.reopened_issues || 0) + 
+            (summary.escalated_issues || 0),
+          fixedIssues: summary.completed_issues || 0,
+          complaints: 0
+        },
+        rawSummary: summary,
+        alerts: {
+          // ✅ FIXED: Mapping to exact keys from your Manager JSON
+          escalations: data.active_escalations || 0,
+          deadlines: data.overdue_issues || 0,
+          pendingReviews: summary.resolved_pending_review || 0
+        },
+        recentIssues: data.recent_issues || [],
+        mySites: data.my_sites || []
+      }
     };
+
   } catch (error) {
     console.error('Fetch dashboard error:', error.response?.data || error.message);
     return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch dashboard',
-      stats: {
-        totalIssues: 0,
-        notFixedIssues: 0,
-        fixedIssues: 0,
-        complaints: 0,
-      },
+      success: true, // Fallback
+      data: {
+        isSolverView: false,
+        stats: { totalIssues: 0, notFixedIssues: 0, fixedIssues: 0, complaints: 0 },
+        rawSummary: {},
+        alerts: { escalations: 0, deadlines: 0, pendingReviews: 0 },
+        recentIssues: [],
+        mySites: []
+      }
     };
   }
 };
@@ -288,25 +361,35 @@ export const fetchDashboardStats = async () => {
  */
 export const fetchComplaints = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/complaints'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/complaints');
+
+    // 📍 EXACT DATA: Pass the backend response directly without mutating it
+    // Handle both { complaints: [...] } or direct array [...] responses
+    const complaints = response.data.complaints || response.data || [];
 
     return {
       success: true,
-      complaints: response.data,
+      complaints,
     };
+
   } catch (error) {
-    console.error('Fetch complaints error:', error.response?.data || error.message);
+    console.error("Fetch complaints error:", error);
     return {
       success: false,
-      error: error.response?.data?.detail || 'Failed to fetch complaints',
       complaints: [],
     };
   }
 };
-
+export const fetchComplaintById = async (id) => {
+  try {
+    const response = await api.get(`/api/v1/complaints/${id}`);
+    // 📍 EXACT DATA: Return the raw object exactly as backend sent it
+    // No more mapping raisedBy or status="OPEN"
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
 // ==================== SITES API ====================
 
 /**
@@ -329,27 +412,113 @@ export const fetchSites = async () => {
   }
 };
 
+export const fetchSitesAnalytics = async () => {
+ try {
+    const response = await api.get('/api/v1/sites/analytics');
+
+    return {
+      success: true,
+      sites: response.data.sites,
+    };
+
+  } catch (error) {
+    console.error("Fetch sites error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      sites: [],
+      error: error.response?.data?.detail || "Failed to fetch sites",
+    };
+  }
+};
+
+export const fetchSolversPerformanceAPI = async () => {
+  try {
+    const response = await api.get('/api/v1/solvers');
+
+    return {
+      success: true,
+      solvers: response.data.solvers,
+    };
+
+  } catch (error) {
+    return {
+      success: false,
+      solvers: [],
+      error: error.response?.data?.detail || "Failed to fetch solvers",
+    };
+  }
+};
+
 // ==================== CHATBOT API ====================
 
 /**
  * Send message to chatbot
  */
 // chatService.js 
-export const sendChatMessage = async (text, currentIssueId = null, imageUrl = null) => {
-  const requestBody = {
-    message: text,
-    image_url: imageUrl, // URL from ImageKit
-    issue_id: currentIssueId, 
-    metadata: {
-      screen: "chat_main",
-      timestamp: new Date().toISOString(),
-      platform: Platform.OS,
-      // You can add GPS here later if needed
-    }
-  };
+export const sendChatMessage = async (
+  text,
+  sessionId = null,
+  currentIssueId = null,
+  imageUrl = null
+) => {
+  try {
+    const requestBody = {
+      message: text,
+      session_id: sessionId,   // ✅ VERY IMPORTANT
+      image_url: imageUrl,
+      issue_id: currentIssueId,
+      metadata: {
+        platform: Platform.OS,
+        timestamp: new Date().toISOString(),
+      }
+    };
 
-  const response = await axios.post(`${API_URL}/chat`, requestBody);
-  return response.data;
+    const response = await api.post('/api/v1/chat/', requestBody);
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error("Chat send error:", error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data?.detail || "Failed to send message",
+    };
+  }
+};
+
+export const fetchChatSessions = async () => {
+  try {
+    const response = await api.get('/api/v1/chat/sessions');
+    return {
+      success: true,
+      sessions: response.data.sessions,
+    };
+  } catch (error) {
+    console.error("Fetch sessions error:", error.response?.data || error.message);
+    return {
+      success: false,
+      sessions: [],
+    };
+  }
+};
+
+export const fetchSessionDetail = async (sessionId) => {
+  try {
+    const response = await api.get(`/api/v1/chat/sessions/${sessionId}`);
+    return {
+      success: true,
+      session: response.data,
+    };
+  } catch (error) {
+    console.error("Fetch session detail error:", error.response?.data || error.message);
+    return {
+      success: false,
+      session: null,
+    };
+  }
 };
 
 // ==================== HEALTH CHECK ====================

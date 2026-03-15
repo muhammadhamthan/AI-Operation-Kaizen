@@ -150,6 +150,15 @@ class ChatRequest(BaseModel):
             "thanks for the update",
         ],
     )
+    session_id: Optional[int] = Field(
+        None,
+        description=(
+            "Which conversation session this message belongs to. "
+            "If None → backend creates a new session automatically. "
+            "Frontend gets session_id from the response and sends it "
+            "in all subsequent messages in the same conversation."
+        ),
+    )
     image_url: Optional[str] = Field(
         None,
         max_length=500,
@@ -228,6 +237,13 @@ class ChatResponse(BaseModel):
             "⚠️ Complaint filed for Issue #1. Assignment reopened. Calling solver again.",
             "👋 Hello! I'm your facility management assistant. How can I help?",
         ],
+    )
+    session_id: Optional[int] = Field(
+        None,
+        description=(
+            "The session this message belongs to. "
+            "Frontend MUST store this and send it back in the next ChatRequest.session_id"
+        ),
     )
     intent: str = Field(
         ...,
@@ -366,6 +382,7 @@ class ChatHistoryListResponse(BaseModel):
     Used by GET /api/v1/chat/history?issue_id=1
     """
     total: int = Field(..., description="Total messages matching query")
+    session_id: Optional[int] = None
     issue_id: Optional[int] = Field(
         None,
         description="If filtered by issue, shows which issue",

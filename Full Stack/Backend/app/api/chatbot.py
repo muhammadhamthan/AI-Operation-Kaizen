@@ -1,146 +1,231 @@
 """
-PURPOSE: THE PRIMARY API ENDPOINT — All user interaction flows here.
-──────────────────────────────────────────────────────────────────────
-POST /api/v1/chat           → Process free text message
-GET  /api/v1/chat/history   → Retrieve conversation history
-
-EVERY action in the system flows through POST /api/v1/chat:
-  - Issue creation
-  - Issue status updates
-  - Complaints
-  - Status queries
-  - Work updates (solver)
-  - Approval/rejection (supervisor)
-  - Escalation queries (manager)
-  - General conversation
-
-The ChatbotService orchestrates everything:
-  1. Receives free text
-  2. AI detects intent
-  3. Routes to correct handler
-  4. Executes backend actions
-  5. Returns natural language response
-
-
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from typing import Optional
-
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.services.chatbot_service import ChatbotService
-from app.schemas.chatbot_schema import (
-    ChatRequest,
-    ChatResponse,
-    ChatHistoryListResponse,
-)
-
-router = APIRouter()
-
-
-@router.post(
-    "",
-    response_model=ChatResponse,
-    summary="Send a chat message — THE universal endpoint",
-)
-async def send_chat_message(
-    chat_request: ChatRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-
-    THE main endpoint. User sends free text, system does everything.
-
-    Examples:
-      Supervisor: "pipe broken in vepery site need to fix in 5 days"
-      Solver: "I have started working on the AC repair"
-      Manager: "show me all escalated issues"
-      Anyone: "hello" / "what are my issues?"
-
-    chatbot_service = ChatbotService(db)
-
-    response = await chatbot_service.process_message(
-        user=current_user,
-        message=chat_request.message,
-        image_url=chat_request.image_url,
-        issue_id=chat_request.issue_id,
-        metadata=chat_request.metadata,
-    )
-
-    return response
-
-
-@router.get(
-    "/history",
-    response_model=ChatHistoryListResponse,
-    summary="Get chat conversation history",
-)
-def get_chat_history(
-    issue_id: Optional[int] = None,
-    skip: int = 0,
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-
-    Retrieves chat messages.
-    If issue_id provided → messages for that issue.
-    Otherwise → all messages for this user.
-
-    chatbot_service = ChatbotService(db)
-
-    return chatbot_service.get_history(
-        user_id=current_user.id,
-        user_role=current_user.role,
-        issue_id=issue_id,
-        skip=skip,
-        limit=limit,
-    )
-    
-    
+PURPOSE: Chat endpoints with session management.
+──────────────────────────────────────────────────
+POST /api/v1/chat/                     → Send message (creates/continues session)
+GET  /api/v1/chat/sessions             → List all sessions (sidebar)
+GET  /api/v1/chat/sessions/{id}        → Get all messages in a session
+PUT  /api/v1/chat/sessions/{id}/rename → Rename a session
+DELETE /api/v1/chat/sessions/{id}      → Delete (archive) a session
+GET  /api/v1/chat/history              → Legacy: filter by issue_id
 """
 
-# app/api/chatbot.py
-
-# app/api/chatbot.py
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
-from app.db import get_db
+from app.db.session import get_db
+from app.core.security import get_current_user
+from app.models.user import User
+from app.services.ai_service import detect_and_route
+from app.services.ai_orchestrator import AIOrchestrator
 from app.services.chatbot_service import ChatbotService
 from app.schemas.chatbot_schema import (
     ChatRequest,
     ChatResponse,
     ChatHistoryListResponse,
 )
+from app.schemas.chat_session_schema import (
+    ChatSessionListResponse,
+    ChatSessionDetailResponse,
+    ChatSessionRename,
+)
 
 router = APIRouter()
 
 
-@router.post("/", response_model=ChatResponse)
-async def send_chat_message(
+# ══════════════════════════════════════════════════════════
+# PRIMARY: Send chat message
+# ══════════════════════════════════════════════════════════
+
+@router.post("", response_model=ChatResponse)
+async def chat(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    No auth required — user is handled inside chatbot_service.
-    Frontend: POST /api/v1/chat
-    Body: {"message": "...", "image_url": null, "issue_id": null}
-    """
-    chatbot_service = ChatbotService(db)
+    THE main endpoint. All user interaction flows through here.
 
-    response = await chatbot_service.process_message(
-        user=None,
-        message=request.message,
+    1. AI detects intent from free text
+    2. Orchestrator executes the right function(s)
+    3. Chat is logged to DB with session tracking
+    """
+    session_id = str(request.session_id or current_user.id)
+
+    # Step 1: AI routing
+    route = await detect_and_route(session_id, request.message)
+
+    # Step 2: Execute (orchestrator handles greeting/clarification/single/multi)
+    orchestrator = AIOrchestrator(db)
+    response = await orchestrator.execute(
+        route=route,
+        current_user=current_user,
+        session_id=session_id,
         image_url=request.image_url,
-        issue_id=request.issue_id,
-        metadata=request.metadata,
     )
+
+    # Step 3: Log to DB (session management + chat history)
+    chatbot_service = ChatbotService(db)
+    await chatbot_service.log_conversation(
+        user=current_user,
+        session_id=request.session_id,
+        user_message=request.message,
+        ai_response=response.message,
+        issue_id=response.issue_id or request.issue_id,
+        image_url=request.image_url,
+    )
+
+    # Step 4: Attach session_id to response
+    response.session_id = request.session_id
 
     return response
 
+
+# ══════════════════════════════════════════════════════════
+# SESSIONS: List all sessions (sidebar)
+# ══════════════════════════════════════════════════════════
+
+@router.get("/sessions", response_model=ChatSessionListResponse)
+async def list_sessions(
+    skip: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns all chat sessions for the sidebar.
+    Ordered by most recently updated.
+
+    Response:
+    {
+      "total": 12,
+      "sessions": [
+        {
+          "id": 7,
+          "title": "Show overdue issues",
+          "last_message_preview": "You have 3 overdue issues...",
+          "last_message_at": "2026-02-10T14:30:00Z",
+          "message_count": 4,
+          "created_at": "2026-02-10T14:28:00Z"
+        },
+        ...
+      ]
+    }
+    """
+    chatbot_service = ChatbotService(db)
+
+    return await chatbot_service.get_sessions(
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+    )
+
+
+# ══════════════════════════════════════════════════════════
+# SESSION DETAIL: Get all messages in a session
+# ══════════════════════════════════════════════════════════
+
+@router.get("/sessions/{session_id}", response_model=ChatSessionDetailResponse)
+async def get_session_detail(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns ALL messages in a specific session.
+    Called when user clicks a session in the sidebar.
+
+    Response:
+    {
+      "id": 7,
+      "title": "Show overdue issues",
+      "messages": [
+        {"id": 1, "role_in_chat": "USER", "message": "show overdue issues", ...},
+        {"id": 2, "role_in_chat": "AI", "message": "You have 3 overdue...", ...},
+        {"id": 3, "role_in_chat": "USER", "message": "show details of issue 3", ...},
+        {"id": 4, "role_in_chat": "AI", "message": "Issue #3: AC Breakdown...", ...}
+      ],
+      "total_messages": 4
+    }
+    """
+    chatbot_service = ChatbotService(db)
+
+    result = await chatbot_service.get_session_detail(
+        session_id=session_id,
+        user_id=current_user.id,
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    return result
+
+
+# ══════════════════════════════════════════════════════════
+# SESSION RENAME
+# ══════════════════════════════════════════════════════════
+
+@router.put("/sessions/{session_id}/rename")
+async def rename_session(
+    session_id: int,
+    data: ChatSessionRename,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Rename a chat session (like ChatGPT pencil icon)."""
+    chatbot_service = ChatbotService(db)
+
+    result = await chatbot_service.rename_session(
+        session_id=session_id,
+        user_id=current_user.id,
+        new_title=data.title,
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    return {"message": f"Session renamed to '{data.title}'", "session_id": session_id}
+
+
+# ══════════════════════════════════════════════════════════
+# SESSION DELETE (soft delete)
+# ══════════════════════════════════════════════════════════
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Soft delete — hides from sidebar but preserves messages.
+    Like ChatGPT trash icon.
+    """
+    chatbot_service = ChatbotService(db)
+
+    success = await chatbot_service.delete_session(
+        session_id=session_id,
+        user_id=current_user.id,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    return {"message": f"Session {session_id} deleted", "session_id": session_id}
+
+
+# ══════════════════════════════════════════════════════════
+# LEGACY: History by issue (backward compatible)
+# ══════════════════════════════════════════════════════════
 
 @router.get("/history", response_model=ChatHistoryListResponse)
 async def get_chat_history(
@@ -148,13 +233,14 @@ async def get_chat_history(
     skip: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """No auth required for now."""
+    """Legacy endpoint — get messages filtered by issue_id."""
     chatbot_service = ChatbotService(db)
 
-    return chatbot_service.get_history(
-        user_id=1,
-        user_role="supervisor",
+    return await chatbot_service.get_history(
+        user_id=current_user.id,
+        user_role=current_user.role,
         issue_id=issue_id,
         skip=skip,
         limit=limit,

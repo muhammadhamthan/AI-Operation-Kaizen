@@ -1,12 +1,16 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard'; // 📍 IMPORTED CLIPBOARD
 import { useTheme } from '../../theme/ThemeContext';
 import { formatRelativeTime } from '../../utils/formatters';
 
 // NEW: Added `image` to the destructured props
 const ChatMessage = ({ message, image, isUser, timestamp, status = 'sent' }) => {
   const { theme, isDark } = useTheme();
+  
+  // 📍 STATE for copy animation
+  const [copied, setCopied] = useState(false);
 
   // Smart detection: Handle legacy cases where the image URI is passed as the message string
   const isMessageStringAnImage = 
@@ -23,6 +27,14 @@ const ChatMessage = ({ message, image, isUser, timestamp, status = 'sent' }) => 
   const userBubbleBg = isDark ? '#2f2f2f' : '#f4f4f4';
   const aiAvatarBg = isDark ? '#ffffff' : '#000000';
   const aiIconColor = isDark ? '#000000' : '#ffffff';
+
+  // 📍 COPY FUNCTION
+  const handleCopy = async () => {
+    if (!textContent) return;
+    await Clipboard.setStringAsync(textContent);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+  };
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.aiContainer]}>
@@ -80,6 +92,22 @@ const ChatMessage = ({ message, image, isUser, timestamp, status = 'sent' }) => 
             <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
               {formatRelativeTime(timestamp)}
             </Text>
+          )}
+
+          {/* 📍 NEW COPY BUTTON */}
+          {textContent && (
+            <TouchableOpacity 
+              onPress={handleCopy} 
+              activeOpacity={0.6} 
+              style={styles.copyButton}
+            >
+              <Ionicons 
+                name={copied ? "checkmark-done" : "copy-outline"} 
+                size={12} 
+                color={copied ? "#10a37f" : theme.textSecondary} 
+              />
+              {copied && <Text style={[styles.copiedText, { color: "#10a37f" }]}>Copied</Text>}
+            </TouchableOpacity>
           )}
 
           {isUser && status && (
@@ -188,6 +216,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 2,
+  },
+  // 📍 NEW STYLES FOR COPY BUTTON
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: 4,
+  },
+  copiedText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
 

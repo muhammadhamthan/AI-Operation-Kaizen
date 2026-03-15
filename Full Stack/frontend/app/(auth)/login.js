@@ -201,26 +201,7 @@ export default function LoginScreen() {
               style={styles.loginButton}
             />
 
-            {/* ── Sleek Developer Card ── */}
-            <View style={[styles.testCredentials, { backgroundColor: devBoxBg, borderColor: devBoxBorder }]}>
-              <View style={styles.devCardHeader}>
-                <Ionicons name="code-slash" size={14} color={mutedColor} />
-                <Text style={[styles.testTitle, { color: mutedColor }]}>
-                  TEST CREDENTIALS
-                </Text>
-              </View>
-              <View style={styles.testList}>
-                <Text style={[styles.testText, { color: textColor }]}>
-                  <Text style={{ fontWeight: '600', color: mutedColor }}>Mgr:</Text> manager1 / manager123
-                </Text>
-                <Text style={[styles.testText, { color: textColor }]}>
-                  <Text style={{ fontWeight: '600', color: mutedColor }}>Sup:</Text> supervisor1 / super123
-                </Text>
-                <Text style={[styles.testText, { color: textColor }]}>
-                  <Text style={{ fontWeight: '600', color: mutedColor }}>Sol:</Text> solver1 / solver123
-                </Text>
-              </View>
-            </View>
+           
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>

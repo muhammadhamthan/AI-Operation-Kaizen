@@ -65,14 +65,15 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8081",    # Expo web
-        "http://localhost:19006",   # Expo web alt
-        "http://localhost:3000",    # React dev
-        "http://127.0.0.1:8081",
-        "http://127.0.0.1:8000",
-        "*",                        # Allow all for dev (remove in production)
-    ],
+    # allow_origins=[
+    #     "http://localhost:8081",    # Expo web
+    #     "http://localhost:19006",   # Expo web alt
+    #     "http://localhost:3000",    # React dev
+    #     "http://127.0.0.1:8001",
+    #     "http://127.0.0.1:8000",
+    #     "*",                        # Allow all for dev (remove in production)
+    # ],
+    allow_origins=["http://localhost:8081"],  # The URL of your frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -90,26 +91,30 @@ app.add_middleware(
 # Router Registration
 # ──────────────────────────────────────────────────────────
 
-# from app.api.auth import router as auth_router
+from app.api.auth import router as auth_router
 from app.api.chatbot import router as chatbot_router
 from app.api.issues import router as issues_router
 from app.api.assignments import router as assignments_router
 from app.api.images import router as images_router
 from app.api.complaints import router as complaints_router
 from app.api.dashboard import router as dashboard_router
+from app.api.solver import router as solvers_router
+from app.api.site import router as site_router
 # from app.api.notifications import router as notifications_router
-# from app.api.webhooks import router as webhooks_router
+from app.api.webhooks import router as webhooks_router
 # from app.api.history import router as history_router
 
-# app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(chatbot_router, prefix="/api/v1/chat", tags=["Chatbot"])
 app.include_router(issues_router, prefix="/api/v1/issues", tags=["Issues"])
 app.include_router(assignments_router, prefix="/api/v1/assignments", tags=["Assignments"])
 app.include_router(images_router, prefix="/api/v1/images", tags=["Images"])
 app.include_router(complaints_router, prefix="/api/v1/complaints", tags=["Complaints"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(solvers_router, prefix="/api/v1/solvers", tags=["Solvers"])
+app.include_router(site_router, prefix="/api/v1/sites", tags=["Sites"])
 # app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notifications"])
-# app.include_router(webhooks_router, prefix="/api/v1/webhooks", tags=["Webhooks"])
+app.include_router(webhooks_router, prefix="/api/v1/webhooks", tags=["Webhooks"])
 # app.include_router(history_router, prefix="/api/v1/history", tags=["History"])
 
 
