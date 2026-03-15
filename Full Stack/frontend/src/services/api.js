@@ -11,26 +11,29 @@ import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
 
 // API Base URL - Backend is on port 8001
-const getBaseUrl = () => {
-  // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || 
-                     process.env.EXPO_PUBLIC_BACKEND_URL;
+// const getBaseUrl = () => {
+//   // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
+//   const backendUrl = Constants.expoConfig?.extra?.backendUrl || 
+//                      process.env.EXPO_PUBLIC_BACKEND_URL;
   
-  if (backendUrl) {
-    return `${backendUrl}/api`;
-  }
+//   if (backendUrl) {
+//     return `${backendUrl}/api`;
+//   }
   
-  // For local development
-  if (Platform.OS === 'web') {
-    // Use relative URL which will be proxied
-    return 'http://localhost:8001/api';
-  }
+//   // For local development
+//   if (Platform.OS === 'web') {
+//     // Use relative URL which will be proxied
+//     return 'http://localhost:8001/api';
+//   }
   
-  // Native apps need full URL
-  return 'http://localhost:8001/api';
-};
+//   // Native apps need full URL
+//   return 'http://localhost:8001/api';
+// };
 
-const API_BASE_URL = getBaseUrl();
+const backendUrl = 'https://api.rakkarstudios.in';
+
+
+const API_BASE_URL = backendUrl;
 
 console.log('API Base URL:', API_BASE_URL);
 
