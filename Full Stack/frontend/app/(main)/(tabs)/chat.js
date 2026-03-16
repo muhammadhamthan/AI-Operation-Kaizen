@@ -10,7 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Alert, // 📍 Added Alert for ghost sessions
+  Alert, 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -26,7 +26,7 @@ import {
   loadConversation,
   startNewConversation,
   selectCurrentConversationId,
-  selectConversationLoading // 📍 FIX: Using the main screen loader
+  selectConversationLoading 
 } from '../../../src/store/slices/chatSlice';
 import { selectUnreadCount, selectNotifications, markAllAsRead, markAsRead, setNotifications } from '../../../src/store/slices/notificationsSlice';
 import NotificationBanner from '../../../src/components/chat/NotificationBanner';
@@ -58,7 +58,7 @@ export default function ChatScreen() {
   const unreadCount = useSelector(selectUnreadCount);
   const notifications = useSelector(selectNotifications);
   const currentSessionId = useSelector(selectCurrentConversationId);
-  const isConversationLoading = useSelector(selectConversationLoading); // 📍 FIX
+  const isConversationLoading = useSelector(selectConversationLoading);
 
   const scrollViewRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false); 
@@ -70,7 +70,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (user?.id) {
       dispatch(loadChatHistory());
-      dispatch(startNewConversation()); // 📍 FIX: Guarantees a blank screen on startup
+      dispatch(startNewConversation()); 
       setSelectedConversation(null);
     }
 
@@ -93,24 +93,17 @@ export default function ChatScreen() {
     if (!drawerOpen) setDrawerOpen(true);
   }, [drawerOpen, drawerAnimation]);
 
-  // 📍 FIX: Ghost Session handling!
   const handleSelectConversation = async (conversationId) => {
-    toggleDrawer(); // Close drawer immediately for snappy UX
+    toggleDrawer(); 
     
     try {
-      // .unwrap() allows us to catch the 404 error from the backend
       await dispatch(loadConversation(conversationId)).unwrap();
       setSelectedConversation(conversationId);
     } catch (error) {
       console.warn("Failed to load session:", error);
-      
-      // Reset the screen back to empty state
       dispatch(startNewConversation());
       setSelectedConversation(null);
-      
-      // Refresh the sidebar to delete the ghost session
       dispatch(loadChatHistory());
-      
       Alert.alert("Session Not Found", "This conversation no longer exists or was deleted.");
     }
   };
@@ -121,10 +114,12 @@ export default function ChatScreen() {
     toggleDrawer();
   };
 
-  const handleSendMessage = async (text) => {
+  // 📍 FIX: Accept the imageUri from the ChatInput!
+  const handleSendMessage = async (text, imageUri = null) => {
     const userMessage = {
       id: Date.now(),
-      message: text,
+      message: text || '', // Fallback to empty string if just an image
+      image: imageUri,     // 📍 Store the local image URI directly in the slice
       role_in_chat: 'user',
       created_at: new Date().toISOString(),
     };
@@ -134,7 +129,7 @@ export default function ChatScreen() {
 
     try {
       const result = await sendChatMessage(
-        text,
+        text || 'Uploaded an image', // Provide dummy text to backend if empty
         currentSessionId 
       );
 
@@ -225,7 +220,6 @@ export default function ChatScreen() {
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         >
-          {/* 📍 FIX: Dynamic State rendering using the correct loader */}
           {isConversationLoading ? (
             <View style={styles.loadingHistoryContainer}>
               <ActivityIndicator size="large" color={theme.textSecondary} />
@@ -275,9 +269,9 @@ export default function ChatScreen() {
               <ChatMessage
                 key={msg.id}
                 message={msg.message}
+                // 📍 FIX: Pass the image explicitly to the component
                 image={msg.image || (msg.attachments?.length > 0 ? msg.attachments[0] : null)}
                 location={msg.location} 
-                // 📍 FIX: Case insensitive check fixes the left/right alignment!
                 isUser={msg.role_in_chat?.toLowerCase() === 'user'} 
                 timestamp={msg.created_at}
               />

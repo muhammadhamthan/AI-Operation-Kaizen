@@ -684,17 +684,22 @@ async def run_sql_agent(session_id: str, user_input: str):
             history_text += f"{role}: {msg.content}\n"
 
         response = agent.invoke({
-            "input": f"""
+    "input": f"""
 Conversation History (last 10 messages):
 {history_text}
 
 User Question:
 {user_input}
 
-Use the database to answer the question.
-Only SELECT queries allowed.
-If the user refers to something like "his", "that issue", or "that supervisor",
-use the conversation history to resolve it.
+Instructions:
+- Only SELECT queries allowed.
+- Use conversation history to resolve references like "his", "that issue", "that supervisor".
+- If user says "elaborate", "more detail", "explain more", "expand", "elobrate" or any follow-up phrase:
+  → Read the LAST AI message from conversation history
+  → Do NOT treat it as a new query
+  → Re-use the same subject from the last answer
+  → Provide MORE detailed breakdown of the same data
+- Never treat a follow-up phrase as a standalone query.
 """
         })
 
@@ -709,22 +714,62 @@ use the conversation history to resolve it.
 You are a system explaining database results to users.
 
 Rules:
-- If result is empty, explain WHY logically.
-- Use role information if available.
-- Do not show raw SQL output like [].
-- Give a human explanation.
+You are a concise assistant explaining database results for mobile users.
+
+Rules:
+- NEVER hallucinate, summarize, or rephrase any field value — show EXACT data from the result.
+- NEVER omit any field that exists in the result — show ALL fields.
+- Keep format short and scannable for mobile screens.
+- No long paragraphs — each field on its own line.
+- Never show raw SQL, tuples, or technical output.
+- If result is empty, say why in one short sentence.
+- ALWAYS use conversation history to resolve pronouns like "she", "he", "they", "it".
+
+Format for a single record:
+👤 Name: <exact value>
+📞 Phone: <exact value>
+📧 Email: <exact value>
+🏷️ Role: <exact value>
+✅ Status: <exact value>
+
+Format for a list of issues:
+📋 Issues (N found):
+
+Title:<id> — <exact title>
+📝 <exact description>
+⚡ Priority: <exact value>
+📌 Status: <exact value>
+📍 Site: <exact value>
+
+<id> — <exact title>
+📝 <exact description>
+⚡ Priority: <exact value>
+📌 Status: <exact value>
+📍 Site: <exact value>
+
+STRICT RULES:
+- Title must come first, exactly as stored — never reword it.
+- Description must always be shown — never skip it.
+- Every field from the database result must appear — never drop any field.
+- Never merge or reorder fields.
+- Never invent or infer values not present in the result.
+
 """
         },
         {
             "role": "user",
             "content": f"""
+Conversation History (last 10 messages):
+{history_text}
+
 User Question:
 {user_input}
 
 Database Result:
 {result}
 
-Explain the result clearly.
+Explain clearly. Use conversation history to resolve any pronouns or references.
+If this is a follow-up or elaboration request, give full detail based on history.
 """
         }
     ],
@@ -732,15 +777,19 @@ Explain the result clearly.
 )
 
         final_answer = explanation.choices[0].message.content
+        
+        print("SQL Agent Result:", result)
+        print("SQL Agent Explanation:", final_answer)
 
     except Exception as e:
 
         print("SQL Agent Error:", e)
-        final_answer = "⚠️ Database query failed."
+        final_answer = "⚠️ Something went wrong Please try again."
 
     # Save new conversation to Redis
     memory.chat_memory.add_user_message(user_input)
     memory.chat_memory.add_ai_message(final_answer)
+    print(f"[Redis Saved] session={session_id} | Q: {user_input[:60]} | A: {final_answer[:80]}")
 
     save_memory(session_id, memory)
 
@@ -802,10 +851,8 @@ Your job is to detect user intent, select the correct function, and collect
 all required arguments before calling any function.
 
 IMPORTANT — ARGUMENT COLLECTION FROM CONVERSATION:
-- The conversation history above contains prior turns.
+- The conversation history contains prior turns.
 - If a user previously stated an intent (e.g. "approve") and now sends just a number (e.g. "X"), treat that number as the issue_id for the previous intent.
-- If a user previously stated an issue_id and now states an action, combine both and call the function.
-- If a user previously stated an intent (e.g. "complete") and now sends just a number (e.g. "X"), treat that number as the issue_id for the previous intent.
 - If a user previously stated an issue_id and now states an action, combine both and call the function.
 - NEVER ask for an argument that was already provided in prior turns.
 - Resolve "it", "that issue", "the same one" from prior context.
@@ -823,7 +870,6 @@ AVAILABLE FUNCTIONS & REQUIRED ARGS
 7. raise_complaint      → required: [issue_id, message]
 8. reassign_solver      → required: [issue_id, solver_name]
 9. query_function       → required: [query]
-10. llm_function        → required: [message]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONVERSATION HISTORY (from Redis)
@@ -838,104 +884,232 @@ Use the conversation history above to:
            → merge history + new message → issue_id = X → call approve_completion
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ROUTING PRIORITY — APPLY IN THIS EXACT ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1 → Is it a bare action word ONLY with no issue_id and no context?
+         → YES → [CONSTRAINT 1] Ask: issue action or query?
+
+Step 2 → Is it a full action message with issue_id or context?
+         → YES → detect function → collect args → call immediately
+
+Step 3 → Everything else (details, descriptions, questions, follow-ups, general chat)
+         → DEFAULT → query_function
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[CONSTRAINT 1] AMBIGUOUS ACTION RESOLUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+When a user sends ONLY a bare action word that maps to one of the 8 issue management
+functions — with NO issue_id, NO description, NO additional context —
+you MUST first ask whether they mean an ISSUE ACTION or a QUERY.
+
+The 8 issue management action keywords are:
+  - approve
+  - update priority / change priority
+  - extend deadline / more time
+  - complete work / mark done
+  - report blocker / blocked
+  - raise complaint / complaint
+  - reassign
+  - create issue / report problem
+
+STEP 1 — Detect ambiguity:
+  A message is AMBIGUOUS if:
+  → It contains ONLY a bare action keyword from the list above
+  → AND no issue_id is present
+  → AND no descriptive context is present
+
+STEP 2 — Ask clarification:
+  "Are you looking to perform an issue action (e.g. approve, reassign, extend deadline)
+   or do you want to query information about your issues?"
+
+STEP 3A — User replies "issue" / "action" / confirms performing an action:
+  → Proceed with that function
+  → Apply SITE CONTEXT RULE — call query_function(query="show all open issues for this user")
+  → Show list → user picks issue_id → collect remaining args → call function
+
+STEP 3B — User replies "query" / "search" / "show" / "list" / "find":
+  → CALL query_function(query="<original action word> issues")
+
+DO NOT trigger Constraint 1 if:
+  → The message already contains an issue_id
+  → The message already contains descriptive context
+  → The message is a full sentence
+
+EXAMPLES:
+
+  Example 1 — Bare action → clarify → issue path:
+    User: "approve"
+    → AMBIGUOUS → Ask: "issue action or query?"
+    User: "issue"
+    → CALL query_function(query="show all open issues for this user")
+    → [List shown] User: "5"
+    → CALL approve_completion(issue_id=5)
+
+  Example 2 — Bare action → clarify → query path:
+    User: "approve"
+    → AMBIGUOUS → Ask: "issue action or query?"
+    User: "query"
+    → CALL query_function(query="show all open issues pending approval")
+
+  Example 3 — Not ambiguous, has context → skip Constraint 1:
+    User: "extend deadline for issue 12 by 3 days"
+    → NOT ambiguous → CALL extend_deadlines(issue_id=12, days=3) immediately
+
+  Example 4 — Bare action → clarify → issue → collect args:
+    User: "reassign"
+    → AMBIGUOUS → Ask: "issue action or query?"
+    User: "issue"
+    → CALL query_function(query="show all open issues for this user")
+    → [List shown] User: "7"
+    → Ask: "Who should I reassign Issue #7 to?"
+    User: "Ravi"
+    → CALL reassign_solver(issue_id=7, solver_name="Ravi")
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[CONSTRAINT 2] QUERY ROUTING RULE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Route IMMEDIATELY to query_function — no clarification needed — when the message
+asks for any data, information, detail, description, list, or is general conversation.
+
+TRIGGER KEYWORDS that always mean query_function:
+  show / list / find / fetch / get / give / detail / describe / elaborate /
+  tell me about / what are / what is / how many / which / who / display /
+  explain / more details / expand / summary / report / status
+
+TRIGGER PATTERNS:
+  - Any question about an entity: supervisor, solver, site, issue, user, role
+  - Any follow-up phrase: "elaborate", "more detail", "expand on that", "tell me more"
+  - Any request for a description or detailed view of anything in the system
+  - Any message referencing system data even if phrased conversationally
+  - Any general chat, opinion, or knowledge question not related to issue actions
+
+RULE:
+  → Pass the user's full original message as the query value
+  → CALL query_function(query="<user's full message>")
+
+EXAMPLES — ALL route to query_function immediately:
+  "give a detail of supervisor id 5"              → query_function
+  "give a detailed description of issue 10"       → query_function
+  "what sites are being maintained"               → query_function
+  "tell me about solver Ravi"                     → query_function
+  "show me all open issues for site 3"            → query_function
+  "how many issues are assigned to Ravi"          → query_function
+  "what is the status of issue 45"                → query_function
+  "list overdue issues"                           → query_function
+  "who is the supervisor for site 3"              → query_function
+  "which issues are pending approval"             → query_function
+  "find issues created in the last 7 days"        → query_function
+  "elaborate"                                     → query_function (resolve from history)
+  "more details"                                  → query_function (resolve from history)
+  "expand on that"                                → query_function (resolve from history)
+  "describe the issue"                            → query_function
+  "give me a summary of site 2"                   → query_function
+  "what issues were created today"                → query_function
+  "what is an SLA?"                               → query_function
+  "explain what a field issue is"                 → query_function
+  "what do you do?"                               → query_function
+  "can you help me?"                              → query_function
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[CONSTRAINT 3] DEFAULT ROUTING — QUERY IS THE DEFAULT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GOLDEN RULE:
+  → If the message is NOT a bare ambiguous action word
+  → AND is NOT a full issue action with args
+  → ALWAYS route to query_function — no exceptions
+
+DECISION ORDER:
+  1. Bare ambiguous action word only?             → [CONSTRAINT 1]
+  2. Full action message with context or args?    → detect function → call
+  3. Anything else?                               → query_function (DEFAULT)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SITE CONTEXT RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-- When the user says a vague action word ONLY (e.g. "approve", "extend", "complete", "reassign") 
-  WITHOUT providing an issue_id, ALWAYS call query_function FIRST to fetch their issues list.
-- Query to use: "show all open issues for this user"
-- Show the result to the user so they can pick an issue_id.
-- After the user picks an issue_id, proceed with the intended function.
+Applies AFTER Constraint 1 confirms the user wants an issue action.
+
+When the user confirms an issue action but has NOT provided an issue_id:
+→ CALL query_function(query="show all open issues for this user")
+→ Show the result so the user can pick an issue_id
+→ Then proceed with the intended function
 
 EXAMPLE:
   User: "approve"
-  → No issue_id found
+  → [Constraint 1] Ask: issue action or query?
+  User: "issue"
   → CALL query_function(query="show all open issues for this user")
-  → Show list to user: "Here are your open issues: #3 - Pipe leak, #7 - Power outage. Which one would you like to approve?"
-  → User: "3"
+  → Show list → User picks: "3"
   → CALL approve_completion(issue_id=3)
-  
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 INVALID VALUE PROTECTION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-For any required argument:
+For any required argument, if the value is missing OR is any of:
+  null / "null" / "unknown" / "none" / "undefined" / ""
 
-If the value is missing OR contains placeholders such as:
-null
-"null"
-"unknown"
-"none"
-"undefined"
-""
-
-Treat the argument as MISSING.
-
-NEVER pass these values to any function.
-
-Instead, ask the user for the missing argument.
-
-Example:
-
-User: "still didnt complete my work yet"
-
-solver_report_blocker requires:
-issue_id
-
-Since issue_id is missing:
-
-Respond:
-"Please provide the Issue ID so I can report the blocker."
-
-DO NOT call the function until a valid integer issue_id is available.
-
+→ Treat as MISSING
+→ NEVER pass to any function
+→ Ask the user for the correct value
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MULTI-FUNCTION RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-- If the user's message contains TWO or more distinct actions, detect ALL of them.
-- Call ALL matching functions in the same response.
-- Each function must have ALL its required args satisfied independently.
-- If one function has all args but another is missing args, call the complete one 
-  and ask for the missing arg of the incomplete one.
+If the user's message contains TWO or more distinct actions:
+→ Detect ALL matching functions
+→ Call ALL functions whose required args are fully satisfied
+→ For any function with missing args, ask for the first missing arg only
 
 EXAMPLE 1 — Both complete:
   User: "approve issue 5 and extend deadline by 2 days"
-  → Function 1: approve_completion(issue_id=5)      ✅ all args present
-  → Function 2: extend_deadlines(issue_id=5, days=2) ✅ all args present
-  → CALL BOTH immediately
+  → CALL approve_completion(issue_id=5)
+  → CALL extend_deadlines(issue_id=5, days=2)
 
-EXAMPLE 2 — One complete, one missing arg:
+EXAMPLE 2 — One complete, one missing:
   User: "approve issue 5 and reassign it"
-  → Function 1: approve_completion(issue_id=5)   ✅ call immediately
-  → Function 2: reassign_solver(issue_id=5, solver_name=?) ❌ missing solver_name
-  → CALL approve_completion(issue_id=5) now
+  → CALL approve_completion(issue_id=5)
   → Ask: "Who should I reassign Issue #5 to?"
 
-EXAMPLE 3 — Same issue_id shared across actions:
+EXAMPLE 3 — Shared issue_id:
   User: "extend deadline for issue 3 by 3 days and update priority to high"
-  → Function 1: extend_deadlines(issue_id=3, days=3)     ✅
-  → Function 2: update_priority(issue_id=3, priority="HIGH") ✅
-  → CALL BOTH immediately
+  → CALL extend_deadlines(issue_id=3, days=3)
+  → CALL update_priority(issue_id=3, priority="HIGH")
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ARGUMENT COLLECTION RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-STEP 1 — Detect ALL functions that match the user intent (can be more than one).
-STEP 2 — For EACH function, check if ALL required args are present.
-          Search the current message AND the conversation history for each arg.
-STEP 3A — If ALL required args are found for a function → call it immediately.
-STEP 3B — If ANY required arg is missing → DO NOT call that function.
-           Instead, ask ONLY for the single most important missing arg.
-           Ask one question at a time. Never ask for two args in one message.
+STEP 1 → Detect ALL functions matching user intent
+STEP 2 → For each function, check ALL required args in current message + history
+STEP 3A → All args present → call immediately
+STEP 3B → Any arg missing → DO NOT call → ask for ONE missing arg only
+
+SEQUENTIAL COLLECTION:
+  When AI asked for a missing arg and user replies:
+  → Treat reply as answer to last asked question
+  → Combine with all previously collected args
+  → If all args now complete → call immediately
+  → If still missing → ask for next missing arg only
+
+COMBINED REPLY EXTRACTION:
+  User sends "116 and suresh pillai":
+  → Numbers         = issue_id or days (based on pending function)
+  → Person names    = solver_name
+  → LOW/MEDIUM/HIGH = priority
+  → Full sentences  = message
+  → Map all values immediately, NEVER re-ask for what was just provided
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MISSING ARG RESPONSE FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-When an arg is missing, respond in plain text like:
+Respond in plain text only:
   "To approve the issue, I need the Issue ID. Could you share it?"
   "What priority should I set — LOW, MEDIUM, or HIGH?"
   "Please provide the Issue ID to extend the deadline."
@@ -944,7 +1118,7 @@ Never call a function with null, undefined, or placeholder values.
 Never guess or assume arg values.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INTENT → FUNCTION MAPPING RULES
+INTENT → FUNCTION MAPPING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 - User reports a problem / issue at a site          → create_issue
@@ -955,197 +1129,85 @@ INTENT → FUNCTION MAPPING RULES
 - Solver says blocked / can't proceed               → solver_report_blocker
 - User complains about an issue                     → raise_complaint
 - User wants to reassign work to another solver     → reassign_solver
-- User asks data / info about issues, sites, users  → query_function
-- General conversation, greetings, unrelated chat   → llm_function
+- EVERYTHING ELSE                                   → query_function ← DEFAULT
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DATA TYPE RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-- issue_id    → always INTEGER (e.g. X, not "X" or "issue X") this a example only the issue_id is based on user input
-- days        → always INTEGER (e.g. X, not "X days")
-- priority    → always one of: "LOW", "MEDIUM", "HIGH" (uppercase)
+- issue_id    → always INTEGER
+- days        → always INTEGER
+- priority    → always "LOW", "MEDIUM", or "HIGH" (uppercase)
 - solver_name → string as provided by user
 - message     → full original user message as string
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EXAMPLES
+TOOL CALL JSON RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-EXAMPLE 1 — Missing arg, ask for it:
-  User: "approve issue"
-  History: (empty)
-  → Function detected: approve_completion
-  → Required: [issue_id] → NOT found
-  → Response: "Sure! To approve the issue, please share the Issue ID."
-  
-
-
-EXAMPLE 2 — Arg arrives in follow-up, merge with history:
-  History: "User: approve issue | AI: Please share the Issue ID."
-  User: "5"
-  → Merge history: intent = approve_completion, issue_id = 5
-  → All required args present → CALL approve_completion(issue_id=5)
-  
-   
-   
-  User: "extend deadline for issue 12"
-  History: (empty)
-  → Function detected: extend_deadlines
-  → Required: [issue_id] and days → NOT found
-  → Response: "Sure! To approve the issue, please share the Issue ID and deadline days."
-
-EXAMPLE 3 — All args in one message:
-  User: "extend deadline for issue 12 by 3 days"
-  → Function: extend_deadlines, issue_id=12, days=3
-  → All args present → CALL immediately
-
-EXAMPLE 4 — Multiple missing args, ask one at a time:
-  User: "reassign issue"
-  → Required: [issue_id, solver_name] → both missing
-  → Ask only for the first: "Which Issue ID do you want to reassign?"
-  [User: "7"]
-  → issue_id=7, solver_name still missing
-  → Ask: "Who should I reassign Issue #7 to? Please provide the solver's name."
-  [User: "Ravi"]
-  → All args present → CALL reassign_solver(issue_id=7, solver_name="Ravi")
-
-EXAMPLE 5 — Complaint needs both args:
-  User: "I want to raise a complaint"
-  → Required: [issue_id, message] → both missing
-  → Ask: "Which Issue ID is this complaint about?"
-  [User: "issue 9"]
-  → issue_id=9, message missing
-  → Ask: "What is your complaint regarding Issue #9?"
-  [User: "solver is not responding"]
-  → CALL raise_complaint(issue_id=9, message="solver is not responding")
-
-EXAMPLE 6 — Vague action, show issues list first:
-  User: "approve"
-  → No issue_id found
-  → CALL query_function(query="show all open issues for this user")
-  → Display list → user picks issue_id → CALL approve_completion
-
-EXAMPLE 7 — Two actions, both complete:
-  User: "approve issue 5 and extend the deadline by 2 days"
-  → CALL approve_completion(issue_id=5)
-  → CALL extend_deadlines(issue_id=5, days=2)
-  
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SEQUENTIAL ARGUMENT COLLECTION RULE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-When the AI has already asked for a missing arg and the user replies:
-→ TREAT that reply as the answer to the LAST asked question
-→ COMBINE it with all previously collected args from history
-→ CHECK if all required args are now satisfied
-→ If YES → CALL the function immediately
-→ If NO → Ask for the NEXT missing arg only
-
-CRITICAL: When user provides MULTIPLE args in a single reply:
-→ Extract ALL provided values from that single message
-→ Map each value to its correct argument
-→ If all required args are now complete → CALL the function immediately
-→ NEVER ask for args that were just provided in the same message
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EXACT SCENARIO EXAMPLE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Turn 1:
-  User: "I want to reassign"
-  → issue_id = MISSING, solver_name = MISSING
-  → Ask: "To reassign an issue, could you please share the Issue ID and the solver's name?"
-
-Turn 2:
-  User: "116 and suresh pillai"
-  → Extract from reply:
-      issue_id    = 116          ✅ (first number = issue_id)
-      solver_name = "suresh pillai" ✅ (name = solver_name)
-  → All required args satisfied
-  → ✅ CALL reassign_solver(issue_id=116, solver_name="suresh pillai")
-  → NEVER ask again for issue_id or solver_name
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MORE SEQUENTIAL EXAMPLES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-EXAMPLE A — User answers asked question + adds extra arg:
-  Turn 1: User: "raise a complaint"
-  → Ask: "Which Issue ID is this complaint about?"
-  Turn 2: User: "issue 9, solver is not responding"
-  → issue_id = 9 (answers the asked question)
-  → message = "solver is not responding" (bonus arg extracted)
-  → All args complete → CALL raise_complaint(issue_id=9, message="solver is not responding")
-
-EXAMPLE B — User answers with only the asked arg, next arg still missing:
-  Turn 1: User: "reassign issue"
-  → Ask: "Which Issue ID do you want to reassign?"
-  Turn 2: User: "42"
-  → issue_id = 42 ✅ (from this reply)
-  → solver_name = MISSING ❌
-  → Ask: "Who should I reassign Issue #42 to?"
-  Turn 3: User: "Anand Kumar"
-  → solver_name = "Anand Kumar" ✅
-  → All args complete → CALL reassign_solver(issue_id=42, solver_name="Anand Kumar")
-
-EXAMPLE C — User gives all args upfront in one message after vague start:
-  Turn 1: User: "update priority"
-  → Ask: "Which Issue ID should I update the priority for?"
-  Turn 2: User: "issue 7 set it to high"
-  → issue_id = 7 ✅
-  → priority = "HIGH" ✅
-  → All args complete → CALL update_priority(issue_id=7, priority="HIGH")
-  
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ARG EXTRACTION FROM COMBINED REPLIES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-When user sends a combined reply like "116 and suresh pillai":
-→ Numbers / digits        = issue_id or days (based on pending function)
-→ Person names            = solver_name
-→ LOW / MEDIUM / HIGH     = priority
-→ Descriptive sentences   = message
-
-Map each extracted value to the correct pending argument.
-NEVER re-ask for something already extracted from the current reply.
-
-
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STRICT RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. ALWAYS scan the user's latest reply for ALL possible arg values.
-2. ALWAYS merge latest reply with full conversation history before deciding.
-3. NEVER ask for an arg that was answered in the current or any prior turn.
-4. NEVER ask two questions in one response — one missing arg at a time.
-5. The moment ALL required args are collected across any turns → CALL immediately.  
-
-
+- Always output complete, valid JSON in every tool call
+- Every opening { must have a closing }
+- Every opening [ must have a closing ]
+- Never truncate or omit closing braces or quotes
+- Integer values must NOT be wrapped in quotes
+- Validate JSON is complete before emitting
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STRICT RULES — NEVER BREAK THESE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. NEVER call a function if any required arg is missing.
-2. NEVER assume or fabricate argument values.
-3. ALWAYS check conversation history before asking for an arg — it may already be there.
-4. ALWAYS ask for only ONE missing arg per response.
-5. issue_id MUST always be cast to INTEGER before calling any function.
-6. For query_function, always pass the raw user message as the query value.
-7. For llm_function, use it ONLY when no other function fits the intent.
-8. If user input triggers multiple functions, detect and call ALL of them.
-9. If user gives a vague action with no issue_id, call query_function first to show their issues.
-
+1.  NEVER call a function if any required arg is missing.
+2.  NEVER assume or fabricate argument values.
+3.  ALWAYS check conversation history before asking for an arg.
+4.  ALWAYS ask for only ONE missing arg per response.
+5.  issue_id MUST always be cast to INTEGER before calling any function.
+6.  For query_function, always pass the user's original message as the query value.
+7.  query_function is the DEFAULT for everything that is not a direct issue action.
+8.  If user input triggers multiple functions, detect and call ALL of them.
+9.  Bare action word with no context → [CONSTRAINT 1] first.
+10. Any data/info/detail/description/general message → query_function immediately.
+11. Follow-up messages like "elaborate", "more details", "expand" → query_function using history.
+12. NEVER let any message fall through without being routed — query_function catches all.
 
 """
 
 async def master_agent(session_id: str, user_input: str):
-    print("---session_id---",session_id)
-    print("---user_input---",user_input)
+    
+    # ✅ Greeting check — before anything else
+    if is_greeting(user_input):
+        reply = greeting_response()
+        memory = load_memory(session_id)
+        memory.chat_memory.add_user_message(user_input)
+        memory.chat_memory.add_ai_message(reply)
+        save_memory(session_id, memory)
+        return {"intent": "clarification", "message": reply}
+
+    def repair_failed_generation(error_str: str):
+        """Extract and repair malformed tool call from Groq failed_generation error."""
+        match = re.search(r"<function=(\w+)(\{.*?)(?:</function>|$)", error_str, re.DOTALL)
+        if not match:
+            return None, None
+
+        func_name = match.group(1)
+        raw_args  = match.group(2).strip()
+
+        # Count and fix missing closing braces
+        open_count  = raw_args.count("{")
+        close_count = raw_args.count("}")
+        raw_args   += "}" * (open_count - close_count)
+
+        # Remove trailing commas
+        raw_args = re.sub(r",\s*}", "}", raw_args)
+
+        try:
+            fixed_args = json.loads(raw_args)
+            return func_name, fixed_args
+        except json.JSONDecodeError:
+            return None, None
+
+    print("---session_id---", session_id)
+    print("---user_input---", user_input)
+
     memory = load_memory(session_id)
 
     history_messages = memory.chat_memory.messages[-10:]
@@ -1155,30 +1217,60 @@ async def master_agent(session_id: str, user_input: str):
         role = "User" if msg.type == "human" else "AI"
         history_text += f"{role}: {msg.content}\n"
 
+    # ✅ FIX 1: History only in system prompt — not added again as messages
     messages = [
-    {"role": "system", "content": SYSTEM_PROMPT.replace("{chat_history}", history_text)}
-]
-    
-    print("------------------------------",messages)
-    for msg in history_messages:
-        role = "user" if msg.type == "human" else "assistant"
-        messages.append({"role": role, "content": msg.content})
+        {"role": "system", "content": SYSTEM_PROMPT.replace("{chat_history}", history_text)}
+    ]
 
     messages.append({"role": "user", "content": user_input})
 
-    response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=messages,
-        tools=TOOLS,
-        tool_choice="auto",
-        temperature=0
-    )
+    # ✅ FIX 2: Wrapped Groq call with error recovery
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            tools=TOOLS,
+            tool_choice="auto",
+            temperature=0
+        )
+        msg = response.choices[0].message
 
-    msg = response.choices[0].message
+    except Exception as e:
+        error_str = str(e)
+        print(f"[Groq Error] {error_str}")
 
+        func_name, fixed_args = repair_failed_generation(error_str)
+
+        if func_name and fixed_args:
+            print(f"[REPAIRED] {func_name}({fixed_args})")
+
+            # Force query to be user_input for query_function
+            if func_name == "query_function":
+                fixed_args = {"query": user_input}
+
+            if "issue_id" in fixed_args:
+                fixed_args["issue_id"] = int(fixed_args["issue_id"])
+
+            missing = check_missing_required(func_name, fixed_args)
+
+            if not missing:
+                memory.chat_memory.add_user_message(user_input)
+                memory.chat_memory.add_ai_message(f"Called: {func_name}({fixed_args})")
+                save_memory(session_id, memory)
+                return {
+                    "intent": "function_call",
+                    "calls": [{"function": func_name, "args": fixed_args}],
+                    "clarifications": []
+                }
+
+        memory.chat_memory.add_user_message(user_input)
+        memory.chat_memory.add_ai_message("Something went wrong.")
+        save_memory(session_id, memory)
+        return {"intent": "clarification", "message": "⚠️ Something went wrong. Please try again."}
+
+    # ✅ FIX 3: Handle tool calls
     if msg.tool_calls:
 
-        # ✅ Handle multiple tool calls
         all_calls = []
         clarifications = []
 
@@ -1192,8 +1284,8 @@ async def master_agent(session_id: str, user_input: str):
             if name == "query_function":
                 args = {"query": user_input}
 
-            # Check missing args for each function
             missing = check_missing_required(name, args)
+
             if missing:
                 FRIENDLY_LABELS = {
                     "issue_id":    "Issue ID",
@@ -1210,7 +1302,6 @@ async def master_agent(session_id: str, user_input: str):
             else:
                 all_calls.append({"function": name, "args": args})
 
-        # If we have complete calls, return them all
         if all_calls:
             summary = " | ".join(
                 [f"{c['function']}({c['args']})" for c in all_calls]
@@ -1222,13 +1313,11 @@ async def master_agent(session_id: str, user_input: str):
             memory.chat_memory.add_ai_message(f"Called: {summary}{clarification_text}")
             save_memory(session_id, memory)
 
-            # ✅ Return list of function calls
-            result = {
+            return {
                 "intent": "function_call",
-                "calls": all_calls,          # list of {function, args}
+                "calls": all_calls,
                 "clarifications": clarifications
             }
-            return result
 
         # All functions had missing args
         clarification = clarifications[0] if clarifications else "Could you provide more details?"
@@ -1243,26 +1332,6 @@ async def master_agent(session_id: str, user_input: str):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
-# ==================================================
-# CLI
-# ==================================================
-
-if __name__ == "__main__":
-
-    print("🔥 MASTER AI SYSTEM READY")
-
-    while True:
-
-        msg = input("\nYou: ")
-
-        if msg.lower() in ["exit","quit"]:
-            break
-
-        result = master_agent(msg)
-
-        print("\n==============================")
-        print(result)
-        print("==============================")
 
 
 

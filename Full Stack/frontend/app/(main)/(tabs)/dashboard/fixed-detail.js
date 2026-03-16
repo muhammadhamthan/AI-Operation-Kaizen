@@ -179,17 +179,7 @@ export default function FixedDetailScreen() {
           </View>
         </View>
 
-        {/* ── TIMELINE ── */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Full Timeline</Text>
-          {timeline && timeline.length > 0 ? (
-            <IssueTimeline history={timeline} />
-          ) : (
-            <Text style={[styles.description, { color: theme.textSecondary, fontStyle: 'italic' }]}>
-              No timeline available.
-            </Text>
-          )}
-        </View>
+        
 
         <View style={styles.bottomPadding} />
       </ScrollView>

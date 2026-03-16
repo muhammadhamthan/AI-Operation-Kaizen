@@ -158,7 +158,7 @@ class ChatbotService:
 
             elif func == "query_function":
                 from app.services.ai_service import run_sql_agent
-                result = await run_sql_agent(session.id, args["query"])
+                result = await run_sql_agent(user.id, args["query"])
                 r = ChatResponse(message=result, intent="query_function",
                              actions_taken=["sql_agent"])
 

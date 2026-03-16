@@ -17,6 +17,7 @@ node_modules/
 !.yarn/versions
 
 .metro-cache/
+Frontend/.metro-cache/
 
 # Testing
 /coverage
