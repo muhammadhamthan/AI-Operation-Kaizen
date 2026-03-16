@@ -194,51 +194,7 @@ export default function SolverProfileScreen() {
           </View>
         )}
 
-        {/* ACTIVE ASSIGNMENTS */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Active Assignments</Text>
-          {activeIssues.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No active assignments available in overview.</Text>
-          ) : (
-            activeIssues.map(item => (
-              <TouchableOpacity
-                key={item.assignment.id}
-                style={styles.issueRow}
-                activeOpacity={0.7}
-                onPress={() => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: item.issue.id } })}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>{item.issue.title}</Text>
-                  <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>#{item.issue.id} · {item.issue.priority.toUpperCase()}</Text>
-                </View>
-                <StatusBadge status={item.assignment.status} />
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-
-        {/* RECENT COMPLETED */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Recent Completed Issues</Text>
-          {completedIssues.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No completed issues available in overview.</Text>
-          ) : (
-            completedIssues.map(issue => (
-              <TouchableOpacity
-                key={issue.id}
-                style={styles.issueRow}
-                activeOpacity={0.7}
-                onPress={() => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } })}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.issueTitle, { color: theme.text }]} numberOfLines={2}>{issue.title}</Text>
-                  <Text style={[styles.issueMeta, { color: theme.textSecondary }]}>#{issue.id} · {issue.priority.toUpperCase()}</Text>
-                </View>
-                <StatusBadge status="COMPLETED" />
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
+       
 
         <View style={styles.bottomPadding} />
       </ScrollView>

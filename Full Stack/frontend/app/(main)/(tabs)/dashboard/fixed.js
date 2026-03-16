@@ -22,23 +22,22 @@ import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 import { formatDate } from '../../../../src/utils/formatters';
-import { getUserById } from '../../../../src/mocks/users';
-import { getAssignmentByIssueId } from '../../../../src/mocks/issueAssignments';
 
 export default function FixedIssuesScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
+  const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const dispatch = useDispatch();
+  
   const user = useSelector(selectCurrentUser);
   const issues = useSelector(selectFixedIssues);
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
-  // ── LOGIC UNTOUCHED ──
   useEffect(() => {
     if (user) dispatch(fetchIssues(user));
   }, [user]);
@@ -69,7 +68,17 @@ export default function FixedIssuesScreen() {
     setRefreshing(false);
   }, [user, isOnline, lastRefresh]);
 
-  // ── PREMIUM MONOCHROME PALETTE ──
+  // 📍 FIX: Added Local Search Filtering
+  const filteredIssues = issues.filter((issue) => {
+    if (!searchText) return true;
+    const lowerSearch = searchText.toLowerCase();
+    return (
+      issue.title?.toLowerCase().includes(lowerSearch) ||
+      issue.site_name?.toLowerCase().includes(lowerSearch) ||
+      issue.id?.toString().includes(lowerSearch)
+    );
+  });
+
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -78,8 +87,11 @@ export default function FixedIssuesScreen() {
   const successBg = isDark ? 'rgba(16, 163, 127, 0.15)' : 'rgba(16, 163, 127, 0.1)';
 
   const renderItem = ({ item }) => {
-    const assignment = getAssignmentByIssueId(item.id);
-    const solver = assignment ? getUserById(assignment.assigned_to_solver_id) : null;
+    // 📍 FIX: Mapped perfectly to real backend data (no more mocks!)
+    const siteName = item.site_name || item.site?.name || 'Unknown Site';
+    const solverName = item.assignments && item.assignments.length > 0 
+      ? item.assignments[0].solver_name 
+      : (item.solver_name || null);
 
     return (
       <TouchableOpacity
@@ -104,7 +116,7 @@ export default function FixedIssuesScreen() {
         <View style={styles.cardInfo}>
           <View style={styles.infoItem}>
             <Ionicons name="location-outline" size={14} color={theme.textSecondary} />
-            <Text style={[styles.infoText, { color: theme.textSecondary }]}>{item.site?.name}</Text>
+            <Text style={[styles.infoText, { color: theme.textSecondary }]}>{siteName}</Text>
           </View>
           <View style={[styles.dot, { backgroundColor: theme.textSecondary }]} />
           <View style={styles.infoItem}>
@@ -113,12 +125,12 @@ export default function FixedIssuesScreen() {
           </View>
         </View>
 
-        {solver && (
+        {solverName && (
           <View style={[styles.solverRow, { borderTopColor: borderColor, borderTopWidth: StyleSheet.hairlineWidth }]}>
             <Text style={[styles.solverLabel, { color: theme.textSecondary }]}>Solved by</Text>
             <View style={styles.solverUser}>
-              <Avatar uri={solver.avatar} name={solver.name} size="small" />
-              <Text style={[styles.solverName, { color: theme.text }]}>{solver.name}</Text>
+              <Avatar name={solverName} size="small" />
+              <Text style={[styles.solverName, { color: theme.text }]}>{solverName}</Text>
             </View>
           </View>
         )}
@@ -161,18 +173,25 @@ export default function FixedIssuesScreen() {
 
       {/* ── RESULTS COUNT ── */}
       <View style={styles.resultsHeader}>
+        {/* 📍 FIX: Displays the length of the filtered array */}
         <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
-          {issues.length} issue{issues.length !== 1 ? 's' : ''} found
+          {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
         </Text>
       </View>
 
       {/* ── LIST ── */}
       <FlatList
-        data={issues}
+        data={filteredIssues} // 📍 FIX: Passed the filtered array here
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<EmptyState icon="checkmark-done-outline" title="No completed issues" message="No issues have been completed yet." />}
+        ListEmptyComponent={
+          <EmptyState 
+            icon="checkmark-done-outline" 
+            title={searchText ? "No matches found" : "No completed issues"} 
+            message={searchText ? `No issues matching "${searchText}"` : "No issues have been completed yet."} 
+          />
+        }
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

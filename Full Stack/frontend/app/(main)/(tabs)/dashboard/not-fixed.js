@@ -23,19 +23,20 @@ import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 
 export default function NotFixedIssuesScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
+  const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const dispatch = useDispatch();
+  
   const user = useSelector(selectCurrentUser);
   const issues = useSelector(selectNotFixedIssues);
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
-  // ── LOGIC UNTOUCHED ──
   useEffect(() => {
     if (user) {
       dispatch(fetchIssues(user));
@@ -71,6 +72,18 @@ export default function NotFixedIssuesScreen() {
   const handleIssuePress = (issue) => {
     router.push({ pathname: '/(main)/(tabs)/dashboard/not-fixed-detail', params: { id: issue.id } });
   };
+
+  // 📍 FIX: Added Local Filtering Logic
+  const filteredIssues = issues.filter((issue) => {
+    if (!searchText) return true;
+    const lowerSearch = searchText.toLowerCase();
+    return (
+      issue.title?.toLowerCase().includes(lowerSearch) ||
+      issue.description?.toLowerCase().includes(lowerSearch) ||
+      issue.site_name?.toLowerCase().includes(lowerSearch) ||
+      issue.id?.toString().includes(lowerSearch)
+    );
+  });
 
   if (loading && issues.length === 0) {
     return <Loader message="Loading issues..." />;
@@ -115,22 +128,23 @@ export default function NotFixedIssuesScreen() {
 
       {/* ── RESULTS COUNT ── */}
       <View style={styles.resultsHeader}>
+        {/* 📍 FIX: Output length of filtered array, not raw array */}
         <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
-          {issues.length} issue{issues.length !== 1 ? 's' : ''} found
+          {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
         </Text>
       </View>
 
       {/* ── LIST ── */}
       <FlatList
-        data={issues}
+        data={filteredIssues} // 📍 FIX: Replaced `issues` with `filteredIssues`
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => <IssueCard issue={item} onPress={() => handleIssuePress(item)} />}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <EmptyState 
             icon="checkmark-circle-outline" 
-            title="All Clear!" 
-            message="No pending issues at the moment." 
+            title={searchText ? "No matches found" : "All Clear!"} 
+            message={searchText ? `No issues matching "${searchText}"` : "No pending issues at the moment."} 
           />
         }
         showsVerticalScrollIndicator={false}
