@@ -8,6 +8,8 @@ import {
   Dimensions,
   RefreshControl,
   Platform,
+  Animated,
+  Easing
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -72,6 +74,9 @@ export default function DashboardScreen() {
   const lineChartRef = useRef();
   const pieChartRef = useRef();
   const barChartRef = useRef();
+  
+  // ── SPIN ANIMATION VALUE ──
+  const spinValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (user) {
@@ -107,28 +112,35 @@ export default function DashboardScreen() {
       return;
     }
     setRefreshing(true);
+    
+    // Start animation
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+
     if (user) {
       await dispatch(fetchDashboardData(user));
       await dispatch(fetchSolversPerformance(user));
       await dispatch(fetchSitesWithAnalytics(user));
       await dispatch(fetchComplaints(user)); 
     }
+    
+    // Stop animation
     setRefreshing(false);
-  }, [user, isOnline, dispatch]);
+    spinValue.stopAnimation();
+    spinValue.setValue(0);
+  }, [user, isOnline, dispatch, spinValue]);
 
-
-
-  // ── ADD THIS: Custom Pull-to-Refresh detector for Web ──
-  const handleScroll = (event) => {
-    if (Platform.OS !== 'web') return; // Let native iOS/Android handle themselves
-    
-    const offsetY = event.nativeEvent.contentOffset.y;
-    
-    // If they drag the screen down past -80px and it's not already refreshing
-    if (offsetY < -80 && !refreshing) {
-      onRefresh();
-    }
-  };
+  // Interpolate rotation
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg']
+  });
 
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -301,9 +313,28 @@ export default function DashboardScreen() {
           <Text style={[styles.greeting, { color: theme.textSecondary }]}>Analytics Overview</Text>
           <Text style={[styles.userName, { color: theme.text }]}>{isSolverView ? 'Workspace' : 'Dashboard'}</Text>
         </View>
-        <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
-          <Avatar uri={user?.avatar} name={user?.name} size="medium" />
-        </TouchableOpacity>
+        
+        <View style={styles.headerActions}>
+          {Platform.OS === 'web' && (
+            <TouchableOpacity 
+              onPress={onRefresh} 
+              disabled={refreshing}
+              style={styles.refreshButton}
+            >
+              <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <Ionicons 
+                  name="sync" 
+                  size={22} 
+                  color={refreshing ? theme.primary : theme.textSecondary} 
+                />
+              </Animated.View>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
+            <Avatar uri={user?.avatar} name={user?.name} size="medium" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -311,8 +342,6 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
-        onScroll={handleScroll}
-        scrollEventThrottle={16} // This makes the scroll tracking lightning fast
       >
 
         {/* ── ACTION REQUIRED ALERTS ── */}
@@ -532,6 +561,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 20 : 10, paddingBottom: 20 },
   greeting: { fontSize: 14, fontWeight: '500', marginBottom: 4 },
   userName: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  refreshButton: { padding: 8, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   content: { padding: 16 },
   sectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12, marginLeft: 4 },
   statsContainer: { marginBottom: 24 },
