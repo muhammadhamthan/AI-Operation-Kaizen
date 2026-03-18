@@ -116,6 +116,20 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [user, isOnline, dispatch]);
 
+
+
+  // ── ADD THIS: Custom Pull-to-Refresh detector for Web ──
+  const handleScroll = (event) => {
+    if (Platform.OS !== 'web') return; // Let native iOS/Android handle themselves
+    
+    const offsetY = event.nativeEvent.contentOffset.y;
+    
+    // If they drag the screen down past -80px and it's not already refreshing
+    if (offsetY < -80 && !refreshing) {
+      onRefresh();
+    }
+  };
+
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
 
@@ -297,6 +311,8 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
+        onScroll={handleScroll}
+        scrollEventThrottle={16} // This makes the scroll tracking lightning fast
       >
 
         {/* ── ACTION REQUIRED ALERTS ── */}
