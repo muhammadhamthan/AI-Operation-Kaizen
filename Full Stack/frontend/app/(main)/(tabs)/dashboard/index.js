@@ -105,7 +105,7 @@ export default function DashboardScreen() {
     return { text: `Due in ${diffDays}d`, color: theme.textSecondary }; 
   };
 
-  const onRefresh = useCallback(async () => {
+ const onRefresh = useCallback(async () => {
     if (!isOnline) {
       setToastMessage("Can't refresh while offline");
       setTimeout(() => setToastMessage(''), 3000);
@@ -113,7 +113,7 @@ export default function DashboardScreen() {
     }
     setRefreshing(true);
     
-    // Start animation
+    // 1. Start the infinite spin animation
     Animated.loop(
       Animated.timing(spinValue, {
         toValue: 1,
@@ -124,16 +124,29 @@ export default function DashboardScreen() {
     ).start();
 
     if (user) {
-      await dispatch(fetchDashboardData(user));
-      await dispatch(fetchSolversPerformance(user));
-      await dispatch(fetchSitesWithAnalytics(user));
-      await dispatch(fetchComplaints(user)); 
+      try {
+        // 2. FETCH EVERYTHING CONCURRENTLY
+        // Promise.allSettled forces the code to wait until EVERY single request 
+        // comes back, even if one of them fails with a 504 error.
+        await Promise.allSettled([
+          dispatch(fetchDashboardData(user)),
+          dispatch(fetchSolversPerformance(user)),
+          dispatch(fetchSitesWithAnalytics(user)),
+          dispatch(fetchComplaints(user))
+        ]);
+      } finally {
+        // 3. THE GUARANTEE
+        // The finally block ensures that no matter what happens (success or crash),
+        // the spinner will only stop when all activity is completely done.
+        setRefreshing(false);
+        spinValue.stopAnimation();
+        spinValue.setValue(0);
+      }
+    } else {
+      setRefreshing(false);
+      spinValue.stopAnimation();
+      spinValue.setValue(0);
     }
-    
-    // Stop animation
-    setRefreshing(false);
-    spinValue.stopAnimation();
-    spinValue.setValue(0);
   }, [user, isOnline, dispatch, spinValue]);
 
   // Interpolate rotation
