@@ -550,6 +550,19 @@ export default function DashboardScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* ── NEW: FULL SCREEN REFRESH OVERLAY ── */}
+      {refreshing && (
+        <View style={[styles.refreshOverlay, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
+          <Animated.View style={{ transform: [{ rotate: spin }] }}>
+            <Ionicons name="sync" size={54} color={theme.primary} />
+          </Animated.View>
+          <Text style={[styles.refreshOverlayText, { color: theme.text }]}>
+            Updating Dashboard...
+          </Text>
+        </View>
+      )}
+
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -587,4 +600,18 @@ const styles = StyleSheet.create({
   viewAllButton: { paddingVertical: 16, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
   viewAllText: { fontSize: 13, fontWeight: '600' },
   bottomPadding: { height: 40 },
+
+  // ── NEW STYLES FOR REFRESH OVERLAY ──
+  refreshOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  refreshOverlayText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
 });
