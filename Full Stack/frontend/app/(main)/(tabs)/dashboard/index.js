@@ -78,6 +78,24 @@ export default function DashboardScreen() {
   // ── SPIN ANIMATION VALUE ──
   const spinValue = useRef(new Animated.Value(0)).current;
 
+  // ── NEW: EFFECT TO CONTROL INFINITE SPIN ──
+  useEffect(() => {
+    if (refreshing) {
+      Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.linear,
+          // 📍 FIXED: Disables native driver on web to prevent the visual freeze bug
+          useNativeDriver: Platform.OS !== 'web', 
+        })
+      ).start();
+    } else {
+      spinValue.stopAnimation();
+      spinValue.setValue(0);
+    }
+  }, [refreshing, spinValue]);
+
   useEffect(() => {
     if (user) {
       dispatch(fetchDashboardData(user));
@@ -105,29 +123,20 @@ export default function DashboardScreen() {
     return { text: `Due in ${diffDays}d`, color: theme.textSecondary }; 
   };
 
- const onRefresh = useCallback(async () => {
+  const onRefresh = useCallback(async () => {
     if (!isOnline) {
       setToastMessage("Can't refresh while offline");
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
-    setRefreshing(true);
     
-    // 1. Start the infinite spin animation
-    Animated.loop(
-      Animated.timing(spinValue, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
+    // This triggers the useEffect above to start spinning infinitely
+    setRefreshing(true);
 
     if (user) {
       try {
-        // 2. FETCH EVERYTHING CONCURRENTLY
-        // Promise.allSettled forces the code to wait until EVERY single request 
-        // comes back, even if one of them fails with a 504 error.
+        // Promise.allSettled waits for every single request to finish 
+        // regardless of whether they succeed or fail (like a 504 error)
         await Promise.allSettled([
           dispatch(fetchDashboardData(user)),
           dispatch(fetchSolversPerformance(user)),
@@ -135,19 +144,13 @@ export default function DashboardScreen() {
           dispatch(fetchComplaints(user))
         ]);
       } finally {
-        // 3. THE GUARANTEE
-        // The finally block ensures that no matter what happens (success or crash),
-        // the spinner will only stop when all activity is completely done.
+        // The guarantee: only stop when all data fetches are completely done
         setRefreshing(false);
-        spinValue.stopAnimation();
-        spinValue.setValue(0);
       }
     } else {
       setRefreshing(false);
-      spinValue.stopAnimation();
-      spinValue.setValue(0);
     }
-  }, [user, isOnline, dispatch, spinValue]);
+  }, [user, isOnline, dispatch]);
 
   // Interpolate rotation
   const spin = spinValue.interpolate({
