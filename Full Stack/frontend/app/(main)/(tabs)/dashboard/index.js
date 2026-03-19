@@ -78,21 +78,20 @@ export default function DashboardScreen() {
   // ── SPIN ANIMATION VALUE ──
   const spinValue = useRef(new Animated.Value(0)).current;
 
-  // ── NEW: EFFECT TO CONTROL INFINITE SPIN ──
+  // ── EFFECT TO CONTROL INFINITE SPIN ──
   useEffect(() => {
     if (refreshing) {
+      spinValue.setValue(0);
       Animated.loop(
         Animated.timing(spinValue, {
           toValue: 1,
           duration: 1000,
           easing: Easing.linear,
-          // 📍 FIXED: Disables native driver on web to prevent the visual freeze bug
-          useNativeDriver: Platform.OS !== 'web', 
+          useNativeDriver: Platform.OS !== 'web', // Fixes the web freezing bug
         })
       ).start();
     } else {
       spinValue.stopAnimation();
-      spinValue.setValue(0);
     }
   }, [refreshing, spinValue]);
 
@@ -135,8 +134,7 @@ export default function DashboardScreen() {
 
     if (user) {
       try {
-        // Promise.allSettled waits for every single request to finish 
-        // regardless of whether they succeed or fail (like a 504 error)
+        // Waits for EVERY request to finish (success or 504 timeout)
         await Promise.allSettled([
           dispatch(fetchDashboardData(user)),
           dispatch(fetchSolversPerformance(user)),
@@ -144,7 +142,7 @@ export default function DashboardScreen() {
           dispatch(fetchComplaints(user))
         ]);
       } finally {
-        // The guarantee: only stop when all data fetches are completely done
+        // Guarantees the spinner stops only when everything is done
         setRefreshing(false);
       }
     } else {
@@ -282,14 +280,13 @@ export default function DashboardScreen() {
   }, [sitesList]);
 
   // ==========================================
-  // 📏 SMART GRID ALIGNMENT LOGIC (THE FIX!)
+  // 📏 SMART GRID ALIGNMENT LOGIC
   // ==========================================
   
-  // Helper to ensure small whole numbers don't create fractional grid lines
   const getOptimalSegments = (maxVal) => {
-    if (maxVal === 0) return 1; // Prevent NaN errors
-    if (maxVal <= 8) return maxVal; // Locks grid strictly to integers (1, 2, 3...)
-    return 4; // Defaults back to standard 4 segments for large numbers
+    if (maxVal === 0) return 1; 
+    if (maxVal <= 8) return maxVal; 
+    return 4; 
   };
 
   const lineDataMax = Math.max(...calculatedLineData.datasets[0].data);
@@ -463,8 +460,8 @@ export default function DashboardScreen() {
                 style={styles.chart} 
                 withInnerLines={true} 
                 withOuterLines={false} 
-                fromZero={true} // 📍 FIXED: Prevents random bottom scaling
-                segments={lineSegments} // 📍 FIXED: Locks grid to whole numbers
+                fromZero={true} 
+                segments={lineSegments} 
               />
             </View>
           </ScrollView>
@@ -496,7 +493,7 @@ export default function DashboardScreen() {
                   style={styles.chart}
                   showValuesOnTopOfBars
                   withInnerLines={false}
-                  fromZero={true} // 📍 FIXED: Applies math fix to Bar Chart too
+                  fromZero={true} 
                   segments={barSegments} 
                 />
               </View>
@@ -567,7 +564,7 @@ export default function DashboardScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* ── NEW: FULL SCREEN REFRESH OVERLAY ── */}
+      {/* ── FULL SCREEN REFRESH OVERLAY ── */}
       {refreshing && (
         <View style={[styles.refreshOverlay, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
           <Animated.View style={{ transform: [{ rotate: spin }] }}>
@@ -617,7 +614,6 @@ const styles = StyleSheet.create({
   viewAllText: { fontSize: 13, fontWeight: '600' },
   bottomPadding: { height: 40 },
 
-  // ── NEW STYLES FOR REFRESH OVERLAY ──
   refreshOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
