@@ -22,6 +22,9 @@ import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 
+// ── ADDED REUSABLE SPINNER ──
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
 export default function NotFixedIssuesScreen() {
   const { theme, isDark } = useTheme(); 
   const router = useRouter();
@@ -63,11 +66,19 @@ export default function NotFixedIssuesScreen() {
 
     setRefreshing(true);
     if (user) {
-      await dispatch(fetchIssues(user));
+      try {
+        // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+        await Promise.allSettled([
+          dispatch(fetchIssues(user))
+        ]);
+      } finally {
+        setLastRefresh(Date.now());
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
     }
-    setLastRefresh(Date.now());
-    setRefreshing(false);
-  }, [user, isOnline, lastRefresh]);
+  }, [user, isOnline, lastRefresh, dispatch]);
 
   const handleIssuePress = (issue) => {
     router.push({ pathname: '/(main)/(tabs)/dashboard/not-fixed-detail', params: { id: issue.id } });
@@ -85,7 +96,8 @@ export default function NotFixedIssuesScreen() {
     );
   });
 
-  if (loading && issues.length === 0) {
+  // 📍 FIX: Added `&& !refreshing` to prevent Loader hijacking
+  if (loading && issues.length === 0 && !refreshing) {
     return <Loader message="Loading issues..." />;
   }
 
@@ -104,7 +116,17 @@ export default function NotFixedIssuesScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Pending Issues</Text>
-        <View style={styles.placeholder} />
+        
+        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? pendingAccent : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
       {/* ── SEARCH BAR ── */}
@@ -148,15 +170,21 @@ export default function NotFixedIssuesScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
+        // 📍 FIX: Disables double spinner on web
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[pendingAccent]}
-            tintColor={pendingAccent}
-          />
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[pendingAccent]}
+              tintColor={pendingAccent}
+            />
+          )
         }
       />
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Pending Issues..." color={pendingAccent} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -175,7 +203,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
   searchInput: { 
