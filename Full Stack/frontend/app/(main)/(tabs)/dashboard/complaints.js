@@ -23,6 +23,9 @@ import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 
+// ── ADDED REUSABLE SPINNER ──
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
 export default function ComplaintsScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -61,10 +64,20 @@ export default function ComplaintsScreen() {
     }
 
     setRefreshing(true);
-    if (user) await dispatch(fetchComplaints(user));
-    setLastRefresh(Date.now());
-    setRefreshing(false);
-  }, [user, isOnline, lastRefresh]);
+    if (user) {
+      try {
+        // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+        await Promise.allSettled([
+          dispatch(fetchComplaints(user))
+        ]);
+      } finally {
+        setLastRefresh(Date.now());
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
+    }
+  }, [user, isOnline, lastRefresh, dispatch]);
 
   // ── Date Formatter ──
   const formatDate = (dateString) => {
@@ -77,6 +90,7 @@ export default function ComplaintsScreen() {
   const surfaceColor = isDark ? '#242424' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const inactiveBg = isDark ? '#2a2a2a' : '#eeeeef';
+  const accentColor = '#ef4444'; // Red to match the warning icon
 
   const renderItem = ({ item }) => {
     return (
@@ -88,7 +102,7 @@ export default function ComplaintsScreen() {
         <View style={styles.cardHeader}>
           <View style={styles.idContainer}>
             <View style={styles.iconWrapper}>
-              <Ionicons name="warning" size={14} color="#ef4444" />
+              <Ionicons name="warning" size={14} color={accentColor} />
             </View>
             
             {/* 📍 FIX: Created a flex wrapper to properly space the ID and Date */}
@@ -145,7 +159,8 @@ export default function ComplaintsScreen() {
     );
   };
 
-  if (loading && complaints.length === 0) return <Loader message="Loading complaints..." />;
+  // 📍 FIX: Added `&& !refreshing` to prevent Loader hijacking
+  if (loading && complaints.length === 0 && !refreshing) return <Loader message="Loading complaints..." />;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -156,7 +171,17 @@ export default function ComplaintsScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Complaints Hub</Text>
-        <View style={styles.placeholder} />
+        
+        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? accentColor : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
       {/* ── SEARCH BAR ── */}
@@ -199,14 +224,20 @@ export default function ComplaintsScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
+        // 📍 FIX: Disables double spinner on web
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.textSecondary}
-          />
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
         }
       />
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Complaints..." color={accentColor} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -229,7 +260,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
   searchInput: { 

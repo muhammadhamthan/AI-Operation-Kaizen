@@ -23,6 +23,9 @@ import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 import { formatDate } from '../../../../src/utils/formatters';
 
+// ── ADDED REUSABLE SPINNER ──
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
 export default function FixedIssuesScreen() {
   const { theme, isDark } = useTheme(); 
   const router = useRouter();
@@ -61,14 +64,21 @@ export default function FixedIssuesScreen() {
     }
 
     setRefreshing(true);
+    
     if (user) {
-      await dispatch(fetchIssues(user));
+      try {
+        await Promise.allSettled([
+          dispatch(fetchIssues(user))
+        ]);
+      } finally {
+        setLastRefresh(Date.now());
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
     }
-    setLastRefresh(Date.now());
-    setRefreshing(false);
-  }, [user, isOnline, lastRefresh]);
+  }, [user, isOnline, lastRefresh, dispatch]);
 
-  // 📍 FIX: Added Local Search Filtering
   const filteredIssues = issues.filter((issue) => {
     if (!searchText) return true;
     const lowerSearch = searchText.toLowerCase();
@@ -83,11 +93,10 @@ export default function FixedIssuesScreen() {
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
-  const successColor = '#10a37f'; // OpenAI Green
+  const successColor = '#10a37f'; 
   const successBg = isDark ? 'rgba(16, 163, 127, 0.15)' : 'rgba(16, 163, 127, 0.1)';
 
   const renderItem = ({ item }) => {
-    // 📍 FIX: Mapped perfectly to real backend data (no more mocks!)
     const siteName = item.site_name || item.site?.name || 'Unknown Site';
     const solverName = item.assignments && item.assignments.length > 0 
       ? item.assignments[0].solver_name 
@@ -138,21 +147,29 @@ export default function FixedIssuesScreen() {
     );
   };
 
-  if (loading && issues.length === 0) return <Loader message="Loading fixed issues..." />;
+  // 📍 THE FIX IS HERE: Added `&& !refreshing` to prevent Loader hijacking
+  if (loading && issues.length === 0 && !refreshing) return <Loader message="Loading fixed issues..." />;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       
-      {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Resolved Issues</Text>
-        <View style={styles.placeholder} />
+        
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      {/* ── SEARCH BAR ── */}
       <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
         <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
           <Ionicons name="search" size={18} color={theme.textSecondary} />
@@ -171,17 +188,14 @@ export default function FixedIssuesScreen() {
         </View>
       </View>
 
-      {/* ── RESULTS COUNT ── */}
       <View style={styles.resultsHeader}>
-        {/* 📍 FIX: Displays the length of the filtered array */}
         <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
           {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
         </Text>
       </View>
 
-      {/* ── LIST ── */}
       <FlatList
-        data={filteredIssues} // 📍 FIX: Passed the filtered array here
+        data={filteredIssues}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
@@ -194,14 +208,18 @@ export default function FixedIssuesScreen() {
         }
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[successColor]}
-            tintColor={successColor}
-          />
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[successColor]}
+              tintColor={successColor}
+            />
+          )
         }
       />
+
+      <FullScreenSpinner visible={refreshing} message="Updating Resolved Issues..." />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -220,7 +238,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
   searchInput: { 

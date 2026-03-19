@@ -202,11 +202,7 @@ export default function IssueDetailScreen() {
           <ImageGallery images={issue.images || []} />
         </View>
 
-        {/* ── TIMELINE ── */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Timeline</Text>
-          <IssueTimeline history={issue.history || []} />
-        </View>
+    
 
         {/* ── CALL HISTORY (Solver Only) ── */}
         {user?.role === 'problem_solver' && issue.call_logs?.length > 0 && (
