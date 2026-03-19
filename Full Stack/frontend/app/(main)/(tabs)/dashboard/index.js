@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   RefreshControl,
-  Platform,
-  Animated,
-  Easing
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -39,6 +37,8 @@ import Loader from '../../../../src/components/common/Loader';
 import Avatar from '../../../../src/components/common/Avatar';
 import Toast from '../../../../src/components/common/Toast';
 import StatusBadge from '../../../../src/components/common/StatusBadge'; 
+// ── ADDED REUSABLE SPINNER ──
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner'; 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -74,26 +74,6 @@ export default function DashboardScreen() {
   const lineChartRef = useRef();
   const pieChartRef = useRef();
   const barChartRef = useRef();
-  
-  // ── SPIN ANIMATION VALUE ──
-  const spinValue = useRef(new Animated.Value(0)).current;
-
-  // ── EFFECT TO CONTROL INFINITE SPIN ──
-  useEffect(() => {
-    if (refreshing) {
-      spinValue.setValue(0);
-      Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: Platform.OS !== 'web', // Fixes the web freezing bug
-        })
-      ).start();
-    } else {
-      spinValue.stopAnimation();
-    }
-  }, [refreshing, spinValue]);
 
   useEffect(() => {
     if (user) {
@@ -129,12 +109,10 @@ export default function DashboardScreen() {
       return;
     }
     
-    // This triggers the useEffect above to start spinning infinitely
     setRefreshing(true);
 
     if (user) {
       try {
-        // Waits for EVERY request to finish (success or 504 timeout)
         await Promise.allSettled([
           dispatch(fetchDashboardData(user)),
           dispatch(fetchSolversPerformance(user)),
@@ -142,19 +120,12 @@ export default function DashboardScreen() {
           dispatch(fetchComplaints(user))
         ]);
       } finally {
-        // Guarantees the spinner stops only when everything is done
         setRefreshing(false);
       }
     } else {
       setRefreshing(false);
     }
   }, [user, isOnline, dispatch]);
-
-  // Interpolate rotation
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg']
-  });
 
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -297,7 +268,6 @@ export default function DashboardScreen() {
     : 0;
   const barSegments = getOptimalSegments(barDataMax);
 
-
   // ==========================================
   // UI RENDER
   // ==========================================
@@ -334,13 +304,12 @@ export default function DashboardScreen() {
               disabled={refreshing}
               style={styles.refreshButton}
             >
-              <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                <Ionicons 
-                  name="sync" 
-                  size={22} 
-                  color={refreshing ? theme.primary : theme.textSecondary} 
-                />
-              </Animated.View>
+              {/* Simplified static button, the spinner component handles the animation */}
+              <Ionicons 
+                name="sync" 
+                size={22} 
+                color={refreshing ? theme.primary : theme.textSecondary} 
+              />
             </TouchableOpacity>
           )}
 
@@ -564,17 +533,8 @@ export default function DashboardScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* ── FULL SCREEN REFRESH OVERLAY ── */}
-      {refreshing && (
-        <View style={[styles.refreshOverlay, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
-          <Animated.View style={{ transform: [{ rotate: spin }] }}>
-            <Ionicons name="sync" size={54} color={theme.primary} />
-          </Animated.View>
-          <Text style={[styles.refreshOverlayText, { color: theme.text }]}>
-            Updating Dashboard...
-          </Text>
-        </View>
-      )}
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Dashboard..." />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -613,17 +573,4 @@ const styles = StyleSheet.create({
   viewAllButton: { paddingVertical: 16, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
   viewAllText: { fontSize: 13, fontWeight: '600' },
   bottomPadding: { height: 40 },
-
-  refreshOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  refreshOverlayText: {
-    marginTop: 20,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
 });
