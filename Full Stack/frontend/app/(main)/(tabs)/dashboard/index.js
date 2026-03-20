@@ -313,6 +313,12 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           )}
 
+
+          {/* ── NEW: Navigate to Chat via Arrow ── */}
+          <TouchableOpacity onPress={() => router.push('/(main)/(tabs)/chat')} activeOpacity={0.7} style={{ marginRight: 4, padding: 4 }}>
+            <Ionicons name="arrow-undo-outline" size={24} color={theme.text} />
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
             <Avatar uri={user?.avatar} name={user?.name} size="medium" />
           </TouchableOpacity>

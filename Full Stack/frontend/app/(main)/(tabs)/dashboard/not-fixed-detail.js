@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -6,7 +6,8 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Alert,
-  Platform 
+  Platform,
+  RefreshControl 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -30,6 +31,13 @@ import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import Loader from '../../../../src/components/common/Loader';
 
+// ── ADDED REUSABLE IMPORTS & MISSING COMPONENTS ──
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+import Avatar from '../../../../src/components/common/Avatar';
+import { formatDate } from '../../../../src/utils/formatters';
+
 export default function NotFixedDetailScreen() {
   const { theme, isDark } = useTheme(); 
   const router = useRouter();
@@ -37,11 +45,14 @@ export default function NotFixedDetailScreen() {
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
   
-  // ✅ Prioritize full API response over the cached list response
   const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
   const fullIssue = useSelector(selectCurrentIssue);
   const timeline = useSelector(selectIssueTimeline) || [];
   const loading = useSelector(selectIssuesLoading);
+  const isOnline = useSelector(selectIsOnline);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const issue = (fullIssue && fullIssue.id === parseInt(id)) ? fullIssue : cachedIssue;
 
@@ -53,21 +64,48 @@ export default function NotFixedDetailScreen() {
     return () => { dispatch(clearCurrentIssue()); };
   }, [id, dispatch]);
 
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    if (!id) return;
+    
+    setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        dispatch(fetchIssueById(parseInt(id))),
+        dispatch(fetchIssueTimeline(parseInt(id)))
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [id, isOnline, dispatch]);
+
   const overdueDays = issue ? calculateOverdueDays(issue.deadline_at, issue.status) : null;
 
-  if (loading || !issue) return <Loader message="Loading issue details..." />;
+  if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
+  if (!issue) return <Loader message="Loading issue details..." />;
 
-  // ── SMART DATA EXTRACTION ──
+  // ── SMART DATA EXTRACTION (Mapped to exact JSON response) ──
   const siteName = issue.site_name || issue.site?.name || 'N/A';
   const siteLocation = issue.site_location || issue.site?.location || null;
+  const raisedByName = issue.supervisor_name || 'N/A';
+  
+  const currentAssignment = issue.assignments && issue.assignments.length > 0 
+    ? issue.assignments[0] 
+    : null;
+    
+  const solverName = currentAssignment?.solver_name || null;
 
   // ── PREMIUM PALETTE ──
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
+  const pendingAccent = '#f59e0b';
   
-  // Refined Warning Palette
   const warningBg = isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2';
   const warningBorder = isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2';
 
@@ -80,10 +118,31 @@ export default function NotFixedDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Pending Issue</Text>
-        <View style={styles.placeholder} />
+        
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? pendingAccent : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
+      >
         
         {/* ── REFINED WARNING BANNER ── */}
         {overdueDays > 0 && (
@@ -114,9 +173,9 @@ export default function NotFixedDetailScreen() {
           <Text style={[styles.description, { color: theme.textSecondary }]}>{issue.description}</Text>
         </View>
 
-        {/* ── LOCATION ── */}
+        {/* ── DETAILS & LOCATION ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Location</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Details</Text>
           
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
@@ -128,7 +187,6 @@ export default function NotFixedDetailScreen() {
             </View>
           </View>
 
-          {/* ✅ ADDED: Safe location check */}
           {siteLocation && (
             <View style={[styles.infoRow, { marginTop: 16 }]}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
@@ -140,17 +198,63 @@ export default function NotFixedDetailScreen() {
               </View>
             </View>
           )}
+
+          {/* ✅ Mapped from JSON: deadline_at */}
+          {issue.deadline_at && (
+            <View style={[styles.infoRow, { marginTop: 16 }]}>
+              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+                <Ionicons name="calendar-outline" size={18} color={theme.textSecondary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Deadline</Text>
+                <Text style={[styles.infoValue, { color: theme.text }]}>{formatDate(issue.deadline_at)}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
-        {/* ── PHOTOS (Using ImageGallery component) ── */}
+        {/* ── PEOPLE INVOLVED ── */}
+        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
+          <View style={styles.peopleGrid}>
+            <View style={[styles.personRow, solverName && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              {/* ✅ Mapped from JSON: supervisor_name */}
+              <Avatar name={raisedByName} size="medium" />
+              <View style={styles.personInfo}>
+                <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
+                  {raisedByName}
+                </Text>
+                <Text style={[styles.personRole, { color: theme.textSecondary }]}>Raised By</Text>
+              </View>
+            </View>
+            
+            {/* ✅ Mapped from JSON: assignments array */}
+            {solverName && (
+              <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
+                <Avatar name={solverName} size="medium" />
+                <View style={styles.personInfo}>
+                  <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
+                    {solverName}
+                  </Text>
+                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
+                </View>
+                {currentAssignment?.solver_phone && (
+                   <Text style={[styles.personRole, { color: theme.textSecondary, marginTop: 4 }]}>
+                     {currentAssignment.solver_phone}
+                   </Text>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* ── PHOTOS ── */}
         {issue.images && issue.images.length > 0 && (
           <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Attached Media</Text>
             <ImageGallery images={issue.images} />
           </View>
         )}
-
-       
 
         {/* ── ACTIONS ── */}
         <View style={styles.actions}>
@@ -174,6 +278,11 @@ export default function NotFixedDetailScreen() {
         
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* ── FULL SCREEN SPINNER ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Details..." color={pendingAccent} />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -190,7 +299,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   warningBanner: { 
     flexDirection: 'row', 
@@ -254,6 +365,17 @@ const styles = StyleSheet.create({
   infoContent: { flex: 1, justifyContent: 'center' },
   infoLabel: { fontSize: 12, fontWeight: '500', marginBottom: 2 },
   infoValue: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
+
+  peopleGrid: { flexDirection: 'column' },
+  personRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, 
+    paddingBottom: 12 
+  },
+  personInfo: { flex: 1, justifyContent: 'center' },
+  personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
+  personRole: { fontSize: 13 },
   
   actions: { marginHorizontal: 16, marginTop: 32 },
   bottomPadding: { height: 40 },
