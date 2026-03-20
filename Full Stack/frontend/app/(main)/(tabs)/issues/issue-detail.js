@@ -1,12 +1,4 @@
-import { useDispatch, useSelector } from 'react-redux';
-import { 
-  fetchIssueById, 
-  fetchIssueTimeline, 
-  selectIssueById, 
-  selectCurrentIssue, 
-  selectIssueTimeline 
-} from '../../../../src/store/slices/issuesSlice';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,19 +8,35 @@ import {
   Image,
   Animated,
   Platform,
-  Alert, // ✅ Added Alert import
+  Alert,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
+
 import { useTheme } from '../../../../src/theme/ThemeContext';
+import { 
+  fetchIssueById, 
+  fetchIssueTimeline, 
+  selectIssueById, 
+  selectCurrentIssue, 
+  selectIssueTimeline,
+  selectIssuesLoading
+} from '../../../../src/store/slices/issuesSlice';
 import { formatDate, formatDateTime } from '../../../../src/utils/formatters';
 import { calculateOverdueDays } from '../../../../src/utils/overdue';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import Loader from '../../../../src/components/common/Loader';
 import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
-import Button from '../../../../src/components/common/Button'; // ✅ Added Button import
+import Button from '../../../../src/components/common/Button'; 
+
+// ── ADDED REUSABLE IMPORTS ──
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function IssueDetailScreen() {
   const { theme, isDark } = useTheme(); 
@@ -40,6 +48,11 @@ export default function IssueDetailScreen() {
   const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
   const fullIssue = useSelector(selectCurrentIssue);
   const timeline = useSelector(selectIssueTimeline) || [];
+  const loading = useSelector(selectIssuesLoading);
+  const isOnline = useSelector(selectIsOnline);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const issue = (fullIssue && fullIssue.id === parseInt(id)) ? fullIssue : cachedIssue;
 
@@ -61,11 +74,31 @@ export default function IssueDetailScreen() {
         useNativeDriver: false,
       }).start();
     }
-  }, [highlighted]);
+  }, [highlighted, highlightAnim]);
 
-  if (!issue) {
-    return <Loader message="Loading issue details..." />;
-  }
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    if (!id) return;
+    
+    setRefreshing(true);
+    try {
+      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+      await Promise.allSettled([
+        dispatch(fetchIssueById(parseInt(id))),
+        dispatch(fetchIssueTimeline(parseInt(id)))
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [id, isOnline, dispatch]);
+
+  // 📍 FIX: Added `!refreshing` to prevent Loader hijacking
+  if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
+  if (!issue) return <Loader message="Loading issue details..." />;
 
   // ── SMART DATA EXTRACTION ──
   const siteName = issue.site_name || issue.site?.name || 'N/A';
@@ -131,10 +164,33 @@ export default function IssueDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
-        <View style={styles.placeholder} />
+        
+        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        // 📍 FIX: Disables double spinner on web
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
+      >
         
         <Animated.View style={[styles.card, styles.flatCard, { backgroundColor: highlightColor, borderColor }]}>
           <Text style={[styles.issueTitle, { color: theme.text }]}>{issue.title}</Text>
@@ -413,6 +469,11 @@ export default function IssueDetailScreen() {
         
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Issue..." color={theme.primary} />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -429,7 +490,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   content: { flex: 1 },
   
@@ -527,6 +590,6 @@ const styles = StyleSheet.create({
   historyDetails: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
   historyTime: { fontSize: 12, fontWeight: '500' },
   
-  actions: { marginHorizontal: 16, marginTop: 32 }, // ✅ Added actions style
+  actions: { marginHorizontal: 16, marginTop: 32 },
   bottomPadding: { height: 40 },
 });

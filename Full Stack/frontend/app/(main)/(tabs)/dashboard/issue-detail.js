@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,6 +26,11 @@ import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import CallHistorySection from '../../../../src/components/issue/CallHistorySection';
 import Loader from '../../../../src/components/common/Loader';
+
+// ── ADDED REUSABLE IMPORTS ──
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function IssueDetailScreen() {
   const { theme, isDark } = useTheme(); 
@@ -54,6 +60,10 @@ export default function IssueDetailScreen() {
   const user = useSelector(selectCurrentUser);
   const issue = useSelector(selectCurrentIssue);
   const loading = useSelector(selectIssuesLoading);
+  const isOnline = useSelector(selectIsOnline);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -62,15 +72,34 @@ export default function IssueDetailScreen() {
     return () => {
       dispatch(clearCurrentIssue());
     };
-  }, [id]);
+  }, [id, dispatch]);
+
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    if (!id) return;
+    
+    setRefreshing(true);
+    try {
+      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+      await Promise.allSettled([
+        dispatch(fetchIssueById(parseInt(id)))
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [id, isOnline, dispatch]);
 
   const handleAction = (action) => {
     Alert.alert('Coming Soon', `${action} functionality will be available in Phase 2-3`);
   };
 
-  if (loading || !issue) {
-    return <Loader message="Loading issue details..." />;
-  }
+  // 📍 FIX: Added `!refreshing` to prevent Loader hijacking
+  if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
+  if (!issue) return <Loader message="Loading issue details..." />;
 
   // ── SAFEGUARD FOR ASSIGNMENTS (Backend sends an array now) ──
   const currentAssignment = issue.assignments && issue.assignments.length > 0 
@@ -92,10 +121,33 @@ export default function IssueDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
-        <View style={styles.placeholder} />
+        
+        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        // 📍 FIX: Disables double spinner on web
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
+      >
         
         {/* ── ISSUE IDENTITY ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
@@ -202,8 +254,6 @@ export default function IssueDetailScreen() {
           <ImageGallery images={issue.images || []} />
         </View>
 
-    
-
         {/* ── CALL HISTORY (Solver Only) ── */}
         {user?.role === 'problem_solver' && issue.call_logs?.length > 0 && (
           <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor, padding: 0, overflow: 'hidden' }]}>
@@ -259,6 +309,11 @@ export default function IssueDetailScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Issue Details..." color={theme.primary} />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -275,7 +330,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   content: { flex: 1 },
   
