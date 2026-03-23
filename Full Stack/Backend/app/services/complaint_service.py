@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select, func
 
 from app.models.user import User
 from app.models.issue import Issue
@@ -141,30 +142,75 @@ class ComplaintService:
     # READ-ONLY: For API
     # ══════════════════════════════════════════════════════
 
-    def list_complaints(self, current_user, issue_id=None, solver_id=None, skip=0, limit=20):
-        q = self.db.query(Complaint)
+    async def list_complaints(
+        self,
+        current_user,
+        issue_id=None,
+        solver_id=None,
+        skip=0,
+        # limit=20,
+    ):
 
+        # Base query
+        stmt = select(Complaint)
+
+        # Role based filtering
         if current_user.role == UserRole.SUPERVISOR:
-            q = q.filter(Complaint.raised_by_supervisor_id == current_user.id)
+            stmt = stmt.where(
+                Complaint.raised_by_supervisor_id == current_user.id
+            )
+
         elif current_user.role == UserRole.PROBLEMSOLVER:
-            q = q.filter(Complaint.target_solver_id == current_user.id)
+            stmt = stmt.where(
+                Complaint.target_solver_id == current_user.id
+            )
 
+        # Optional filters
         if issue_id:
-            q = q.filter(Complaint.issue_id == issue_id)
-        if solver_id:
-            q = q.filter(Complaint.target_solver_id == solver_id)
+            stmt = stmt.where(Complaint.issue_id == issue_id)
 
-        total = q.count()
-        items = q.order_by(Complaint.created_at.desc()).offset(skip).limit(limit).all()
+        if solver_id:
+            stmt = stmt.where(Complaint.target_solver_id == solver_id)
+
+        # ─────────────────────────────
+        # COUNT QUERY
+        # ─────────────────────────────
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+
+        total = (await self.db.execute(count_stmt)).scalar()
+
+        # ─────────────────────────────
+        # FETCH ITEMS
+        # ─────────────────────────────
+
+        stmt = (
+            stmt
+            .order_by(Complaint.created_at.desc())
+            .offset(skip)
+            # .limit()
+        )
+
+        result = await self.db.execute(stmt)
+
+        # scalars() returns Complaint ORM objects
+        items = result.scalars().all()
 
         return ComplaintListResponse(
             total=total,
             complaints=[self._to_response(c) for c in items],
         )
 
-    def get_complaint(self, complaint_id: int):
-        c = self.db.query(Complaint).filter(Complaint.id == complaint_id).first()
-        return self._to_response(c) if c else None
+    async def get_complaint(self, complaint_id: int):
+
+        stmt = select(Complaint).where(Complaint.id == complaint_id)
+
+        result = await self.db.execute(stmt)
+
+        # returns Complaint object or None
+        complaint = result.scalar_one_or_none()
+
+        return self._to_response(complaint) if complaint else None
 
     def _to_response(self, c):
         return ComplaintResponse(

@@ -5,31 +5,78 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
-import { fetchIssueById, selectCurrentIssue, selectIssuesLoading, clearCurrentIssue } from '../../../../src/store/slices/issuesSlice';
-import { formatDate, formatDurationFromDates } from '../../../../src/utils/formatters';
-import Card from '../../../../src/components/common/Card';
+import { 
+  fetchIssueById, 
+  fetchIssueTimeline,
+  selectIssueById,
+  selectCurrentIssue,
+  selectIssueTimeline,
+  selectIssuesLoading, 
+  clearCurrentIssue 
+} from '../../../../src/store/slices/issuesSlice';
+import { formatDate, formatDateTime } from '../../../../src/utils/formatters';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
-import Avatar from '../../../../src/components/common/Avatar';
-import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import ImageGallery from '../../../../src/components/issue/ImageGallery';
+import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import Loader from '../../../../src/components/common/Loader';
 
 export default function FixedDetailScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
+  const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const dispatch = useDispatch();
-  const issue = useSelector(selectCurrentIssue);
+
+  // ✅ Prioritize full API response over the cached list response
+  const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
+  const fullIssue = useSelector(selectCurrentIssue);
+  const timeline = useSelector(selectIssueTimeline) || [];
   const loading = useSelector(selectIssuesLoading);
 
+  const issue = (fullIssue && fullIssue.id === parseInt(id)) ? fullIssue : cachedIssue;
+
   useEffect(() => {
-    if (id) dispatch(fetchIssueById(parseInt(id)));
-    return () => { dispatch(clearCurrentIssue()); };
-  }, [id]);
+    if (id) {
+      dispatch(fetchIssueById(parseInt(id)));
+      dispatch(fetchIssueTimeline(parseInt(id)));
+    }
+    return () => { 
+      dispatch(clearCurrentIssue()); 
+    };
+  }, [id, dispatch]);
 
   if (loading || !issue) return <Loader message="Loading issue details..." />;
 
-  const resolutionTime = formatDurationFromDates(issue.created_at, issue.updated_at);
+  // ── SMART DATA EXTRACTION ──
+  const raisedByName = issue.supervisor_name || issue.raised_by?.name || 'N/A';
+  
+  const currentAssignment = issue.assignments && issue.assignments.length > 0 
+    ? issue.assignments[0] 
+    : issue.assignment || null;
+
+  const solverName = currentAssignment?.solver_name || currentAssignment?.assigned_to?.name || null;
+
+  // ── 🕒 PROFESSIONAL TIME CALCULATION ──
+  const calculateProfessionalTime = (start, end) => {
+    if (!start || !end) return 'N/A';
+    const diffInMs = new Date(end).getTime() - new Date(start).getTime();
+    if (diffInMs <= 0) return '0 hrs';
+    
+    const totalHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+
+    if (days > 0) {
+      return `${days}d ${remainingHours > 0 ? `${remainingHours}h` : ''}`.trim();
+    }
+    return `${totalHours}h`;
+  };
+
+  const resolutionTime = calculateProfessionalTime(issue.created_at, issue.updated_at);
+
+  const getInitials = (name) => {
+    if (!name || name === 'N/A') return 'NA';
+    return name.substring(0, 2).toUpperCase();
+  };
 
   // ── PREMIUM PALETTE ──
   const bgColor = isDark ? '#212121' : '#f9f9f9';
@@ -69,7 +116,7 @@ export default function FixedDetailScreen() {
           <View style={styles.badges}>
             <StatusBadge status={issue.priority} type="priority" size="small" />
             <View style={[styles.typeTag, { backgroundColor: iconBg }]}>
-              <Text style={[styles.typeText, { color: theme.text }]}>{issue.issue_type}</Text>
+              <Text style={[styles.typeText, { color: theme.text }]}>{issue.issue_type || 'General'}</Text>
             </View>
           </View>
         </View>
@@ -80,7 +127,7 @@ export default function FixedDetailScreen() {
             <View style={[styles.metricIconWrapper, { backgroundColor: successBg }]}>
               <Ionicons name="time-outline" size={20} color={successColor} />
             </View>
-            <Text style={[styles.metricValue, { color: theme.text }]}>{resolutionTime || 'N/A'}</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>{resolutionTime}</Text>
             <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Resolution Time</Text>
           </View>
           
@@ -88,36 +135,42 @@ export default function FixedDetailScreen() {
             <View style={[styles.metricIconWrapper, { backgroundColor: iconBg }]}>
               <Ionicons name="cellular-outline" size={20} color={theme.textSecondary} />
             </View>
-            <Text style={[styles.metricValue, { color: theme.text }]}>{issue.callLogs?.length || 0}</Text>
+            <Text style={[styles.metricValue, { color: theme.text }]}>
+              {currentAssignment?.total_call_attempts || 0}
+            </Text>
             <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Call Attempts</Text>
           </View>
         </View>
 
-        {/* ── PHOTOS ── */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Before & After</Text>
-          <ImageGallery images={issue.images} />
-        </View>
+        {/* ── PHOTOS (Using ImageGallery component to prevent DOM crashes) ── */}
+        {issue.images && issue.images.length > 0 && (
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Before & After</Text>
+            <ImageGallery images={issue.images} />
+          </View>
+        )}
 
         {/* ── PARTICIPANTS ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Participants</Text>
           <View style={styles.peopleGrid}>
-            {issue.raisedBy && (
-              <View style={[styles.personRow, { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-                <Avatar uri={issue.raisedBy.avatar} name={issue.raisedBy.name} size="medium" />
-                <View style={styles.personInfo}>
-                  <Text style={[styles.personName, { color: theme.text }]}>{issue.raisedBy.name}</Text>
-                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Supervisor</Text>
-                </View>
+            <View style={[styles.personRow, solverName && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <View style={[styles.avatarCircle, { backgroundColor: '#3b82f6' }]}>
+                <Text style={styles.avatarText}>{getInitials(raisedByName)}</Text>
               </View>
-            )}
+              <View style={styles.personInfo}>
+                <Text style={[styles.personName, { color: theme.text }]}>{raisedByName}</Text>
+                <Text style={[styles.personRole, { color: theme.textSecondary }]}>Supervisor</Text>
+              </View>
+            </View>
             
-            {issue.solver && (
+            {solverName && (
               <View style={[styles.personRow, { paddingTop: 12 }]}>
-                <Avatar uri={issue.solver.avatar} name={issue.solver.name} size="medium" />
+                <View style={[styles.avatarCircle, { backgroundColor: '#10a37f' }]}>
+                  <Text style={styles.avatarText}>{getInitials(solverName)}</Text>
+                </View>
                 <View style={styles.personInfo}>
-                  <Text style={[styles.personName, { color: theme.text }]}>{issue.solver.name}</Text>
+                  <Text style={[styles.personName, { color: theme.text }]}>{solverName}</Text>
                   <Text style={[styles.personRole, { color: theme.textSecondary }]}>Solver</Text>
                 </View>
                 <Ionicons name="checkmark-done" size={20} color={successColor} />
@@ -129,7 +182,13 @@ export default function FixedDetailScreen() {
         {/* ── TIMELINE ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Full Timeline</Text>
-          <IssueTimeline history={issue.history || []} />
+          {timeline && timeline.length > 0 ? (
+            <IssueTimeline history={timeline} />
+          ) : (
+            <Text style={[styles.description, { color: theme.textSecondary, fontStyle: 'italic' }]}>
+              No timeline available.
+            </Text>
+          )}
         </View>
 
         <View style={styles.bottomPadding} />
@@ -183,7 +242,7 @@ const styles = StyleSheet.create({
   metricsContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 16, gap: 12 },
   metricCard: { flex: 1, padding: 16, alignItems: 'flex-start' },
   metricIconWrapper: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  metricValue: { fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginBottom: 2, fontVariant: ['tabular-nums'] },
+  metricValue: { fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 2 },
   metricLabel: { fontSize: 12, fontWeight: '500' },
   
   sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
@@ -198,6 +257,19 @@ const styles = StyleSheet.create({
   personInfo: { flex: 1, justifyContent: 'center' },
   personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
   personRole: { fontSize: 13 },
+
+  avatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 
   bottomPadding: { height: 40 },
 });

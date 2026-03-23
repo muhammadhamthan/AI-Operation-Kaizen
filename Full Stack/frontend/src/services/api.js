@@ -182,6 +182,7 @@ export const fetchIssues = async (filters = {}) => {
       () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
       { maxRetries: 2 }
     );
+    console.log(response)
 
     // Transform response to match frontend expectations
     // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }
@@ -272,34 +273,80 @@ export const fetchIssueTimeline = async (issueId) => {
     };
   }
 };
-
 // ==================== DASHBOARD API ====================
-
 /**
  * Fetch dashboard statistics
  */
 export const fetchDashboardStats = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/dashboard/stats'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/dashboard');
+    const data = response?.data || {};
 
+    // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
+    if (data.active_assignments) {
+      return {
+        success: true,
+        data: {
+          isSolverView: true,
+          stats: {
+            totalIssues: (data.total_active || 0) + (data.total_completed || 0),
+            notFixedIssues: data.total_active || 0,
+            fixedIssues: data.total_completed || 0,
+            complaints: data.complaints_against || 0
+          },
+          recentIssues: data.active_assignments.map(a => ({
+            id: a.issue_id,
+            title: a.issue_title,
+            site_name: a.site_name,
+            priority: a.priority,
+            status: "ASSIGNED", // Default status for assignments
+            created_at: a.due_date // Use due date for sorting/charts
+          }))
+        }
+      };
+    }
+
+    // 👔 MANAGER / SUPERVISOR PAYLOAD
+    const summary = data.summary || {};
     return {
       success: true,
-      stats: response.data,
+      data: {
+        isSolverView: false,
+        stats: {
+          totalIssues: summary.total_issues || 0,
+          notFixedIssues: 
+            (summary.open_issues || 0) + 
+            (summary.assigned_issues || 0) + 
+            (summary.in_progress_issues || 0) + 
+            (summary.reopened_issues || 0) + 
+            (summary.escalated_issues || 0),
+          fixedIssues: summary.completed_issues || 0,
+          complaints: 0
+        },
+        rawSummary: summary,
+        alerts: {
+          // ✅ FIXED: Mapping to exact keys from your Manager JSON
+          escalations: data.active_escalations || 0,
+          deadlines: data.overdue_issues || 0,
+          pendingReviews: summary.resolved_pending_review || 0
+        },
+        recentIssues: data.recent_issues || [],
+        mySites: data.my_sites || []
+      }
     };
+
   } catch (error) {
     console.error('Fetch dashboard error:', error.response?.data || error.message);
     return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch dashboard',
-      stats: {
-        totalIssues: 0,
-        notFixedIssues: 0,
-        fixedIssues: 0,
-        complaints: 0,
-      },
+      success: true, // Fallback
+      data: {
+        isSolverView: false,
+        stats: { totalIssues: 0, notFixedIssues: 0, fixedIssues: 0, complaints: 0 },
+        rawSummary: {},
+        alerts: { escalations: 0, deadlines: 0, pendingReviews: 0 },
+        recentIssues: [],
+        mySites: []
+      }
     };
   }
 };
@@ -311,22 +358,65 @@ export const fetchDashboardStats = async () => {
  */
 export const fetchComplaints = async () => {
   try {
-    const response = await withRetry(
-      () => api.get('/complaints'),
-      { maxRetries: 2 }
-    );
+    const response = await api.get('/api/v1/complaints');
+
+    const complaints = response.data.complaints.map(c => ({
+      ...c,
+
+      // map supervisor
+      raisedBy: {
+        name: c.supervisor_name,
+      },
+
+      // map solver
+      targetSolver: {
+        name: c.solver_name,
+      },
+
+      // issue object expected in UI
+      issue: {
+        title: c.issue_title
+      },
+
+      // temporary status since backend doesn't send it
+      status: "OPEN"
+    }));
 
     return {
       success: true,
-      complaints: response.data,
+      complaints,
     };
+
   } catch (error) {
-    console.error('Fetch complaints error:', error.response?.data || error.message);
     return {
       success: false,
-      error: error.response?.data?.detail || 'Failed to fetch complaints',
       complaints: [],
     };
+  }
+};
+
+export const fetchComplaintById = async (id) => {
+  try {
+    const response = await api.get(`/api/v1/complaints/${id}`);
+
+    const c = response.data;
+
+    return {
+      ...c,
+      raisedBy: {
+        name: c.supervisor_name,
+      },
+      targetSolver: {
+        name: c.solver_name,
+      },
+      issue: {
+        title: c.issue_title
+      },
+      status: "OPEN"
+    };
+
+  } catch (error) {
+    throw error;
   }
 };
 
@@ -348,6 +438,44 @@ export const fetchSites = async () => {
       success: false,
       error: error.response?.data?.detail || 'Failed to fetch sites',
       sites: [],
+    };
+  }
+};
+
+export const fetchSitesAnalytics = async () => {
+ try {
+    const response = await api.get('/api/v1/sites/analytics');
+
+    return {
+      success: true,
+      sites: response.data.sites,
+    };
+
+  } catch (error) {
+    console.error("Fetch sites error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      sites: [],
+      error: error.response?.data?.detail || "Failed to fetch sites",
+    };
+  }
+};
+
+export const fetchSolversPerformanceAPI = async () => {
+  try {
+    const response = await api.get('/api/v1/solvers');
+
+    return {
+      success: true,
+      solvers: response.data.solvers,
+    };
+
+  } catch (error) {
+    return {
+      success: false,
+      solvers: [],
+      error: error.response?.data?.detail || "Failed to fetch solvers",
     };
   }
 };
