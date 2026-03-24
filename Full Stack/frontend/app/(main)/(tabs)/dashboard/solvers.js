@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   RefreshControl,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,8 +22,13 @@ import {
   selectPerformanceLoading,
 } from "../../../../src/store/slices/performanceSlice"
 import Loader from '../../../../src/components/common/Loader';
-import EmptyState from "../../../../src/components/common/EmptyState"
+import EmptyState from "../../../../src/components/common/EmptyState";
 import Avatar from '../../../../src/components/common/Avatar';
+
+// ── ADDED MISSING IMPORTS FOR STANDARD PATTERN ──
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function SolversScreen() {
   const { theme, isDark } = useTheme();
@@ -32,9 +38,11 @@ export default function SolversScreen() {
   const user = useSelector(selectCurrentUser);
   const solvers = useSelector(selectAllSolvers);
   const loading = useSelector(selectPerformanceLoading);
+  const isOnline = useSelector(selectIsOnline); // Added for safety
 
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState(''); // Added for Toast
 
   useEffect(() => {
     if (user) {
@@ -43,11 +51,23 @@ export default function SolversScreen() {
   }, [dispatch, user]);
 
   const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
     if (!user) return;
+    
     setRefreshing(true);
-    await dispatch(fetchSolversPerformance(user));
-    setRefreshing(false);
-  }, [dispatch, user]);
+    try {
+      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+      await Promise.allSettled([
+        dispatch(fetchSolversPerformance(user))
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [dispatch, user, isOnline]);
 
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -63,7 +83,6 @@ export default function SolversScreen() {
     });
   }, [searchText, solvers]);
 
-  // Use the exact color from the backend if available, otherwise calculate it
   const getScoreColor = (score, backendColor) => {
     if (backendColor) return backendColor;
     if (score >= 75) return '#10a37f';
@@ -74,21 +93,19 @@ export default function SolversScreen() {
   const getLabelIcon = label => {
     if (label === 'Top Performer') return 'trophy-outline';
     if (label === 'Good' || label === 'Average') return 'speedometer-outline';
-    return 'alert-circle-outline'; // For "Needs Attention"
+    return 'alert-circle-outline'; 
   };
 
   const renderItem = ({ item }) => {
     const perf = item.performance || {};
     const scoreColor = getScoreColor(perf.score, perf.label_color);
 
-    // ✅ FIXED: Matched exact snake_case variables from backend JSON
     const activeCount =
       (perf.in_progress_count || 0) +
       (perf.assigned_not_started_count || 0) +
       (perf.reopened_count || 0) +
-      (perf.active_count || 0); // Added active_count just in case
+      (perf.active_count || 0); 
 
-    // Format skills array for display (e.g. ["electrical", "hvac"] -> "Electrical, Hvac")
     const displaySkills = item.skills?.length > 0 
       ? item.skills.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')
       : 'Problem Solver';
@@ -174,7 +191,7 @@ export default function SolversScreen() {
             <Text
               style={[styles.metricValue, { color: theme.text }]}
             >
-              {perf.completed_count || 0} {/* ✅ FIXED */}
+              {perf.completed_count || 0}
             </Text>
           </View>
           <View style={styles.metric}>
@@ -188,11 +205,11 @@ export default function SolversScreen() {
                 styles.metricValue,
                 {
                   color:
-                    (perf.complaint_count || 0) > 0 ? '#ef4444' : theme.text, // ✅ FIXED
+                    (perf.complaint_count || 0) > 0 ? '#ef4444' : theme.text, 
                 },
               ]}
             >
-              {perf.complaint_count || 0} {/* ✅ FIXED */}
+              {perf.complaint_count || 0} 
             </Text>
           </View>
         </View>
@@ -220,7 +237,7 @@ export default function SolversScreen() {
                 { color: theme.textSecondary },
               ]}
             >
-              Completion {perf.completion_rate || 0}% {/* ✅ FIXED */}
+              Completion {perf.completion_rate || 0}% 
             </Text>
             <View style={styles.dot} />
             <Text
@@ -229,7 +246,7 @@ export default function SolversScreen() {
                 { color: theme.textSecondary },
               ]}
             >
-              On-time {perf.on_time_rate || 0}% {/* ✅ FIXED */}
+              On-time {perf.on_time_rate || 0}% 
             </Text>
           </View>
         </View>
@@ -237,7 +254,8 @@ export default function SolversScreen() {
     );
   };
 
-  if (loading && solvers.length === 0) return <Loader message="Loading team performance..." />;
+  // 📍 FIX: Added `&& !refreshing` to prevent Loader hijacking
+  if (loading && solvers.length === 0 && !refreshing) return <Loader message="Loading team performance..." />;
 
   return (
     <SafeAreaView
@@ -269,12 +287,21 @@ export default function SolversScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={() => router.push('/(main)/profile')}
-          activeOpacity={0.7}
-        >
-          <Avatar uri={user?.avatar} name={user?.name} size="medium" />
-        </TouchableOpacity>
+        
+        {/* 📍 FIX: Added Header Actions Row for Sync + Avatar */}
+        <View style={styles.headerActions}>
+          {Platform.OS === 'web' && (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            onPress={() => router.push('/(main)/profile')}
+            activeOpacity={0.7}
+          >
+            <Avatar uri={user?.avatar} name={user?.name} size="medium" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* SEARCH */}
@@ -325,15 +352,23 @@ export default function SolversScreen() {
           renderItem={renderItem}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          // 📍 FIX: Disables double spinner on web
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={theme.textSecondary}
-            />
+            Platform.OS === 'web' ? undefined : (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={theme.textSecondary}
+              />
+            )
           }
         />
       )}
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Team..." />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -353,6 +388,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, // Added for spacing
   backButton: {
     padding: 4,
     marginLeft: -4,
@@ -367,6 +403,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 4,
   },
+  webRefreshButton: { padding: 8 }, // Added for touch target
   searchContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,

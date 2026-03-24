@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -16,7 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { fetchIssueById, selectCurrentIssue, selectIssuesLoading, clearCurrentIssue } from '../../../../src/store/slices/issuesSlice';
-// ✅ ADDED: Brought over your formatters from the other file so dates look clean
 import { formatDate } from '../../../../src/utils/formatters'; 
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
@@ -26,13 +26,16 @@ import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import CallHistorySection from '../../../../src/components/issue/CallHistorySection';
 import Loader from '../../../../src/components/common/Loader';
 
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
 export default function IssueDetailScreen() {
   const { theme, isDark } = useTheme(); 
   const router = useRouter();
   
   const { id, fromNotification } = useLocalSearchParams();
 
-  // ── LOGIC UNTOUCHED ──
   const handleSmartBack = useCallback(() => {
     if (fromNotification === 'true') {
       router.replace('/(main)/(tabs)/dashboard');
@@ -54,6 +57,10 @@ export default function IssueDetailScreen() {
   const user = useSelector(selectCurrentUser);
   const issue = useSelector(selectCurrentIssue);
   const loading = useSelector(selectIssuesLoading);
+  const isOnline = useSelector(selectIsOnline);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -62,26 +69,53 @@ export default function IssueDetailScreen() {
     return () => {
       dispatch(clearCurrentIssue());
     };
-  }, [id]);
+  }, [id, dispatch]);
+
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    if (!id) return;
+    
+    setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        dispatch(fetchIssueById(parseInt(id)))
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [id, isOnline, dispatch]);
 
   const handleAction = (action) => {
     Alert.alert('Coming Soon', `${action} functionality will be available in Phase 2-3`);
   };
 
-  if (loading || !issue) {
-    return <Loader message="Loading issue details..." />;
-  }
+  if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
+  if (!issue) return <Loader message="Loading issue details..." />;
 
-  // ── SAFEGUARD FOR ASSIGNMENTS (Backend sends an array now) ──
   const currentAssignment = issue.assignments && issue.assignments.length > 0 
     ? issue.assignments[0] 
     : null;
 
-  // ── PREMIUM PALETTE ──
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
+
+  
+  // ── ROLE + STATUS DERIVED FLAGS ──
+  const isProblemSolver = user?.role === 'problemsolver';
+  const isSupervisor    = user?.role === 'supervisor';
+  const isManager       = user?.role === 'manager';
+
+  const showMarkDoneBtn   = isProblemSolver && issue.status === 'IN_PROGRESS';
+  const showApproveBtn    = (isSupervisor || isManager) && issue.status === 'RESOLVED_PENDING_REVIEW';
+
+    console.log(user , "hfghiegipefigp")
+
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -92,10 +126,31 @@ export default function IssueDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
-        <View style={styles.placeholder} />
+        
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
+      >
         
         {/* ── ISSUE IDENTITY ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
@@ -119,12 +174,10 @@ export default function IssueDetailScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Site</Text>
-              {/* ✅ Mapped to flat site_name */}
               <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site_name || 'N/A'}</Text>
             </View>
           </View>
 
-          {/* ✅ Render site_location safely */}
           {issue.site_location && (
             <View style={styles.infoRow}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
@@ -137,7 +190,6 @@ export default function IssueDetailScreen() {
             </View>
           )}
 
-          {/* ✅ Added Due Date from the assignment block */}
           {currentAssignment?.due_date && (
             <View style={styles.infoRow}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
@@ -166,7 +218,6 @@ export default function IssueDetailScreen() {
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
           <View style={styles.peopleGrid}>
             <View style={[styles.personRow, currentAssignment && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-              {/* ✅ Mapped to flat supervisor_name */}
               <Avatar name={issue.supervisor_name} size="medium" />
               <View style={styles.personInfo}>
                 <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
@@ -176,7 +227,6 @@ export default function IssueDetailScreen() {
               </View>
             </View>
             
-            {/* ✅ Mapped dynamically from the assignments array */}
             {currentAssignment && (
               <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
                 <Avatar name={currentAssignment.solver_name} size="medium" />
@@ -202,14 +252,8 @@ export default function IssueDetailScreen() {
           <ImageGallery images={issue.images || []} />
         </View>
 
-        {/* ── TIMELINE ── */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Timeline</Text>
-          <IssueTimeline history={issue.history || []} />
-        </View>
-
         {/* ── CALL HISTORY (Solver Only) ── */}
-        {user?.role === 'problem_solver' && issue.call_logs?.length > 0 && (
+        {isProblemSolver && issue.call_logs?.length > 0 && (
           <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor, padding: 0, overflow: 'hidden' }]}>
             <CallHistorySection callLogs={issue.call_logs} />
           </View>
@@ -217,13 +261,58 @@ export default function IssueDetailScreen() {
 
         {/* ── ACTIONS ── */}
         <View style={styles.actions}>
-          {user?.role === 'supervisor' && (
+
+          {/* ── PROBLEM SOLVER ACTIONS ── */}
+          {isProblemSolver && (
             <>
+              {/* Green "Mark as Fixed" — only when IN_PROGRESS */}
+              {showMarkDoneBtn && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.primaryActionBtn, styles.greenBtn]}
+                  onPress={() => handleAction('Mark as Fixed')}
+                >
+                  <View style={styles.primaryActionBtnInner}>
+                    <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+                    <Text style={styles.primaryActionBtnText}>Mark as Fixed</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Always-visible: Upload Fix Photo */}
+              <Button
+                title="Upload Fix Photo"
+                variant="primary"
+                icon="camera-outline"
+                onPress={() => handleAction('Upload Fix Photo')}
+                style={showMarkDoneBtn ? styles.buttonMargin : undefined}
+              />
+            </>
+          )}
+
+          {/* ── SUPERVISOR ACTIONS ── */}
+          {isSupervisor && (
+            <>
+              {/* Green "Approve & Close" — only when RESOLVED_PENDING_REVIEW */}
+              {showApproveBtn && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.primaryActionBtn, styles.greenBtn]}
+                  onPress={() => handleAction('Approve & Close')}
+                >
+                  <View style={styles.primaryActionBtnInner}>
+                    <Ionicons name="checkmark-done-circle-outline" size={22} color="#fff" />
+                    <Text style={styles.primaryActionBtnText}>Approve & Close</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
               <Button
                 title="Raise Complaint"
                 variant="danger"
                 icon="alert-circle-outline"
                 onPress={() => handleAction('Raise Complaint')}
+                style={showApproveBtn ? styles.buttonMargin : undefined}
               />
               <Button
                 title="Mark Complete"
@@ -234,21 +323,30 @@ export default function IssueDetailScreen() {
               />
             </>
           )}
-          {user?.role === 'problem_solver' && (
-            <Button
-              title="Upload Fix Photo"
-              variant="primary"
-              icon="camera-outline"
-              onPress={() => handleAction('Upload Fix Photo')}
-            />
-          )}
-          {user?.role === 'manager' && (
+
+          {/* ── MANAGER ACTIONS ── */}
+          {isManager && (
             <>
+              {/* Green "Approve & Close" — only when RESOLVED_PENDING_REVIEW */}
+              {showApproveBtn && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.primaryActionBtn, styles.greenBtn]}
+                  onPress={() => handleAction('Approve & Close')}
+                >
+                  <View style={styles.primaryActionBtnInner}>
+                    <Ionicons name="checkmark-done-circle-outline" size={22} color="#fff" />
+                    <Text style={styles.primaryActionBtnText}>Approve & Close</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
               <Button
                 title="Escalate"
                 variant="danger"
                 icon="arrow-up-circle-outline"
                 onPress={() => handleAction('Escalate')}
+                style={showApproveBtn ? styles.buttonMargin : undefined}
               />
               <Button
                 title="Re-assign"
@@ -259,10 +357,15 @@ export default function IssueDetailScreen() {
               />
             </>
           )}
+
         </View>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      <FullScreenSpinner visible={refreshing} message="Updating Issue Details..." color={theme.primary} />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -279,7 +382,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   content: { flex: 1 },
   
@@ -307,7 +412,7 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 36,
     height: 36,
-    borderRadius: 10, // Squircle shape
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -326,7 +431,40 @@ const styles = StyleSheet.create({
   personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
   personRole: { fontSize: 13 },
 
+  // ── ACTIONS ──
   actions: { marginHorizontal: 16, marginTop: 32 },
   buttonMargin: { marginTop: 12 },
+
+  // ── GREEN CTA BUTTON ──
+  primaryActionBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#10a37f',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  greenBtn: {
+    backgroundColor: '#10a37f',
+  },
+  primaryActionBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  primaryActionBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+
   bottomPadding: { height: 40 },
 });

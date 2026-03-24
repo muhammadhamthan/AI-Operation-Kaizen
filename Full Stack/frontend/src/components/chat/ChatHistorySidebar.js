@@ -17,6 +17,13 @@ const ChatHistorySidebar = ({ conversations, onSelectConversation, onNewChat, se
   const renderItem = ({ item }) => {
     const isSelected = selectedId === item.id;
 
+    // Helper to format just the time from a timestamp string
+    const formatTimeOnly = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
     return (
       <TouchableOpacity
         style={[
@@ -49,6 +56,16 @@ const ChatHistorySidebar = ({ conversations, onSelectConversation, onNewChat, se
             <Text style={[styles.timeText, { color: mutedColor }]}>
               {formatRelativeTime(item.created_at)}
             </Text>
+            
+            {/* 📍 NEW: Displaying the Last Updated Time */}
+            {item.updated_at && (
+              <>
+                <Text style={[styles.timeDivider, { color: mutedColor }]}> • </Text>
+                <Text style={[styles.timeText, { color: mutedColor }]}>
+                  {formatTimeOnly(item.updated_at)}
+                </Text>
+              </>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -100,7 +117,7 @@ const ChatHistorySidebar = ({ conversations, onSelectConversation, onNewChat, se
       <FlatList
         data={conversations}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()} // Ensure ID is a string for key
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.list,
@@ -212,6 +229,11 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 12,
     fontWeight: '400',
+  },
+  timeDivider: {
+    fontSize: 10,
+    marginHorizontal: 4,
+    opacity: 0.5,
   },
 
   emptyContainer: {

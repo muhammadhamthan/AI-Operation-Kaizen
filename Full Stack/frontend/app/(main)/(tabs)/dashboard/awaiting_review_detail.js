@@ -7,17 +7,12 @@ import {
   TouchableOpacity, 
   Alert,
   Platform,
-  RefreshControl,
-  Image,
-  ActivityIndicator
+  RefreshControl 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker'; 
-import * as Location from 'expo-location'; // 📍 IMPORTED LOCATION DIRECTLY
-
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { 
@@ -25,7 +20,6 @@ import {
   fetchIssueTimeline,
   selectIssueById,
   selectCurrentIssue,
-  selectIssueTimeline,
   selectIssuesLoading, 
   clearCurrentIssue 
 } from '../../../../src/store/slices/issuesSlice';
@@ -42,7 +36,7 @@ import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinn
 import Avatar from '../../../../src/components/common/Avatar';
 import { formatDate } from '../../../../src/utils/formatters';
 
-export default function NotFixedDetailScreen() {
+export default function AwaitingReviewDetailScreen() {
   const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -51,17 +45,11 @@ export default function NotFixedDetailScreen() {
   
   const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
   const fullIssue = useSelector(selectCurrentIssue);
-  const timeline = useSelector(selectIssueTimeline) || [];
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
 
   const [refreshing, setRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  
-  const [selectedImage, setSelectedImage] = useState(null);
-  
-  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
-  const [capturedLocation, setCapturedLocation] = useState(null);
 
   const issue = (fullIssue && fullIssue.id === parseInt(id)) ? fullIssue : cachedIssue;
 
@@ -92,129 +80,83 @@ export default function NotFixedDetailScreen() {
     }
   }, [id, isOnline, dispatch]);
 
-  const handleTakePhoto = async () => {
-    console.log("\n[DEBUG] --- STARTING PHOTO CAPTURE FLOW ---");
-    console.log(`[DEBUG] Current Platform: ${Platform.OS}`);
-    
-    setIsCapturingLocation(true); 
+  // 📍 NEW: Dedicated Review Action Handler (Web & Native Safe)
+  const handleReviewAction = (actionType) => {
+    console.log(`\n=============================================`);
+    console.log(`📝 SUPERVISOR REVIEW ACTION: ${actionType}`);
+    console.log(`=============================================`);
+    console.log(`Issue ID:      ${issue?.id}`);
+    console.log(`Supervisor ID: ${user?.id}`);
+    console.log(`Supervisor:    ${user?.name}`);
+    console.log(`=============================================\n`);
 
-    try {
-      console.log("[DEBUG] Requesting location data before opening camera...");
+    if (actionType === 'APPROVE') {
+      if (Platform.OS === 'web') {
+        // Web Fallback
+        const confirmApprove = window.confirm("Are you sure you want to approve this fix? The issue will be marked as COMPLETED.");
+        if (confirmApprove) {
+          console.log(`[DEBUG] Issue #${issue?.id} APPROVED successfully.`);
+          // TODO: Add backend API call here (e.g., dispatch(approveIssue(issue.id)))
+          alert("Success! Issue has been approved and closed.");
+ 
+        }
+      } else {
+        // Native Mobile Flow
+        Alert.alert(
+          "Approve Fix",
+          "Are you sure you want to approve this fix? The issue will be marked as COMPLETED.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Approve",
+              style: "default",
+              onPress: () => {
+                console.log(`[DEBUG] Issue #${issue?.id} APPROVED successfully.`);
+                // TODO: Add backend API call here
+                Alert.alert("Success", "Issue has been approved and closed.");
+             
+              }
+            }
+          ]
+        );
+      }
+    } else if (actionType === 'REJECT') {
+      if (Platform.OS === 'web') {
+        // Web Fallback
+        const confirmReject = window.confirm("Are you sure you want to reject this fix? The issue will be sent back to the solver.");
+        if (confirmReject) {
+          console.log(`[DEBUG] Issue #${issue?.id} REJECTED successfully.`);
+          // TODO: Add backend API call here (e.g., dispatch(rejectIssue(issue.id)))
+          alert("Rejected! Issue has been returned to the solver.");
+    
+        }
+      } else {
+        // Native Mobile Flow
+        Alert.alert(
+          "Reject Fix",
+          "Are you sure you want to reject this fix? The issue will be sent back to the solver.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Reject",
+              style: "destructive",
+              onPress: () => {
+                console.log(`[DEBUG] Issue #${issue?.id} REJECTED successfully.`);
+                // TODO: Add backend API call here
+                Alert.alert("Rejected", "Issue has been returned to the solver.");
       
-      // 📍 INLINE LOCATION LOGIC (Bypasses the buggy location.js import)
-      let loc = null;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000));
-          
-          // Race between getting the location and the 10-second timeout
-          const position = await Promise.race([locationPromise, timeoutPromise]);
-          loc = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          };
-        } else {
-          console.log("[DEBUG] Location permission denied by user.");
-        }
-      } catch (err) {
-        console.log("[DEBUG] Location fetch error:", err.message);
+              }
+            }
+          ]
+        );
       }
-
-      if (loc) {
-        console.log(`[DEBUG] Location captured successfully: Lat ${loc.latitude}, Lon ${loc.longitude}`);
-        setCapturedLocation(loc);
-      } else {
-        console.log("[DEBUG] Location capture failed or timed out.");
-        if (Platform.OS !== 'web') {
-          Alert.alert("Location Required", "We need your location to verify the fix.");
-          return; 
-        }
-        console.log("[DEBUG] Proceeding without location due to web fallback.");
-      }
-
-      let result;
-
-      if (Platform.OS === 'web') {
-        console.log("[DEBUG] Web browser detected. Triggering File Picker.");
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
-      } else {
-        console.log("[DEBUG] Native device detected. Requesting Camera Permissions.");
-        const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-        
-        if (permissionResult.granted === false) {
-          console.log("[DEBUG] User denied camera permissions.");
-          Alert.alert("Permission Required", "You need to allow camera access to take a fix photo.");
-          return;
-        }
-
-        console.log("[DEBUG] Permissions granted. Launching Native Camera.");
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
-      }
-
-      console.log("[DEBUG] Raw ImagePicker Result:", result);
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        console.log(`[DEBUG] SUCCESS! Image selected. URI: ${result.assets[0].uri}`);
-        setSelectedImage(result.assets[0].uri);
-      } else {
-        console.log("[DEBUG] Action was canceled by the user (no image selected).");
-        setCapturedLocation(null); 
-      }
-    } catch (error) {
-      console.error("[DEBUG] EXCEPTION caught during photo capture:", error);
-      if (Platform.OS === 'web') {
-        alert("Error opening file picker on the browser.");
-      } else {
-        Alert.alert("Error", "Could not access the camera.");
-      }
-      setCapturedLocation(null);
-    } finally {
-      setIsCapturingLocation(false); 
-    }
-  };
-
-  const handleSubmitPhoto = () => {
-    console.log("\n=============================================");
-    console.log("📸 UPLOADING FIX PHOTO TO BACKEND");
-    console.log("=============================================");
-    console.log(`Issue ID:      ${issue.id}`);
-    console.log(`Issue Title:   ${issue.title}`);
-    console.log(`Solver ID:     ${user?.id}`);
-    console.log(`Solver Name:   ${user?.name}`);
-    console.log(`Photo URI:     ${selectedImage}`);
-    console.log(`Location:      ${capturedLocation ? `Lat: ${capturedLocation.latitude}, Lon: ${capturedLocation.longitude}` : 'Not Captured'}`);
-    console.log("=============================================\n");
-
-    setSelectedImage(null);
-    setCapturedLocation(null);
-    
-    if (Platform.OS === 'web') {
-      alert("Sent Successfully! Your fix photo has been uploaded and sent for review.");
-    } else {
-      Alert.alert(
-        "Sent Successfully!", 
-        "Your fix photo has been uploaded and sent for review.",
-        [{ text: "OK" }]
-      );
     }
   };
 
   const overdueDays = issue ? calculateOverdueDays(issue.deadline_at, issue.status) : null;
 
-  if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
-  if (!issue) return <Loader message="Loading issue details..." />;
+  if (loading && !refreshing && !issue) return <Loader message="Loading review details..." />;
+  if (!issue) return <Loader message="Loading review details..." />;
 
   const siteName = issue.site_name || issue.site?.name || 'N/A';
   const siteLocation = issue.site_location || issue.site?.location || null;
@@ -226,29 +168,30 @@ export default function NotFixedDetailScreen() {
     
   const solverName = currentAssignment?.solver_name || null;
 
+  // ── PREMIUM PALETTE ──
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
-  const pendingAccent = '#f59e0b';
-  const successAccent = '#10a37f'; 
+  const reviewAccent = '#f97316'; // Orange accent
   
-  const warningBg = isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2';
-  const warningBorder = isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2';
+  const alertBg = isDark ? 'rgba(249, 115, 22, 0.1)' : '#fff7ed';
+  const alertBorder = isDark ? 'rgba(249, 115, 22, 0.2)' : '#ffedd5';
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       
+      {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Pending Issue</Text>
+        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Review Required</Text>
         
         <View style={styles.headerRight}>
           {Platform.OS === 'web' ? (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
-              <Ionicons name="sync" size={22} color={refreshing ? pendingAccent : theme.textSecondary} />
+              <Ionicons name="sync" size={22} color={refreshing ? reviewAccent : theme.textSecondary} />
             </TouchableOpacity>
           ) : (
             <View style={styles.placeholder} />
@@ -266,20 +209,20 @@ export default function NotFixedDetailScreen() {
         }
       >
         
-        {overdueDays > 0 && (
-          <View style={[styles.warningBanner, { backgroundColor: warningBg, borderColor: warningBorder }]}>
-            <View style={styles.warningIconWrapper}>
-              <Ionicons name="warning-outline" size={18} color="#ef4444" />
-            </View>
-            <View style={styles.warningContent}>
-              <Text style={styles.warningTitle}>Action Required</Text>
-              <Text style={styles.warningText}>
-                This issue is overdue by {overdueDays} day{overdueDays > 1 ? 's' : ''}.
-              </Text>
-            </View>
+        {/* ── BANNER ── */}
+        <View style={[styles.warningBanner, { backgroundColor: alertBg, borderColor: alertBorder }]}>
+          <View style={styles.warningIconWrapper}>
+            <Ionicons name="eye-outline" size={18} color="#f97316" />
           </View>
-        )}
+          <View style={styles.warningContent}>
+            <Text style={styles.warningTitle}>Ready for Inspection</Text>
+            <Text style={styles.warningText}>
+              The solver has marked this issue as resolved. Please review and approve or reject the fix.
+            </Text>
+          </View>
+        </View>
 
+        {/* ── ISSUE IDENTITY ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <View style={styles.idRow}>
             <Text style={[styles.issueId, { color: theme.textSecondary }]}>ISSUE #{issue.id}</Text>
@@ -293,6 +236,7 @@ export default function NotFixedDetailScreen() {
           <Text style={[styles.description, { color: theme.textSecondary }]}>{issue.description}</Text>
         </View>
 
+        {/* ── DETAILS & LOCATION ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Details</Text>
           
@@ -331,6 +275,7 @@ export default function NotFixedDetailScreen() {
           )}
         </View>
 
+        {/* ── PEOPLE INVOLVED ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
           <View style={styles.peopleGrid}>
@@ -351,7 +296,7 @@ export default function NotFixedDetailScreen() {
                   <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
                     {solverName}
                   </Text>
-                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
+                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Resolved By</Text>
                 </View>
                 {currentAssignment?.solver_phone && (
                    <Text style={[styles.personRole, { color: theme.textSecondary, marginTop: 4 }]}>
@@ -363,6 +308,7 @@ export default function NotFixedDetailScreen() {
           </View>
         </View>
 
+        {/* ── PHOTOS ── */}
         {issue.images && issue.images.length > 0 && (
           <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Attached Media</Text>
@@ -370,71 +316,29 @@ export default function NotFixedDetailScreen() {
           </View>
         )}
 
+        {/* ── SUPERVISOR ACTIONS ── */}
         <View style={styles.actions}>
-          
-          {user?.role === 'supervisor' && (
-            <Button 
-              title="Raise Complaint" 
-              variant="danger" 
-              icon="alert-circle-outline" 
-              onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')} 
-            />
-          )}
-
-          {(user?.role === 'problemsolver' || user?.role === 'problem_solver') && issue?.status === 'IN_PROGRESS' && (
-            <View style={styles.solverActionContainer}>
-              {!selectedImage ? (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={[styles.primaryActionBtn, { backgroundColor: successAccent, opacity: isCapturingLocation ? 0.7 : 1 }]}
-                  onPress={handleTakePhoto}
-                  disabled={isCapturingLocation}
-                >
-                  <View style={styles.primaryActionBtnInner}>
-                    {isCapturingLocation ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Ionicons name="camera" size={24} color="#fff" />
-                    )}
-                    <Text style={styles.primaryActionBtnText}>
-                      {isCapturingLocation ? "Getting Location..." : "Take Fix Photo"}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <View style={[styles.previewContainer, { backgroundColor: surfaceColor, borderColor }]}>
-                  <View style={styles.previewHeader}>
-                    <Ionicons name="image-outline" size={20} color={theme.text} />
-                    <Text style={[styles.previewTitle, { color: theme.text }]}>Photo Ready</Text>
-                  </View>
-                  
-                  <Image source={{ uri: selectedImage }} style={[styles.previewImage, { borderColor }]} />
-                  
-                  <Text style={[styles.previewSubtext, { color: theme.textSecondary }]}>
-                    Does this photo clearly show the resolved issue?
-                  </Text>
-
-                  <View style={styles.previewActions}>
-                    <TouchableOpacity 
-                      style={[styles.previewBtn, { backgroundColor: iconBg, borderColor, borderWidth: 1 }]} 
-                      onPress={() => {
-                        setSelectedImage(null);
-                        setCapturedLocation(null);
-                      }}
-                    >
-                      <Text style={[styles.previewBtnText, { color: theme.text }]}>Retake</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.previewBtn, { backgroundColor: successAccent, flex: 2 }]} 
-                      onPress={handleSubmitPhoto}
-                    >
-                      <Ionicons name="send" size={18} color="#fff" style={{ marginRight: 6 }} />
-                      <Text style={[styles.previewBtnText, { color: '#fff' }]}>Send Photo</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
+          {user?.role === 'supervisor' ? (
+            <View style={{ gap: 12 }}>
+              <Button 
+                title="Approve Fix" 
+                variant="success" 
+                icon="checkmark-circle-outline" 
+                onPress={() => handleReviewAction('APPROVE')} 
+                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }} 
+              />
+              <Button 
+                title="Reject Fix" 
+                variant="danger" 
+                icon="close-circle-outline" 
+                onPress={() => handleReviewAction('REJECT')} 
+              />
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', padding: 16, backgroundColor: iconBg, borderRadius: 12 }}>
+              <Text style={{ color: theme.textSecondary, fontStyle: 'italic' }}>
+                Waiting for Supervisor Approval.
+              </Text>
             </View>
           )}
         </View>
@@ -442,8 +346,7 @@ export default function NotFixedDetailScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <FullScreenSpinner visible={refreshing} message="Updating Details..." color={pendingAccent} />
-
+      <FullScreenSpinner visible={refreshing} message="Updating Details..." color={reviewAccent} />
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -488,8 +391,8 @@ const styles = StyleSheet.create({
     }),
   },
   warningContent: { flex: 1 },
-  warningTitle: { color: '#ef4444', fontWeight: '700', fontSize: 14, letterSpacing: -0.2, marginBottom: 2 },
-  warningText: { color: '#ef4444', fontSize: 13, lineHeight: 18 },
+  warningTitle: { color: '#f97316', fontWeight: '700', fontSize: 14, letterSpacing: -0.2, marginBottom: 2 },
+  warningText: { color: '#f97316', fontSize: 13, lineHeight: 18 },
 
   content: { flex: 1 },
   
@@ -540,50 +443,5 @@ const styles = StyleSheet.create({
   personRole: { fontSize: 13 },
   
   actions: { marginHorizontal: 16, marginTop: 32 },
-  
-  solverActionContainer: { width: '100%' },
-  primaryActionBtn: {
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    ...Platform.select({
-      ios: { shadowColor: '#10a37f', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12 },
-      android: { elevation: 4 },
-    }),
-  },
-  primaryActionBtnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  primaryActionBtnText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
-  
-  previewContainer: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8 },
-      android: { elevation: 2 },
-    }),
-  },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, alignSelf: 'flex-start' },
-  previewTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
-  previewImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 12,
-  },
-  previewSubtext: { fontSize: 13, textAlign: 'center', marginBottom: 16 },
-  previewActions: { flexDirection: 'row', gap: 12, width: '100%' },
-  previewBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 14,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  previewBtnText: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
-
   bottomPadding: { height: 40 },
 });

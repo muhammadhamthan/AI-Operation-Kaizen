@@ -82,6 +82,13 @@ class Issue(Base):
         Index("idx_issues_site", "site_id"),
         Index("idx_issues_supervisor", "raised_by_supervisor_id"),
         Index("idx_issues_deadline", "deadline_at"),
+        Index("idx_issues_created_at", "created_at"),
+
+        # Composite indexes (VERY IMPORTANT) - these are critical for performance of common queries but it might slow down the inserts/updates a bit, so we need to be careful and only add the ones that are really needed 
+        Index("idx_issues_site_status_created", "site_id", "status", "created_at"),
+        Index("idx_issues_supervisor_status", "raised_by_supervisor_id", "status"),
+        Index("idx_issues_site_status", "site_id", "status"),
+        Index("idx_issues_status_deadline_at", "status", "deadline_at"),  
     )
 
     def __repr__(self):

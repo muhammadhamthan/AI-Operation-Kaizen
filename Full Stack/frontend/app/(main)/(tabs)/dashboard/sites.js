@@ -25,6 +25,9 @@ import EmptyState from '../../../../src/components/common/EmptyState';
 import Avatar from '../../../../src/components/common/Avatar';
 import Loader from '../../../../src/components/common/Loader';
 
+// ── ADDED REUSABLE SPINNER ──
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
 export default function SitesScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -46,8 +49,15 @@ export default function SitesScreen() {
   const onRefresh = useCallback(async () => {
     if (!user) return;
     setRefreshing(true);
-    await dispatch(fetchSitesWithAnalytics(user));
-    setRefreshing(false);
+    
+    try {
+      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+      await Promise.allSettled([
+        dispatch(fetchSitesWithAnalytics(user))
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   }, [dispatch, user]);
 
   // ── SEARCH LOGIC ──
@@ -145,7 +155,8 @@ export default function SitesScreen() {
     );
   };
 
-  if (loading && sites.length === 0) {
+  // 📍 FIX: Added `&& !refreshing` to prevent Loader hijacking
+  if (loading && sites.length === 0 && !refreshing) {
     return <Loader message="Loading sites..." fullScreen />;
   }
 
@@ -165,9 +176,18 @@ export default function SitesScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
-          <Avatar uri={user?.avatar} name={user?.name} size="medium" />
-        </TouchableOpacity>
+        
+        {/* 📍 FIX: Added Header Actions Row for Sync + Avatar */}
+        <View style={styles.headerActions}>
+          {Platform.OS === 'web' && (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
+            <Avatar uri={user?.avatar} name={user?.name} size="medium" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── SEARCH BAR ── */}
@@ -210,9 +230,18 @@ export default function SitesScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
+          // 📍 FIX: Disables double spinner on web
+          refreshControl={
+            Platform.OS === 'web' ? undefined : (
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />
+            )
+          }
         />
       )}
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Sites..." />
+
     </SafeAreaView>
   );
 }
@@ -232,9 +261,11 @@ const styles = StyleSheet.create({
     }),
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   headerSubtitle: { fontSize: 13, fontWeight: '500', marginTop: 2 },
+  webRefreshButton: { padding: 8 },
   
   searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchInputWrapper: { 

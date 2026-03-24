@@ -171,6 +171,11 @@ export const selectFixedIssues = (state) => {
   return state.issues.issues.filter(issue => issue.status === 'COMPLETED');
 };
 
+export const selectAwaitingReviewIssues = (state) => {
+  return state.issues.issues.filter(issue => issue.status === 'RESOLVED_PENDING_REVIEW');
+};
+
+
 export const selectEscalatedIssues = (state) => {
   return state.issues.issues.filter(issue => issue.status === 'ESCALATED');
 };

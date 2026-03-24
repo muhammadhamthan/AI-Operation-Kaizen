@@ -67,6 +67,7 @@ class IssueAssignment(Base):
         Index("idx_assignments_solver", "assigned_to_solver_id"),
         Index("idx_assignments_status", "status"),
         Index("idx_assignments_due_date", "due_date"),
+        Index("idx_assignments_supervisor_status", "assigned_to_solver_id", "status"),
     )
 
     def __repr__(self):
