@@ -20,25 +20,22 @@ import {
   fetchIssueTimeline,
   selectIssueById,
   selectCurrentIssue,
-  selectIssueTimeline,
   selectIssuesLoading, 
   clearCurrentIssue 
 } from '../../../../src/store/slices/issuesSlice';
 import { calculateOverdueDays } from '../../../../src/utils/overdue';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Button from '../../../../src/components/common/Button';
-import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import Loader from '../../../../src/components/common/Loader';
 
-// ── ADDED REUSABLE IMPORTS & MISSING COMPONENTS ──
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 import Avatar from '../../../../src/components/common/Avatar';
 import { formatDate } from '../../../../src/utils/formatters';
 
-export default function NotFixedDetailScreen() {
+export default function AwaitingReviewDetailScreen() {
   const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -47,7 +44,6 @@ export default function NotFixedDetailScreen() {
   
   const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
   const fullIssue = useSelector(selectCurrentIssue);
-  const timeline = useSelector(selectIssueTimeline) || [];
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
 
@@ -85,10 +81,9 @@ export default function NotFixedDetailScreen() {
 
   const overdueDays = issue ? calculateOverdueDays(issue.deadline_at, issue.status) : null;
 
-  if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
-  if (!issue) return <Loader message="Loading issue details..." />;
+  if (loading && !refreshing && !issue) return <Loader message="Loading review details..." />;
+  if (!issue) return <Loader message="Loading review details..." />;
 
-  // ── SMART DATA EXTRACTION (Mapped to exact JSON response) ──
   const siteName = issue.site_name || issue.site?.name || 'N/A';
   const siteLocation = issue.site_location || issue.site?.location || null;
   const raisedByName = issue.supervisor_name || 'N/A';
@@ -104,10 +99,10 @@ export default function NotFixedDetailScreen() {
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
-  const pendingAccent = '#f59e0b';
+  const reviewAccent = '#f97316'; // Orange accent
   
-  const warningBg = isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2';
-  const warningBorder = isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2';
+  const alertBg = isDark ? 'rgba(249, 115, 22, 0.1)' : '#fff7ed';
+  const alertBorder = isDark ? 'rgba(249, 115, 22, 0.2)' : '#ffedd5';
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -117,12 +112,12 @@ export default function NotFixedDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Pending Issue</Text>
+        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Review Required</Text>
         
         <View style={styles.headerRight}>
           {Platform.OS === 'web' ? (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
-              <Ionicons name="sync" size={22} color={refreshing ? pendingAccent : theme.textSecondary} />
+              <Ionicons name="sync" size={22} color={refreshing ? reviewAccent : theme.textSecondary} />
             </TouchableOpacity>
           ) : (
             <View style={styles.placeholder} />
@@ -135,29 +130,23 @@ export default function NotFixedDetailScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           Platform.OS === 'web' ? undefined : (
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={theme.textSecondary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />
           )
         }
       >
         
-        {/* ── REFINED WARNING BANNER ── */}
-        {overdueDays > 0 && (
-          <View style={[styles.warningBanner, { backgroundColor: warningBg, borderColor: warningBorder }]}>
-            <View style={styles.warningIconWrapper}>
-              <Ionicons name="warning-outline" size={18} color="#ef4444" />
-            </View>
-            <View style={styles.warningContent}>
-              <Text style={styles.warningTitle}>Action Required</Text>
-              <Text style={styles.warningText}>
-                This issue is overdue by {overdueDays} day{overdueDays > 1 ? 's' : ''}.
-              </Text>
-            </View>
+        {/* ── BANNER ── */}
+        <View style={[styles.warningBanner, { backgroundColor: alertBg, borderColor: alertBorder }]}>
+          <View style={styles.warningIconWrapper}>
+            <Ionicons name="eye-outline" size={18} color="#f97316" />
           </View>
-        )}
+          <View style={styles.warningContent}>
+            <Text style={styles.warningTitle}>Ready for Inspection</Text>
+            <Text style={styles.warningText}>
+              The solver has marked this issue as resolved. Please review and approve or reject the fix.
+            </Text>
+          </View>
+        </View>
 
         {/* ── ISSUE IDENTITY ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
@@ -199,7 +188,6 @@ export default function NotFixedDetailScreen() {
             </View>
           )}
 
-          {/* ✅ Mapped from JSON: deadline_at */}
           {issue.deadline_at && (
             <View style={[styles.infoRow, { marginTop: 16 }]}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
@@ -218,7 +206,6 @@ export default function NotFixedDetailScreen() {
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
           <View style={styles.peopleGrid}>
             <View style={[styles.personRow, solverName && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-              {/* ✅ Mapped from JSON: supervisor_name */}
               <Avatar name={raisedByName} size="medium" />
               <View style={styles.personInfo}>
                 <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
@@ -228,7 +215,6 @@ export default function NotFixedDetailScreen() {
               </View>
             </View>
             
-            {/* ✅ Mapped from JSON: assignments array */}
             {solverName && (
               <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
                 <Avatar name={solverName} size="medium" />
@@ -236,7 +222,7 @@ export default function NotFixedDetailScreen() {
                   <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
                     {solverName}
                   </Text>
-                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
+                  <Text style={[styles.personRole, { color: theme.textSecondary }]}>Resolved By</Text>
                 </View>
                 {currentAssignment?.solver_phone && (
                    <Text style={[styles.personRole, { color: theme.textSecondary, marginTop: 4 }]}>
@@ -256,32 +242,37 @@ export default function NotFixedDetailScreen() {
           </View>
         )}
 
-        {/* ── ACTIONS ── */}
+        {/* ── SUPERVISOR ACTIONS ── */}
         <View style={styles.actions}>
-          {user?.role === 'supervisor' && (
-            <Button 
-              title="Raise Complaint" 
-              variant="danger" 
-              icon="alert-circle-outline" 
-              onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')} 
-            />
-          )}
-          {user?.role === 'problem_solver' && (
-            <Button 
-              title="Upload Fix Photo" 
-              variant="primary" 
-              icon="camera-outline" 
-              onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')} 
-            />
+          {user?.role === 'supervisor' ? (
+            <View style={{ gap: 12 }}>
+              <Button 
+                title="Approve Fix" 
+                variant="primary" 
+                icon="checkmark-circle-outline" 
+                onPress={() => Alert.alert('Approve', 'Issue will be marked as Completed.')} 
+                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f' }} // Force Green
+              />
+              <Button 
+                title="Reject Fix" 
+                variant="danger" 
+                icon="close-circle-outline" 
+                onPress={() => Alert.alert('Reject', 'Issue will be returned to the solver.')} 
+              />
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', padding: 16, backgroundColor: iconBg, borderRadius: 12 }}>
+              <Text style={{ color: theme.textSecondary, fontStyle: 'italic' }}>
+                Waiting for Supervisor Approval.
+              </Text>
+            </View>
           )}
         </View>
         
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* ── FULL SCREEN SPINNER ── */}
-      <FullScreenSpinner visible={refreshing} message="Updating Details..." color={pendingAccent} />
-
+      <FullScreenSpinner visible={refreshing} message="Updating Details..." color={reviewAccent} />
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -326,8 +317,8 @@ const styles = StyleSheet.create({
     }),
   },
   warningContent: { flex: 1 },
-  warningTitle: { color: '#ef4444', fontWeight: '700', fontSize: 14, letterSpacing: -0.2, marginBottom: 2 },
-  warningText: { color: '#ef4444', fontSize: 13, lineHeight: 18 },
+  warningTitle: { color: '#f97316', fontWeight: '700', fontSize: 14, letterSpacing: -0.2, marginBottom: 2 },
+  warningText: { color: '#f97316', fontSize: 13, lineHeight: 18 },
 
   content: { flex: 1 },
   
