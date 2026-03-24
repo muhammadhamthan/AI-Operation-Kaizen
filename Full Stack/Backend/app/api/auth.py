@@ -118,6 +118,10 @@ async def login_user(
     login_data: UserLogin,
     db: AsyncSession = Depends(get_db),
 ):
+    
+    print("PASSWORD111111111111111111111111111111111:", login_data.password)
+    print("CHAR LEN:", len(login_data.password))
+    print("BYTE LEN:", len(login_data.password.encode('utf-8')))
     result = await db.execute(
         select(User).where(
             User.phone == login_data.phone,
