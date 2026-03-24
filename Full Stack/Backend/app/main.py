@@ -79,6 +79,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
 # Custom Middleware
 # from app.middleware.auth_middleware import AuthMiddleware
 # from app.middleware.logging_middleware import LoggingMiddleware

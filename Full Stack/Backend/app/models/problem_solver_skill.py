@@ -82,6 +82,8 @@ class ProblemSolverSkill(Base):
         Index("idx_solver_skills_site", "site_id"),
         Index("idx_solver_skills_solver", "solver_id"),
         Index("idx_solver_skills_skill_site", "skill_type", "site_id"),
+        Index(" idx_solver_skills_solver_available", "solver_id", "is_available"),
+        Index(" idx_solver_skills_skill_site_available", "skill_type", "site_id", "is_available",priority.desc()),
     )
 
     def __repr__(self) -> str:

@@ -22,6 +22,7 @@ import Avatar from '../../../../src/components/common/Avatar';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function ComplaintsScreen() {
   const { theme, isDark } = useTheme();
@@ -61,40 +62,61 @@ export default function ComplaintsScreen() {
     }
 
     setRefreshing(true);
-    if (user) await dispatch(fetchComplaints(user));
-    setLastRefresh(Date.now());
-    setRefreshing(false);
-  }, [user, isOnline, lastRefresh]);
+    if (user) {
+      try {
+        await Promise.allSettled([
+          dispatch(fetchComplaints(user))
+        ]);
+      } finally {
+        setLastRefresh(Date.now());
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
+    }
+  }, [user, isOnline, lastRefresh, dispatch]);
 
-  // ── Date Formatter ──
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  // ── PREMIUM DANGER PALETTE ──
   const bgColor = isDark ? '#1a1a1a' : '#f4f4f5';
   const surfaceColor = isDark ? '#242424' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const inactiveBg = isDark ? '#2a2a2a' : '#eeeeef';
+  const accentColor = '#ef4444'; // Red to match the warning icon
+  
+  // Custom Card Background for Complaints
+  const cardBgColor = isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.03)';
+  const cardBorderColor = isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)';
+  const searchBorderColor = searchText ? accentColor : 'transparent';
 
   const renderItem = ({ item }) => {
     return (
       <TouchableOpacity
         activeOpacity={0.7}
-        style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}
+        style={[
+          styles.card, 
+          { 
+            backgroundColor: cardBgColor, 
+            borderColor: cardBorderColor,
+            borderLeftColor: accentColor 
+          }
+        ]}
         onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/complaint-detail', params: { id: item.id } })}
       >
         <View style={styles.cardHeader}>
           <View style={styles.idContainer}>
-            <View style={styles.iconWrapper}>
-              <Ionicons name="warning" size={14} color="#ef4444" />
+            <View style={[styles.iconWrapper, { backgroundColor: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)' }]}>
+              <Ionicons name="warning" size={14} color={accentColor} />
             </View>
             
-            {/* 📍 FIX: Created a flex wrapper to properly space the ID and Date */}
             <View style={styles.idTextWrapper}>
               <Text style={[styles.cardId, { color: theme.textSecondary }]} numberOfLines={1}>
-                #{item.id} <Text style={{ color: borderColor, marginHorizontal: 4 }}>|</Text> Issue #{item.issue_id}
+                #{item.id} <Text style={{ color: cardBorderColor, marginHorizontal: 4 }}>|</Text> Issue #{item.issue_id}
               </Text>
               <Text style={[styles.cardDate, { color: theme.textSecondary }]}>
                 {formatDate(item.created_at)}
@@ -122,7 +144,7 @@ export default function ComplaintsScreen() {
           
           {item.solver_name && (
             <>
-              <View style={[styles.verticalDivider, { backgroundColor: borderColor }]} />
+              <View style={[styles.verticalDivider, { backgroundColor: cardBorderColor }]} />
               <View style={styles.personBadge}>
                 <Text style={[styles.roleLabel, { color: theme.textSecondary }]}>To:</Text>
                 <Avatar name={item.solver_name} size="tiny" />
@@ -137,7 +159,7 @@ export default function ComplaintsScreen() {
         {item.complaint_image_url && (
           <Image 
             source={{ uri: item.complaint_image_url }} 
-            style={[styles.thumbnail, { borderColor }]} 
+            style={[styles.thumbnail, { borderColor: cardBorderColor }]} 
             resizeMode="cover" 
           />
         )}
@@ -145,7 +167,7 @@ export default function ComplaintsScreen() {
     );
   };
 
-  if (loading && complaints.length === 0) return <Loader message="Loading complaints..." />;
+  if (loading && complaints.length === 0 && !refreshing) return <Loader message="Loading complaints..." />;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -156,13 +178,22 @@ export default function ComplaintsScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Complaints Hub</Text>
-        <View style={styles.placeholder} />
+        
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? accentColor : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
       {/* ── SEARCH BAR ── */}
       <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
-        <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor: 'transparent' }]}>
-          <Ionicons name="search" size={20} color={theme.textSecondary} style={{ opacity: 0.7 }} />
+        <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor: searchBorderColor }]}>
+          <Ionicons name="search" size={20} color={searchText ? accentColor : theme.textSecondary} style={{ opacity: searchText ? 1 : 0.7 }} />
           <TextInput
             style={[styles.searchTextInput, { color: theme.text }]}
             placeholder="Search by ID, title, or details..."
@@ -172,7 +203,7 @@ export default function ComplaintsScreen() {
           />
           {searchText !== '' && (
             <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+              <Ionicons name="close-circle" size={18} color={accentColor} />
             </TouchableOpacity>
           )}
         </View>
@@ -180,7 +211,7 @@ export default function ComplaintsScreen() {
 
       {/* ── RESULTS COUNT ── */}
       <View style={styles.resultsHeader}>
-        <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
+        <Text style={[styles.resultsCount, { color: searchText ? accentColor : theme.textSecondary }]}>
           {complaints.length} Active {complaints.length === 1 ? 'Complaint' : 'Complaints'}
         </Text>
       </View>
@@ -200,13 +231,18 @@ export default function ComplaintsScreen() {
         }
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.textSecondary}
-          />
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[accentColor]}
+              tintColor={accentColor}
+            />
+          )
         }
       />
+
+      <FullScreenSpinner visible={refreshing} message="Updating Complaints..." color={accentColor} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -229,7 +265,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
   searchInput: { 
@@ -244,7 +282,7 @@ const styles = StyleSheet.create({
   searchTextInput: { flex: 1, fontSize: 15, fontWeight: '500' },
   
   resultsHeader: { paddingHorizontal: 20, paddingBottom: 14 },
-  resultsCount: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8, opacity: 0.8 },
+  resultsCount: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, opacity: 0.8 },
   
   listContent: { paddingHorizontal: 16, paddingBottom: 30 },
   
@@ -253,6 +291,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 18,
     borderWidth: 1,
+    borderLeftWidth: 6, // Thick alert stripe
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 8 },
       android: { elevation: 1 },
@@ -260,12 +299,11 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   
-  // 📍 FIX: Updated Flex layout for ID and Date
   idContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  iconWrapper: { backgroundColor: 'rgba(239,68,68,0.1)', padding: 4, borderRadius: 6 },
+  iconWrapper: { padding: 4, borderRadius: 6 },
   idTextWrapper: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardId: { fontSize: 13, fontWeight: '700', letterSpacing: 0.3 },
-  cardDate: { fontSize: 12, fontWeight: '500', opacity: 0.7 },
+  cardId: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
+  cardDate: { fontSize: 12, fontWeight: '600', opacity: 0.7 },
   
   cardTitle: { fontSize: 17, fontWeight: '700', marginBottom: 6, letterSpacing: -0.2 },
   cardDescription: { fontSize: 14, lineHeight: 22, opacity: 0.9, marginBottom: 16 },

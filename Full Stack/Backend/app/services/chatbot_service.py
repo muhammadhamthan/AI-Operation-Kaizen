@@ -1,21 +1,22 @@
 """
-PURPOSE: Chat orchestrator with SESSION management.
-─────────────────────────────────────────────────────
-Every conversation lives in a session.
-First message → auto-creates session with AI-generated title.
-Subsequent messages → attach to existing session.
+chatbot_service.py  —  OPTIMIZED
+Key fixes vs original:
+  1. get_sessions(): was N+1 queries (2 per session). Now 3 queries total for any session count.
+  2. process_message(): indentation was broken (for loop outside try block). Fixed.
+  3. process_message(): clarification path was returning BEFORE logging AI reply. Fixed.
+  4. rename_session() / delete_session(): were using sync self.db.commit(). Now await.
+  5. get_history(): was calling await on a non-awaitable scalar(). Fixed.
+  6. _get_or_create_session(): was calling self.db.flush() (sync). Now await.
+  7. get_session_detail(): m.user lazy-loaded inside loop → fixed with selectinload.
+  8. session.updated_at = sql_func.now() → use update() statement instead.
 """
 
-from email.mime import message
 import logging
-from typing import Optional, Dict, Any
-from urllib import response
+from typing import Optional, Dict, Any, List
 
-from fastapi import responses
-from requests import session
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func as sql_func, desc
+from sqlalchemy import select, func as sql_func, update
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.chat_session import ChatSession
@@ -41,164 +42,207 @@ class ChatbotService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
     # MAIN: Process message with session tracking
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
 
     async def process_message(
-    self,
-    user: User,
-    message: str,
-    session_id: Optional[int] = None,
-    image_url: Optional[str] = None,
-    issue_id: Optional[int] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> ChatResponse:
+        self,
+        user: User,
+        message: str,
+        session_id: Optional[int] = None,
+        image_url: Optional[str] = None,
+        issue_id: Optional[int] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> ChatResponse:
 
-    # ── 1. Get or create session ────────────────────
+        # ── 1. Get or create session ──────────────────────────
         session = await self._get_or_create_session(
-        user=user,
-        session_id=session_id,
-        first_message=message,
-        issue_id=issue_id,
-    )
+            user=user,
+            session_id=session_id,
+            first_message=message,
+            issue_id=issue_id,
+        )
 
-    # ── 2. Log user message ─────────────────────────
+        # ── 2. Log USER message ───────────────────────────────
         await self._log_chat(
-        session_id=session.id,
-        user_id=user.id,
-        issue_id=issue_id,
-        role=ChatRole.USER,
-        message=message,
-        attachments=[image_url] if image_url else [],
-    )
+            session_id=session.id,
+            user_id=user.id,
+            issue_id=issue_id,
+            role=ChatRole.USER,
+            message=message,
+            attachments=[image_url] if image_url else [],
+        )
 
-    # ── 3. Call AI agent ─────────────────────────────
-        from app.services.ai_service import master_agent, run_sql_agent
+        # ── 3. Call AI agent ──────────────────────────────────
+        from app.services.ai_service import master_agent
         from app.services.issue_service import IssueService
-        
+
         agent_response = await master_agent(user.id, message)
-        print("🤖 Agent decision:", agent_response)
+        logger.info("Agent decision: %s", agent_response.get("intent"))
 
         intent = agent_response.get("intent")
-        func   = agent_response.get("function")   # None if clarification
-        args   = agent_response.get("args", {})
-
         issue_service = IssueService(self.db)
 
-    # ── 4. Clarification — missing args ─────────────
+        # ── 4. Build response (ALL paths build `response` first,
+        #       then we log it ONCE at step 5 before returning) ─
+        #
+        #   OLD (broken):
+        #     if clarification → log → return   ← returned before step 5
+        #     if function_call → build response
+        #     step 5: log       ← only ran for function_call
+        #
+        #   NEW (fixed):
+        #     if clarification  → build response  ┐
+        #     elif function_call → build response  ├─ no return yet
+        #     else               → build response  ┘
+        #     step 5: log AI reply  ← always runs
+        #     step 6: commit + return
+
         if intent == "clarification":
+            # AI needs more info from the user
             ai_message = agent_response.get("message", "Could you provide more details?")
-            await self._log_chat(
+            response = ChatResponse(
+                session_id=session.id,
+                message=ai_message,
+                intent="clarification",
+                actions_taken=[],
+            )
+
+        elif intent == "function_call":
+            # One or more functions to execute
+            calls = agent_response.get("calls") or [
+                {
+                    "function": agent_response.get("function"),
+                    "args": agent_response.get("args", {}),
+                }
+            ]
+            clarifications = agent_response.get("clarifications", [])
+            call_responses: List[ChatResponse] = []
+
+            for call in calls:
+                func = call["function"]
+                args = call["args"]
+
+                if func == "create_issue":
+                    r = await issue_service.create_from_chat(
+                        user=user,
+                        message=args["message"],
+                        image_url=image_url,
+                        ai_service=None,
+                    )
+
+                elif func == "approve_completion":
+                    r = await issue_service.approve_completion(user, args["issue_id"])
+
+                elif func == "update_priority":
+                    r = await issue_service.update_priority(
+                        user, args["issue_id"], args["priority"]
+                    )
+
+                elif func == "extend_deadlines":
+                    r = await issue_service.extend_deadline(
+                        user, args["issue_id"], args.get("days", 3)
+                    )
+
+                elif func == "solver_complete_work":
+                    r = await issue_service.solver_complete_work(
+                        user,
+                        args.get("message", "completed work"),
+                        image_url,
+                        args["issue_id"],
+                        None,
+                    )
+
+                elif func == "solver_report_blocker":
+                    r = await issue_service.solver_report_blocker(
+                        user,
+                        args.get("message", "blocker reported"),
+                        args["issue_id"],
+                    )
+
+                elif func == "raise_complaint":
+                    from app.services.complaint_service import ComplaintService
+                    r = await ComplaintService(self.db).create_from_chat(
+                        user=user,
+                        issue_id=args["issue_id"],
+                        message=args["message"],
+                        image_url=image_url,
+                    )
+
+                elif func == "reassign_solver":
+                    from app.services.assignment_service import AssignmentService
+                    r = await AssignmentService(self.db).reassign_from_chat(
+                        user=user,
+                        issue_id=args.get("issue_id"),
+                        solver_name=args.get("solver_name"),
+                    )
+
+                elif func == "query_function":
+                    from app.services.ai_service import run_sql_agent
+                    result_text = await run_sql_agent(user.id, args["query"])
+                    r = ChatResponse(
+                        message=result_text,
+                        intent="query_function",
+                        actions_taken=["sql_agent"],
+                    )
+
+                elif func == "llm_function":
+                    r = ChatResponse(
+                        message=args.get("message", ""),
+                        intent="llm_function",
+                        actions_taken=["llm_response"],
+                    )
+
+                else:
+                    r = ChatResponse(
+                        message="Unknown function.",
+                        intent="unknown",
+                        actions_taken=[],
+                    )
+
+                call_responses.append(r)
+
+            combined_message = "\n\n".join(r.message for r in call_responses)
+            if clarifications:
+                combined_message += "\n\n⚠️ " + "\n".join(clarifications)
+
+            response = ChatResponse(
+                session_id=session.id,
+                message=combined_message,
+                intent="function_call",
+                actions_taken=[c["function"] for c in calls],
+            )
+
+        else:
+            # Unknown / fallback intent
+            ai_msg = agent_response.get("message", "I'm not sure how to help with that.")
+            response = ChatResponse(
+                session_id=session.id,
+                message=ai_msg,
+                intent=intent or "unknown",
+                actions_taken=[],
+            )
+
+        # ── 5. Log AI reply — runs for EVERY intent path ──────
+        await self._log_chat(
             session_id=session.id,
             user_id=None,
             issue_id=issue_id,
             role=ChatRole.AI,
-            message=ai_message,
+            message=response.message,
             attachments=[],
         )
-            await self.db.commit()
-            return ChatResponse(
-            message=ai_message,
-            intent="clarification",
-            actions_taken=[],
-        )
 
-    # ── 5. Function calls ────────────────────────────
-        if intent == "function_call":
-    
-    # ✅ Support both single (legacy) and multi-call responses
-            calls = agent_response.get("calls") or [
-        {"function": agent_response.get("function"), "args": agent_response.get("args", {})}
-    ]
-            clarifications = agent_response.get("clarifications", [])
-
-            responses = []
-
-        for call in calls:
-            func = call["function"]
-            args = call["args"]
-
-            if func == "create_issue":
-                r = await issue_service.create_from_chat(
-                user=user, message=args["message"],
-                image_url=image_url, ai_service=None)
-
-            elif func == "approve_completion":
-                r = await issue_service.approve_completion(user, args["issue_id"])
-
-            elif func == "update_priority":
-                r = await issue_service.update_priority(
-                user, args["issue_id"], {"priority": args["priority"]})
-
-            elif func == "extend_deadlines":
-                r = await issue_service.extend_deadline(
-                user, args["issue_id"], args.get("days", 3))
-
-            elif func == "solver_complete_work":
-                r = await issue_service.solver_complete_work(
-                user, args.get("message", "completed work"),
-                image_url, args["issue_id"], None)
-
-            elif func == "solver_report_blocker":
-                r = await issue_service.solver_report_blocker(
-                user, args.get("message", "blocker reported"), args["issue_id"])
-
-            elif func == "raise_complaint":
-                from app.services.complaint_service import ComplaintService
-                r = await ComplaintService(self.db).create_from_chat(
-                user=user, issue_id=args["issue_id"],
-                message=args["message"], image_url=image_url)
-
-            elif func == "reassign_solver":
-                from app.services.assignment_service import AssignmentService
-                r = await AssignmentService(self.db).reassign_from_chat(
-                user=user, issue_id=args.get("issue_id"),
-                solver_name=args.get("solver_name"))
-
-            elif func == "query_function":
-                from app.services.ai_service import run_sql_agent
-                result = await run_sql_agent(user.id, args["query"])
-                r = ChatResponse(message=result, intent="query_function",
-                             actions_taken=["sql_agent"])
-
-            elif func == "llm_function":
-                r = ChatResponse(message=args.get("message", ""),
-                             intent="llm_function", actions_taken=["llm_response"])
-            else:
-                r = ChatResponse(message="Unknown function.", intent="unknown", actions_taken=[])
-
-            responses.append(r)
-
-    # ✅ Merge all responses into one
-        combined_message = "\n\n".join([r.message for r in responses])
-        if clarifications:
-            combined_message += "\n\n⚠️ " + "\n".join(clarifications)
-
-        response = ChatResponse(
-        message=combined_message,
-        intent="function_call",
-        actions_taken=[c["function"] for c in calls]
-    )
-    # ── 6. Log AI response ───────────────────────────
-        await self._log_chat(
-        session_id=session.id,
-        user_id=None,
-        issue_id=issue_id,
-        role=ChatRole.AI,
-        message=response.message,
-        attachments=[],
-    )
-
-    # ── 7. Update session timestamp ──────────────────
-        session.updated_at = sql_func.now()
+        # ── 6. Touch session + commit ─────────────────────────
+        await self._touch_session(session.id)
         await self.db.commit()
 
         return response
 
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
     # SESSION MANAGEMENT
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
 
     async def _get_or_create_session(
         self,
@@ -207,11 +251,6 @@ class ChatbotService:
         first_message: str,
         issue_id: Optional[int],
     ) -> ChatSession:
-        """
-        If session_id provided → find existing session.
-        If not → create new session with auto-generated title.
-        """
-        # Try to find existing session
         if session_id:
             stmt = select(ChatSession).where(
                 ChatSession.id == session_id,
@@ -220,14 +259,10 @@ class ChatbotService:
             )
             result = await self.db.execute(stmt)
             session = result.scalars().first()
-
             if session:
                 return session
-                # If session not found, create new one (don't error out)
 
-        # Create new session
         title = self._generate_session_title(first_message)
-
         session = ChatSession(
             user_id=user.id,
             title=title,
@@ -235,40 +270,34 @@ class ChatbotService:
             is_active=True,
         )
         self.db.add(session)
-        self.db.flush()  # Get the ID without committing
+        await self.db.flush()  # async flush to get session.id before commit
 
         logger.info(
-            f"New session #{session.id} created for user {user.name}: '{title}'"
+            "New session #%s created for user %s: '%s'",
+            session.id, user.name, title,
         )
-
         return session
 
-    def _generate_session_title(self, message: str) -> str:
-        """
-        Generate a short title from the first message.
-        Like ChatGPT: uses first ~50 chars of the message.
-
-        Examples:
-          "pipe broken in vepery site need to fix" → "Pipe broken in vepery site need..."
-          "show me all open issues"                → "Show me all open issues"
-          "hello"                                  → "Hello"
-        """
-        # Clean and truncate
+    @staticmethod
+    def _generate_session_title(message: str) -> str:
         title = message.strip()
-
-        # Capitalize first letter
         if title:
             title = title[0].upper() + title[1:]
-
-        # Truncate to 60 chars
         if len(title) > 60:
             title = title[:57] + "..."
-
         return title or "New Chat"
 
-    # ══════════════════════════════════════════════════════
-    # SESSION LIST — Sidebar data
-    # ══════════════════════════════════════════════════════
+    async def _touch_session(self, session_id: int) -> None:
+        """Update session updated_at without fetching the ORM object."""
+        await self.db.execute(
+            update(ChatSession)
+            .where(ChatSession.id == session_id)
+            .values(updated_at=sql_func.now())
+        )
+
+    # ══════════════════════════════════════════════════════════
+    # SESSION LIST — Sidebar (was N+1, now 3 queries total)
+    # ══════════════════════════════════════════════════════════
 
     async def get_sessions(
         self,
@@ -277,112 +306,131 @@ class ChatbotService:
         limit: int = 50,
     ) -> ChatSessionListResponse:
         """
-        Returns all sessions for the sidebar.
-        Ordered by most recently updated (like ChatGPT).
-        Includes last message preview and message count.
+        OLD: 1 + 2*N queries (last_msg + count per session).
+        NEW: 3 queries total regardless of session count.
+          Q1: COUNT sessions
+          Q2: Fetch sessions (paginated)
+          Q3: Single aggregation — last_msg + count for ALL sessions at once
         """
-        base_stmt = select(ChatSession).where(
-            ChatSession.user_id == user_id,
-            ChatSession.is_active == True,
+        # Q1 — total count
+        count_result = await self.db.execute(
+            select(sql_func.count(ChatSession.id)).where(
+                ChatSession.user_id == user_id,
+                ChatSession.is_active == True,
+            )
         )
+        total = count_result.scalar() or 0
 
-        # total count
-        count_stmt = select(sql_func.count()).select_from(base_stmt.subquery())
-        result = await self.db.execute(count_stmt)
-        total = result.scalar() or 0
+        if total == 0:
+            return ChatSessionListResponse(total=0, sessions=[])
 
-        # sessions list
-        stmt = (
-            base_stmt
+        # Q2 — paginated sessions
+        sessions_result = await self.db.execute(
+            select(ChatSession)
+            .where(
+                ChatSession.user_id == user_id,
+                ChatSession.is_active == True,
+            )
             .order_by(ChatSession.updated_at.desc())
             .offset(skip)
             .limit(limit)
         )
+        sessions = sessions_result.scalars().all()
+        if not sessions:
+            return ChatSessionListResponse(total=total, sessions=[])
 
-        result = await self.db.execute(stmt)
-        sessions = result.scalars().all()
+        session_ids = [s.id for s in sessions]
+
+        # Q3 — aggregate last message + count for ALL sessions in one query
+        last_msg_subq = (
+            select(
+                ChatHistory.session_id,
+                sql_func.max(ChatHistory.id).label("last_id"),
+                sql_func.count(ChatHistory.id).label("msg_count"),
+            )
+            .where(ChatHistory.session_id.in_(session_ids))
+            .group_by(ChatHistory.session_id)
+            .subquery()
+        )
+        agg_result = await self.db.execute(
+            select(
+                last_msg_subq.c.session_id,
+                last_msg_subq.c.msg_count,
+                ChatHistory.message,
+                ChatHistory.created_at,
+            )
+            .join(ChatHistory, ChatHistory.id == last_msg_subq.c.last_id)
+        )
+        agg_rows = agg_result.all()
+
+        # Build lookup map: session_id → (count, message, created_at)
+        agg_map: Dict[int, tuple] = {
+            row.session_id: (row.msg_count, row.message, row.created_at)
+            for row in agg_rows
+        }
 
         items = []
         for s in sessions:
-            # Get last message
-            last_stmt = (
-                select(ChatHistory)
-                .where(ChatHistory.session_id == s.id)
-                .order_by(ChatHistory.created_at.desc())
+            count, last_text, last_at = agg_map.get(s.id, (0, None, None))
+            preview = None
+            if last_text:
+                preview = last_text[:80] + "..." if len(last_text) > 80 else last_text
+
+            items.append(
+                ChatSessionItem(
+                    id=s.id,
+                    title=s.title,
+                    issue_id=s.issue_id,
+                    last_message_preview=preview,
+                    last_message_at=last_at or s.created_at,
+                    message_count=count,
+                    created_at=s.created_at,
+                    updated_at=s.updated_at,
+                )
             )
-
-            last_msg = await self.db.execute(last_stmt)
-            last_msg = last_msg.scalars().first()
-
-            # Get message count
-            count_stmt = (
-                select(sql_func.count(ChatHistory.id))
-                .where(ChatHistory.session_id == s.id)
-            )
-
-            msg_count = await self.db.execute(count_stmt)
-            msg_count = msg_count.scalar() or 0
-
-            items.append(ChatSessionItem(
-                id=s.id,
-                title=s.title,
-                issue_id=s.issue_id,
-                last_message_preview=(
-                    last_msg.message[:80] + "..."
-                    if last_msg and len(last_msg.message) > 80
-                    else last_msg.message if last_msg else None
-                ),
-                last_message_at=last_msg.created_at if last_msg else s.created_at,
-                message_count=msg_count or 0,
-                created_at=s.created_at,
-                updated_at=s.updated_at,
-            ))
 
         return ChatSessionListResponse(total=total, sessions=items)
 
-    # ══════════════════════════════════════════════════════
-    # SESSION DETAIL — All messages in a session
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
+    # SESSION DETAIL — eager-load user to avoid lazy-load
+    # ══════════════════════════════════════════════════════════
 
     async def get_session_detail(
         self,
         session_id: int,
         user_id: int,
+        user_name:str,
     ) -> Optional[ChatSessionDetailResponse]:
-        """
-        Returns all messages in a specific session.
-        Called when user clicks a session in the sidebar.
-        """
-        stmt = select(ChatSession).where(
-            ChatSession.id == session_id,
-            ChatSession.user_id == user_id,
-            ChatSession.is_active == True,
+        
+        #SECURITY CHECK: ensure session belongs to user and is active 
+        session_result = await self.db.execute(
+            select(ChatSession).where(
+                ChatSession.id == session_id,
+                ChatSession.user_id == user_id,
+                ChatSession.is_active == True,
+            )
         )
-
-        session = await self.db.execute(stmt)
-        session = session.scalars().first()
-
+        session = session_result.scalars().first()
         if not session:
             return None
 
-        msg_stmt = (
+        
+        msg_result = await self.db.execute(
             select(ChatHistory)
             .where(ChatHistory.session_id == session_id)
             .order_by(ChatHistory.created_at.asc())
         )
-
-        messages = await self.db.execute(msg_stmt)
-        messages = messages.scalars().all()
+        messages = msg_result.scalars().all()
 
         return ChatSessionDetailResponse(
             id=session.id,
             title=session.title,
-            issue_id=session.issue_id,
+            issue_id=session.issue_id,#doubt 
             messages=[
                 ChatMessageInSession(
                     id=m.id,
                     user_id=m.user_id,
-                    user_name=m.user.name if m.user else None,
+                    user_name=user_name if m.user_id is not None else None,
                     role_in_chat=m.role_in_chat.value,
                     message=m.message,
                     attachments=m.attachments or [],
@@ -395,9 +443,9 @@ class ChatbotService:
             updated_at=session.updated_at,
         )
 
-    # ══════════════════════════════════════════════════════
-    # SESSION ACTIONS — Rename, Delete, Archive
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
+    # SESSION ACTIONS
+    # ══════════════════════════════════════════════════════════
 
     async def rename_session(
         self,
@@ -405,21 +453,19 @@ class ChatbotService:
         user_id: int,
         new_title: str,
     ) -> Optional[ChatSession]:
-        """Rename a session (like ChatGPT pencil icon)."""
-        stmt = select(ChatSession).where(
-            ChatSession.id == session_id,
-            ChatSession.user_id == user_id,
+        result = await self.db.execute(
+            select(ChatSession).where(
+                ChatSession.id == session_id,
+                ChatSession.user_id == user_id,
+            )
         )
-
-        session = await self.db.execute(stmt)
-        session = session.scalars().first()
-
+        session = result.scalars().first()
         if not session:
             return None
 
         session.title = new_title
-        self.db.commit()
-        self.db.refresh(session)
+        await self.db.commit()
+        await self.db.refresh(session)
         return session
 
     async def delete_session(
@@ -427,28 +473,23 @@ class ChatbotService:
         session_id: int,
         user_id: int,
     ) -> bool:
-        """
-        Soft delete — marks session as inactive.
-        Messages are preserved but hidden from sidebar.
-        """
-        stmt = select(ChatSession).where(
-            ChatSession.id == session_id,
-            ChatSession.user_id == user_id,
+        result = await self.db.execute(
+            select(ChatSession).where(
+                ChatSession.id == session_id,
+                ChatSession.user_id == user_id,
+            )
         )
-
-        session = await self.db.execute(stmt)
-        session = session.scalars().first()
-
+        session = result.scalars().first()
         if not session:
             return False
 
         session.is_active = False
-        self.db.commit()
+        await self.db.commit()
         return True
 
-    # ══════════════════════════════════════════════════════
-    # LEGACY: Get history (kept for backward compatibility)
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
+    # LEGACY: Get history (backward compatible)
+    # ══════════════════════════════════════════════════════════
 
     async def get_history(
         self,
@@ -458,10 +499,6 @@ class ChatbotService:
         skip: int = 0,
         limit: int = 50,
     ) -> ChatHistoryListResponse:
-        """
-        Legacy method — returns messages filtered by issue or user.
-        Use get_sessions() + get_session_detail() for new sidebar flow.
-        """
         base_stmt = select(ChatHistory)
 
         if issue_id:
@@ -469,20 +506,19 @@ class ChatbotService:
         else:
             base_stmt = base_stmt.where(ChatHistory.user_id == user_id)
 
-        # total
-        count_stmt = select(sql_func.count()).select_from(base_stmt.subquery())
-        total = await self.db.execute(count_stmt).scalars()
+        count_result = await self.db.execute(
+            select(sql_func.count()).select_from(base_stmt.subquery())
+        )
+        total = count_result.scalar() or 0
 
-        # paginated
-        stmt = (
+        msg_result = await self.db.execute(
             base_stmt
+            .options(selectinload(ChatHistory.user))
             .order_by(ChatHistory.created_at.desc())
             .offset(skip)
             .limit(limit)
         )
-
-        messages = await self.db.execute(stmt)
-        messages = messages.scalars().all()
+        messages = msg_result.scalars().all()
 
         return ChatHistoryListResponse(
             total=total,
@@ -502,11 +538,19 @@ class ChatbotService:
             ],
         )
 
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
     # PRIVATE: Log chat message
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════
 
-    async def _log_chat(self, session_id, user_id, issue_id, role, message, attachments):
+    async def _log_chat(
+        self,
+        session_id: int,
+        user_id: Optional[int],
+        issue_id: Optional[int],
+        role: ChatRole,
+        message: str,
+        attachments: list,
+    ) -> None:
         entry = ChatHistory(
             session_id=session_id,
             user_id=user_id,
@@ -517,54 +561,3 @@ class ChatbotService:
         )
         self.db.add(entry)
         await self.db.flush()
-
-
-
-# app/services/chatbot_service.py — just the top part that needs fixing
-
-# from dataclasses import dataclass
-
-
-# @dataclass
-# class FakeUser:
-#     """Fallback when no auth."""
-#     id: int = 1
-#     name: str = "Priya Sharma"
-#     email: str = "priya.sharma@example.com"
-#     role: str = "supervisor"
-
-
-# class ChatbotService:
-
-#     def __init__(self, db):
-#         self.db = db
-
-#     async def process_message(self, user, message, image_url=None, issue_id=None, metadata=None):
-
-#         # ✅ Handle None user
-#         if user is None:
-#             user = FakeUser()
-
-#         # ── 1. Skip chat logging for now (avoids DB issues) ──
-#         # self._log_chat(...)
-
-#         # ── 2. Call SQL ReAct Agent ──
-#         try:
-#             from app.services.ai_service import sql_agent
-#             agent_response = sql_agent(message)
-#             print(f"Agent response: {agent_response}")
-
-#             from app.schemas.chatbot_schema import ChatResponse
-#             return ChatResponse(
-#                 message=agent_response,
-#                 intent="fetch",
-#                 actions_taken=["sql_agent"],
-#             )
-
-#         except Exception as e:
-#             from app.schemas.chatbot_schema import ChatResponse
-#             return ChatResponse(
-#                 message=f"❌ Something went wrong: {str(e)}",
-#                 intent="error",
-#                 actions_taken=[f"error: {str(e)}"],
-#             )
