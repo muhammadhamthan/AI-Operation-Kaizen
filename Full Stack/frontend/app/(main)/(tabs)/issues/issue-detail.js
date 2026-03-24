@@ -17,6 +17,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '../../../../src/theme/ThemeContext';
+import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { 
   fetchIssueById, 
   fetchIssueTimeline, 
@@ -33,7 +34,6 @@ import Loader from '../../../../src/components/common/Loader';
 import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import Button from '../../../../src/components/common/Button'; 
 
-// ── ADDED REUSABLE IMPORTS ──
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
@@ -45,6 +45,7 @@ export default function IssueDetailScreen() {
   
   const dispatch = useDispatch();
 
+  const user = useSelector(selectCurrentUser);
   const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
   const fullIssue = useSelector(selectCurrentIssue);
   const timeline = useSelector(selectIssueTimeline) || [];
@@ -86,7 +87,6 @@ export default function IssueDetailScreen() {
     
     setRefreshing(true);
     try {
-      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
       await Promise.allSettled([
         dispatch(fetchIssueById(parseInt(id))),
         dispatch(fetchIssueTimeline(parseInt(id)))
@@ -96,7 +96,6 @@ export default function IssueDetailScreen() {
     }
   }, [id, isOnline, dispatch]);
 
-  // 📍 FIX: Added `!refreshing` to prevent Loader hijacking
   if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
   if (!issue) return <Loader message="Loading issue details..." />;
 
@@ -114,11 +113,17 @@ export default function IssueDetailScreen() {
   const solverPhone = currentAssignment?.solver_phone || currentAssignment?.assigned_to?.phone || null;
   const dueDate = currentAssignment?.due_date || issue.deadline_at || null;
 
-  // ✅ ONLY OVERDUE IF NOT COMPLETED
   const overdueDays = calculateOverdueDays(issue.deadline_at);
   const isOverdue = overdueDays > 0 && issue.status !== 'COMPLETED';
 
-  // Simple Avatar Generator
+  // ── ROLE + STATUS DERIVED FLAGS ──
+  const isProblemSolver = user?.role === 'problemsolver';
+  const isSupervisor    = user?.role === 'supervisor';
+  const isManager       = user?.role === 'manager';
+
+  const showMarkDoneBtn = isProblemSolver && issue.status === 'IN_PROGRESS';
+  const showApproveBtn  = (isSupervisor || isManager) && issue.status === 'RESOLVED_PENDING_REVIEW';
+
   const getInitials = (name) => {
     if (!name || name === 'N/A') return 'NA';
     return name.substring(0, 2).toUpperCase();
@@ -165,7 +170,6 @@ export default function IssueDetailScreen() {
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
         
-        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
         <View style={styles.headerRight}>
           {Platform.OS === 'web' ? (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
@@ -180,7 +184,6 @@ export default function IssueDetailScreen() {
       <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}
-        // 📍 FIX: Disables double spinner on web
         refreshControl={
           Platform.OS === 'web' ? undefined : (
             <RefreshControl
@@ -203,7 +206,6 @@ export default function IssueDetailScreen() {
               label={issue.priority.toUpperCase()} 
               color={getPriorityColor(issue.priority)} 
             />
-            {/* ✅ Badge shows up only if overdue AND not completed */}
             {isOverdue && (
               <StatusBadge label={`${overdueDays}d overdue`} color="#ef4444" />
             )}
@@ -269,11 +271,9 @@ export default function IssueDetailScreen() {
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
           <View style={styles.peopleGrid}>
             <View style={[styles.personRow, solverName && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-              
               <View style={[styles.avatarCircle, { backgroundColor: '#3b82f6' }]}>
                 <Text style={styles.avatarText}>{getInitials(raisedByName)}</Text>
               </View>
-              
               <View style={styles.personInfo}>
                 <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
                   {raisedByName}
@@ -284,11 +284,9 @@ export default function IssueDetailScreen() {
             
             {solverName && (
               <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
-                
                 <View style={[styles.avatarCircle, { backgroundColor: '#10a37f' }]}>
                   <Text style={styles.avatarText}>{getInitials(solverName)}</Text>
                 </View>
-
                 <View style={styles.personInfo}>
                   <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
                     {solverName}
@@ -338,7 +336,6 @@ export default function IssueDetailScreen() {
           )}
           
           <View style={styles.infoRow}>
-            {/* ✅ Icon background and color adapt if overdue */}
             <View style={[styles.iconWrapper, { backgroundColor: isOverdue ? 'rgba(239,68,68,0.1)' : iconBg }]}>
               <Ionicons name="flag-outline" size={18} color={isOverdue ? '#ef4444' : theme.textSecondary} />
             </View>
@@ -346,7 +343,6 @@ export default function IssueDetailScreen() {
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Deadline</Text>
               <Text style={[styles.infoValue, { color: isOverdue ? '#ef4444' : theme.text }]}>
                 {formatDate(issue.deadline_at)}
-                {/* ✅ Text appended here if overdue */}
                 {isOverdue && ` (${overdueDays} days overdue)`}
               </Text>
             </View>
@@ -383,7 +379,6 @@ export default function IssueDetailScreen() {
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Media Attached</Text>
             {issue.images.map((img, index) => (
               <View key={index} style={styles.imageContainer}>
-                
                 <View style={styles.imageHeader}>
                   <StatusBadge 
                     label={img.image_type} 
@@ -396,7 +391,6 @@ export default function IssueDetailScreen() {
                     />
                   )}
                 </View>
-
                 <View style={[styles.imageWrapper, { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0', borderColor }]}>
                    <Image
                      source={{ uri: img.image_url }}
@@ -405,7 +399,6 @@ export default function IssueDetailScreen() {
                      onError={(e) => console.log('Image failed to load:', img.image_url, e.nativeEvent.error)}
                    />
                 </View>
-                
                 <View style={styles.imageFooter}>
                   <Text style={[styles.uploaderName, { color: theme.text }]}>
                     Uploaded by: {img.uploader_name || 'System'}
@@ -414,7 +407,6 @@ export default function IssueDetailScreen() {
                     {formatDateTime(img.created_at)}
                   </Text>
                 </View>
-
               </View>
             ))}
           </View>
@@ -455,22 +447,52 @@ export default function IssueDetailScreen() {
         )}
 
         {/* ── ACTIONS ── */}
-        {/* ✅ Added the simple Raise Complaint button for RESOLVED_PENDING_REVIEW */}
-        {issue.status === 'RESOLVED_PENDING_REVIEW' && (
-          <View style={styles.actions}>
+        <View style={styles.actions}>
+
+          {/* ── PROBLEM SOLVER: Mark as Fixed (IN_PROGRESS only) ── */}
+          {showMarkDoneBtn && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.primaryActionBtn, styles.greenBtn]}
+              onPress={() => Alert.alert('Coming Soon', 'Mark as Fixed — Phase 2-3')}
+            >
+              <View style={styles.primaryActionBtnInner}>
+                <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+                <Text style={styles.primaryActionBtnText}>Mark as Fixed</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* ── SUPERVISOR / MANAGER: Approve & Close (RESOLVED_PENDING_REVIEW only) ── */}
+          {showApproveBtn && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.primaryActionBtn, styles.greenBtn, showMarkDoneBtn && styles.buttonMargin]}
+              onPress={() => Alert.alert('Coming Soon', 'Approve & Close — Phase 2-3')}
+            >
+              <View style={styles.primaryActionBtnInner}>
+                <Ionicons name="checkmark-done-circle-outline" size={22} color="#fff" />
+                <Text style={styles.primaryActionBtnText}>Approve & Close</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* ── SUPERVISOR / MANAGER: Raise Complaint (RESOLVED_PENDING_REVIEW only) ── */}
+          {(isSupervisor || isManager) && issue.status === 'RESOLVED_PENDING_REVIEW' && (
             <Button 
               title="Raise Complaint" 
               variant="danger" 
               icon="alert-circle-outline" 
-              onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')} 
+              onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')}
+              style={styles.buttonMargin}
             />
-          </View>
-        )}
+          )}
+
+        </View>
         
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* ── NEW CLEAN IMPLEMENTATION ── */}
       <FullScreenSpinner visible={refreshing} message="Updating Issue..." color={theme.primary} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
@@ -535,7 +557,6 @@ const styles = StyleSheet.create({
     gap: 12, 
     paddingBottom: 12 
   },
-  
   avatarCircle: {
     width: 44,
     height: 44,
@@ -548,11 +569,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  
   personInfo: { flex: 1, justifyContent: 'center' },
   personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
   personRole: { fontSize: 13 },
-  
   phoneBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -578,7 +597,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden', 
   },
   image: { width: '100%', height: '100%' },
-  
   imageFooter: { marginTop: 10 },
   uploaderName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   imageDate: { fontSize: 12 },
@@ -590,6 +608,40 @@ const styles = StyleSheet.create({
   historyDetails: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
   historyTime: { fontSize: 12, fontWeight: '500' },
   
+  // ── ACTIONS ──
   actions: { marginHorizontal: 16, marginTop: 32 },
+  buttonMargin: { marginTop: 12 },
+
+  // ── GREEN CTA BUTTON ──
+  primaryActionBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#10a37f',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  greenBtn: {
+    backgroundColor: '#10a37f',
+  },
+  primaryActionBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  primaryActionBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+
   bottomPadding: { height: 40 },
 });
