@@ -17,6 +17,8 @@ export default function DashboardLayout() {
       <Stack.Screen name="site-detail" />
       <Stack.Screen name="solvers" />
       <Stack.Screen name="solver-profile" />
+      <Stack.Screen name="awaiting_review"/>
+      <Stack.Screen name="awaiting_review_detail"/>
     </Stack>
   );
 }

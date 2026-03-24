@@ -10,7 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Alert, // 📍 Added Alert for ghost sessions
+  Alert, 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -26,7 +26,7 @@ import {
   loadConversation,
   startNewConversation,
   selectCurrentConversationId,
-  selectConversationLoading // 📍 FIX: Using the main screen loader
+  selectConversationLoading 
 } from '../../../src/store/slices/chatSlice';
 import { selectUnreadCount, selectNotifications, markAllAsRead, markAsRead, setNotifications } from '../../../src/store/slices/notificationsSlice';
 import NotificationBanner from '../../../src/components/chat/NotificationBanner';
@@ -36,6 +36,11 @@ import ChatHistorySidebar from '../../../src/components/chat/ChatHistorySidebar'
 import Avatar from '../../../src/components/common/Avatar';
 import { navigateToNotification } from '../../../src/utils/notificationNavigation';
 import { sendChatMessage } from '../../../src/services/api';
+
+// ── ADDED REUSABLE IMPORTS ──
+import { selectIsOnline } from '../../../src/store/slices/offlineSlice';
+import Toast from '../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../src/components/common/FullScreenSpinner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = 280;
@@ -58,10 +63,13 @@ export default function ChatScreen() {
   const unreadCount = useSelector(selectUnreadCount);
   const notifications = useSelector(selectNotifications);
   const currentSessionId = useSelector(selectCurrentConversationId);
-  const isConversationLoading = useSelector(selectConversationLoading); // 📍 FIX
+  const isConversationLoading = useSelector(selectConversationLoading);
+  const isOnline = useSelector(selectIsOnline);
 
   const scrollViewRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false); 
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -70,7 +78,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (user?.id) {
       dispatch(loadChatHistory());
-      dispatch(startNewConversation()); // 📍 FIX: Guarantees a blank screen on startup
+      dispatch(startNewConversation()); 
       setSelectedConversation(null);
     }
 
@@ -93,24 +101,17 @@ export default function ChatScreen() {
     if (!drawerOpen) setDrawerOpen(true);
   }, [drawerOpen, drawerAnimation]);
 
-  // 📍 FIX: Ghost Session handling!
   const handleSelectConversation = async (conversationId) => {
-    toggleDrawer(); // Close drawer immediately for snappy UX
+    toggleDrawer(); 
     
     try {
-      // .unwrap() allows us to catch the 404 error from the backend
       await dispatch(loadConversation(conversationId)).unwrap();
       setSelectedConversation(conversationId);
     } catch (error) {
       console.warn("Failed to load session:", error);
-      
-      // Reset the screen back to empty state
       dispatch(startNewConversation());
       setSelectedConversation(null);
-      
-      // Refresh the sidebar to delete the ghost session
       dispatch(loadChatHistory());
-      
       Alert.alert("Session Not Found", "This conversation no longer exists or was deleted.");
     }
   };
@@ -121,10 +122,32 @@ export default function ChatScreen() {
     toggleDrawer();
   };
 
-  const handleSendMessage = async (text) => {
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    
+    setRefreshing(true);
+    try {
+      // 📍 FIX: Refresh both history and the active session if one exists
+      const fetches = [dispatch(loadChatHistory())];
+      if (currentSessionId) {
+        fetches.push(dispatch(loadConversation(currentSessionId)));
+      }
+      
+      await Promise.allSettled(fetches);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [isOnline, currentSessionId, dispatch]);
+
+  const handleSendMessage = async (text, imageUri = null) => {
     const userMessage = {
       id: Date.now(),
-      message: text,
+      message: text || '', 
+      image: imageUri,     
       role_in_chat: 'user',
       created_at: new Date().toISOString(),
     };
@@ -134,7 +157,7 @@ export default function ChatScreen() {
 
     try {
       const result = await sendChatMessage(
-        text,
+        text || 'Uploaded an image', 
         currentSessionId 
       );
 
@@ -198,9 +221,17 @@ export default function ChatScreen() {
           <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.push('/(main)/profile')}>
-          <Avatar uri={user?.avatar} name={user?.name} size="small" />
-        </TouchableOpacity>
+        {/* 📍 FIX: Added Header Actions Row for Sync + Avatar */}
+        <View style={styles.headerActions}>
+          {Platform.OS === 'web' && (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => router.push('/(main)/profile')}>
+            <Avatar uri={user?.avatar} name={user?.name} size="small" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <NotificationBanner
@@ -225,7 +256,6 @@ export default function ChatScreen() {
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         >
-          {/* 📍 FIX: Dynamic State rendering using the correct loader */}
           {isConversationLoading ? (
             <View style={styles.loadingHistoryContainer}>
               <ActivityIndicator size="large" color={theme.textSecondary} />
@@ -277,7 +307,6 @@ export default function ChatScreen() {
                 message={msg.message}
                 image={msg.image || (msg.attachments?.length > 0 ? msg.attachments[0] : null)}
                 location={msg.location} 
-                // 📍 FIX: Case insensitive check fixes the left/right alignment!
                 isUser={msg.role_in_chat?.toLowerCase() === 'user'} 
                 timestamp={msg.created_at}
               />
@@ -319,6 +348,11 @@ export default function ChatScreen() {
           selectedId={selectedConversation}
         />
       </Animated.View>
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Syncing Chat..." color={theme.primary} />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -327,6 +361,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   keyboardAvoid: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, 
+  webRefreshButton: { padding: 4 }, 
   menuButton: { padding: 4 },
   titleButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerTitle: { fontSize: 18, fontWeight: '600', letterSpacing: 0.2 },

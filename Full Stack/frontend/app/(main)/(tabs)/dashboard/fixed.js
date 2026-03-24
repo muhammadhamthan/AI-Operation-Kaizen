@@ -22,23 +22,25 @@ import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 import { formatDate } from '../../../../src/utils/formatters';
-import { getUserById } from '../../../../src/mocks/users';
-import { getAssignmentByIssueId } from '../../../../src/mocks/issueAssignments';
+
+// ── ADDED REUSABLE SPINNER ──
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function FixedIssuesScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Pulled in isDark for precise shading
+  const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const dispatch = useDispatch();
+  
   const user = useSelector(selectCurrentUser);
   const issues = useSelector(selectFixedIssues);
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
-  // ── LOGIC UNTOUCHED ──
   useEffect(() => {
     if (user) dispatch(fetchIssues(user));
   }, [user]);
@@ -62,24 +64,43 @@ export default function FixedIssuesScreen() {
     }
 
     setRefreshing(true);
+    
     if (user) {
-      await dispatch(fetchIssues(user));
+      try {
+        await Promise.allSettled([
+          dispatch(fetchIssues(user))
+        ]);
+      } finally {
+        setLastRefresh(Date.now());
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
     }
-    setLastRefresh(Date.now());
-    setRefreshing(false);
-  }, [user, isOnline, lastRefresh]);
+  }, [user, isOnline, lastRefresh, dispatch]);
 
-  // ── PREMIUM MONOCHROME PALETTE ──
+  const filteredIssues = issues.filter((issue) => {
+    if (!searchText) return true;
+    const lowerSearch = searchText.toLowerCase();
+    return (
+      issue.title?.toLowerCase().includes(lowerSearch) ||
+      issue.site_name?.toLowerCase().includes(lowerSearch) ||
+      issue.id?.toString().includes(lowerSearch)
+    );
+  });
+
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
-  const successColor = '#10a37f'; // OpenAI Green
+  const successColor = '#10a37f'; 
   const successBg = isDark ? 'rgba(16, 163, 127, 0.15)' : 'rgba(16, 163, 127, 0.1)';
 
   const renderItem = ({ item }) => {
-    const assignment = getAssignmentByIssueId(item.id);
-    const solver = assignment ? getUserById(assignment.assigned_to_solver_id) : null;
+    const siteName = item.site_name || item.site?.name || 'Unknown Site';
+    const solverName = item.assignments && item.assignments.length > 0 
+      ? item.assignments[0].solver_name 
+      : (item.solver_name || null);
 
     return (
       <TouchableOpacity
@@ -104,7 +125,7 @@ export default function FixedIssuesScreen() {
         <View style={styles.cardInfo}>
           <View style={styles.infoItem}>
             <Ionicons name="location-outline" size={14} color={theme.textSecondary} />
-            <Text style={[styles.infoText, { color: theme.textSecondary }]}>{item.site?.name}</Text>
+            <Text style={[styles.infoText, { color: theme.textSecondary }]}>{siteName}</Text>
           </View>
           <View style={[styles.dot, { backgroundColor: theme.textSecondary }]} />
           <View style={styles.infoItem}>
@@ -113,12 +134,12 @@ export default function FixedIssuesScreen() {
           </View>
         </View>
 
-        {solver && (
+        {solverName && (
           <View style={[styles.solverRow, { borderTopColor: borderColor, borderTopWidth: StyleSheet.hairlineWidth }]}>
             <Text style={[styles.solverLabel, { color: theme.textSecondary }]}>Solved by</Text>
             <View style={styles.solverUser}>
-              <Avatar uri={solver.avatar} name={solver.name} size="small" />
-              <Text style={[styles.solverName, { color: theme.text }]}>{solver.name}</Text>
+              <Avatar name={solverName} size="small" />
+              <Text style={[styles.solverName, { color: theme.text }]}>{solverName}</Text>
             </View>
           </View>
         )}
@@ -126,21 +147,29 @@ export default function FixedIssuesScreen() {
     );
   };
 
-  if (loading && issues.length === 0) return <Loader message="Loading fixed issues..." />;
+  // 📍 THE FIX IS HERE: Added `&& !refreshing` to prevent Loader hijacking
+  if (loading && issues.length === 0 && !refreshing) return <Loader message="Loading fixed issues..." />;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       
-      {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Resolved Issues</Text>
-        <View style={styles.placeholder} />
+        
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      {/* ── SEARCH BAR ── */}
       <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
         <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
           <Ionicons name="search" size={18} color={theme.textSecondary} />
@@ -159,30 +188,38 @@ export default function FixedIssuesScreen() {
         </View>
       </View>
 
-      {/* ── RESULTS COUNT ── */}
       <View style={styles.resultsHeader}>
         <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
-          {issues.length} issue{issues.length !== 1 ? 's' : ''} found
+          {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
         </Text>
       </View>
 
-      {/* ── LIST ── */}
       <FlatList
-        data={issues}
+        data={filteredIssues}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<EmptyState icon="checkmark-done-outline" title="No completed issues" message="No issues have been completed yet." />}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[successColor]}
-            tintColor={successColor}
+        ListEmptyComponent={
+          <EmptyState 
+            icon="checkmark-done-outline" 
+            title={searchText ? "No matches found" : "No completed issues"} 
+            message={searchText ? `No issues matching "${searchText}"` : "No issues have been completed yet."} 
           />
         }
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[successColor]}
+              tintColor={successColor}
+            />
+          )
+        }
       />
+
+      <FullScreenSpinner visible={refreshing} message="Updating Resolved Issues..." />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -201,7 +238,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
   searchInput: { 

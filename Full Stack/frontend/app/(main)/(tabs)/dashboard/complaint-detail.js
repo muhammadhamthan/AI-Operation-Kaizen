@@ -1,5 +1,14 @@
-import React, { useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
+import React, { useEffect, useCallback, useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  Image, 
+  Platform,
+  RefreshControl
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -11,6 +20,11 @@ import Loader from '../../../../src/components/common/Loader';
 import { formatDateTime } from '../../../../src/utils/formatters';
 import { useSmartBack } from '../../../../src/hooks/useSmartBack';
 
+// ── ADDED REUSABLE IMPORTS ──
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
 export default function ComplaintDetailScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -19,6 +33,10 @@ export default function ComplaintDetailScreen() {
   const dispatch = useDispatch();
   const complaint = useSelector(selectCurrentComplaint);
   const loading = useSelector(selectComplaintsLoading);
+  const isOnline = useSelector(selectIsOnline);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const handleSmartBack = useCallback(() => {
     if (fromNotification === 'true') {
@@ -38,7 +56,28 @@ export default function ComplaintDetailScreen() {
     return () => { dispatch(clearCurrentComplaint()); };
   }, [id, dispatch]);
 
-  if (loading || !complaint) return <Loader message="Loading complaint details..." />;
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    if (!id) return;
+    
+    setRefreshing(true);
+    try {
+      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+      await Promise.allSettled([
+        dispatch(fetchComplaintById(parseInt(id)))
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [id, isOnline, dispatch]);
+
+  // 📍 FIX: Prevents Loader hijacking during refresh, but safely catches empty states
+  if (loading && !refreshing && !complaint) return <Loader message="Loading complaint details..." />;
+  if (!complaint) return <Loader message="Loading complaint details..." />;
 
   // ── PREMIUM PALETTE ──
   const bgColor = isDark ? '#1a1a1a' : '#f4f4f5';
@@ -56,10 +95,33 @@ export default function ComplaintDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Complaint #{complaint.id}</Text>
-        <View style={styles.placeholder} />
+        
+        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? '#ef4444' : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        // 📍 FIX: Disables double spinner on web
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
+      >
         
         {/* ── MAIN COMPLAINT DETAILS ── */}
         <View style={[styles.card, { backgroundColor: surfaceColor, borderColor, overflow: 'hidden', padding: 0 }]}>
@@ -197,6 +259,11 @@ export default function ComplaintDetailScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Complaint..." color="#ef4444" />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -217,7 +284,9 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   
   content: { flex: 1, paddingHorizontal: 16 },
   
@@ -274,7 +343,6 @@ const styles = StyleSheet.create({
   issueLink: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2, marginBottom: 4 },
   issueSubtitle: { fontSize: 14 },
   
-  // ── NEW: Timeline Tracker Styles ──
   trackerContainer: { marginTop: 4 },
   trackerRow: { flexDirection: 'row' },
   trackerNode: { width: 24, alignItems: 'center' },

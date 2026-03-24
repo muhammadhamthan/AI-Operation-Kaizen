@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   RefreshControl,
-  Platform,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -37,10 +37,10 @@ import Loader from '../../../../src/components/common/Loader';
 import Avatar from '../../../../src/components/common/Avatar';
 import Toast from '../../../../src/components/common/Toast';
 import StatusBadge from '../../../../src/components/common/StatusBadge'; 
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner'; 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ── SAFE DATE FORMATTER ──
 const formatSafeDate = (dateString) => {
   if (!dateString) return '';
   const d = new Date(dateString);
@@ -84,10 +84,8 @@ export default function DashboardScreen() {
 
   const getDeadlineIndicator = (dateString) => {
     if (!dateString) return null;
-    
     const dueDate = new Date(dateString);
     const today = new Date();
-    
     today.setHours(0, 0, 0, 0);
     dueDate.setHours(0, 0, 0, 0);
     
@@ -106,24 +104,27 @@ export default function DashboardScreen() {
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
+    
     setRefreshing(true);
     if (user) {
-      await dispatch(fetchDashboardData(user));
-      await dispatch(fetchSolversPerformance(user));
-      await dispatch(fetchSitesWithAnalytics(user));
-      await dispatch(fetchComplaints(user)); 
+      try {
+        await Promise.allSettled([
+          dispatch(fetchDashboardData(user)),
+          dispatch(fetchSolversPerformance(user)),
+          dispatch(fetchSitesWithAnalytics(user)),
+          dispatch(fetchComplaints(user))
+        ]);
+      } finally {
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
     }
-    setRefreshing(false);
   }, [user, isOnline, dispatch]);
 
   const surfaceColor = isDark ? '#171717' : '#ffffff';
-  const borderColor = isDark ? '#333333' : '#e5e5e5';
+  const borderColor = isDark ? '#2a2a2a' : '#ebebeb';
 
-  // ==========================================
-  // 🧮 DYNAMIC CHART DATA CALCULATIONS
-  // ==========================================
-
-  // 1. SMART LINE CHART
   const calculatedLineData = useMemo(() => {
     if (user?.role === 'manager') {
       if (!solvers || solvers.length === 0) {
@@ -180,7 +181,6 @@ export default function DashboardScreen() {
       : (validIssues[0].updated_at || validIssues[0].created_at);
       
     const latestDate = new Date(latestDateStr);
-    
     const startDate = new Date(latestDate);
     startDate.setDate(latestDate.getDate() - 6);
     
@@ -213,7 +213,6 @@ export default function DashboardScreen() {
     };
   }, [recentIssues, isSolverView, user?.role, solvers]);
 
-  // 2. Pie Chart
   const pieData = charts?.issuesByCategory?.length > 0 
     ? charts.issuesByCategory.map((item) => ({
         name: item.name,
@@ -224,7 +223,6 @@ export default function DashboardScreen() {
       })) 
     : [{ name: 'No Data', population: 1, color: isDark ? '#333' : '#e5e5e5', legendFontColor: theme.text, legendFontSize: 12 }];
 
-  // 3. Bar Chart
   const calculatedBarData = useMemo(() => {
     if (!sitesList || sitesList.length === 0) {
       return { labels: ['No Data'], datasets: [{ data: [0] }] };
@@ -239,15 +237,10 @@ export default function DashboardScreen() {
     };
   }, [sitesList]);
 
-  // ==========================================
-  // 📏 SMART GRID ALIGNMENT LOGIC (THE FIX!)
-  // ==========================================
-  
-  // Helper to ensure small whole numbers don't create fractional grid lines
   const getOptimalSegments = (maxVal) => {
-    if (maxVal === 0) return 1; // Prevent NaN errors
-    if (maxVal <= 8) return maxVal; // Locks grid strictly to integers (1, 2, 3...)
-    return 4; // Defaults back to standard 4 segments for large numbers
+    if (maxVal === 0) return 1; 
+    if (maxVal <= 8) return maxVal; 
+    return 4; 
   };
 
   const lineDataMax = Math.max(...calculatedLineData.datasets[0].data);
@@ -257,11 +250,6 @@ export default function DashboardScreen() {
     ? Math.max(...calculatedBarData.datasets[0].data) 
     : 0;
   const barSegments = getOptimalSegments(barDataMax);
-
-
-  // ==========================================
-  // UI RENDER
-  // ==========================================
 
   if (loading && !stats?.totalIssues) return <Loader message="Analyzing data..." />;
 
@@ -278,18 +266,82 @@ export default function DashboardScreen() {
     propsForDots: { r: '4', strokeWidth: '2', stroke: isDark ? '#171717' : '#ffffff' },
   };
 
+  // Alert card config — keeps all routing logic untouched
+  const alertCards = [
+    {
+      icon: 'alert-circle',
+      count: alerts?.escalations || 0,
+      label: 'Escalated',
+      accentColor: '#ef4444',
+      bgLight: '#fef2f2',
+      bgDark: 'rgba(239,68,68,0.08)',
+      borderLight: '#fecaca',
+      borderDark: 'rgba(239,68,68,0.2)',
+      iconBgLight: '#fee2e2',
+      iconBgDark: 'rgba(239,68,68,0.15)',
+      route: '/(main)/(tabs)/dashboard/not-fixed',
+    },
+    {
+      icon: 'time-outline',
+      count: alerts?.deadlines || 0,
+      label: 'Deadlines',
+      accentColor: '#f59e0b',
+      bgLight: '#fffbeb',
+      bgDark: 'rgba(245,158,11,0.08)',
+      borderLight: '#fde68a',
+      borderDark: 'rgba(245,158,11,0.2)',
+      iconBgLight: '#fef3c7',
+      iconBgDark: 'rgba(245,158,11,0.15)',
+      route: '/(main)/(tabs)/dashboard/not-fixed',
+    },
+    {
+      icon: 'clipboard-outline',
+      count: alerts?.pendingReviews || 0,
+      label: 'Pending Review',
+      accentColor: '#3b82f6',
+      bgLight: '#eff6ff',
+      bgDark: 'rgba(59,130,246,0.08)',
+      borderLight: '#bfdbfe',
+      borderDark: 'rgba(59,130,246,0.2)',
+      iconBgLight: '#dbeafe',
+      iconBgDark: 'rgba(59,130,246,0.15)',
+      route: '/(main)/(tabs)/dashboard/awaiting_review',
+    },
+  ];
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#111111' : '#f4f4f6' }]}>
       
       {/* ── HEADER ── */}
-      <View style={[styles.header, { backgroundColor: isDark ? '#212121' : '#f9f9f9' }]}>
+      <View style={[styles.header, { backgroundColor: isDark ? '#111111' : '#f4f4f6' }]}>
         <View>
           <Text style={[styles.greeting, { color: theme.textSecondary }]}>Analytics Overview</Text>
           <Text style={[styles.userName, { color: theme.text }]}>{isSolverView ? 'Workspace' : 'Dashboard'}</Text>
         </View>
-        <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
-          <Avatar uri={user?.avatar} name={user?.name} size="medium" />
-        </TouchableOpacity>
+        
+        <View style={styles.headerActions}>
+          {Platform.OS === 'web' && (
+            <TouchableOpacity 
+              onPress={onRefresh} 
+              disabled={refreshing}
+              style={styles.refreshButton}
+            >
+              <Ionicons 
+                name="sync" 
+                size={22} 
+                color={refreshing ? theme.primary : theme.textSecondary} 
+              />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity onPress={() => router.push('/(main)/(tabs)/chat')} activeOpacity={0.7} style={{ marginRight: 4, padding: 4 }}>
+            <Ionicons name="arrow-undo-outline" size={24} color={theme.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
+            <Avatar uri={user?.avatar} name={user?.name} size="medium" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -299,38 +351,54 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
       >
 
-        {/* ── ACTION REQUIRED ALERTS ── */}
-        {!isSolverView && (
-          <View style={styles.statsContainer}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Action Required</Text>
-            <View style={styles.alertsRow}>
-              
-              <View style={[styles.alertCard, { backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : '#fef2f2', borderColor: isDark ? 'rgba(239,68,68,0.3)' : '#fecaca' }]}>
-                <Ionicons name="alert-circle" size={22} color="#ef4444" />
-                <Text style={[styles.alertCount, { color: '#ef4444' }]}>{alerts?.escalations || 0}</Text>
-                <Text style={[styles.alertLabel, { color: '#ef4444' }]}>Escalated</Text>
-              </View>
-              
-              <View style={[styles.alertCard, { backgroundColor: isDark ? 'rgba(245,158,11,0.15)' : '#fffbeb', borderColor: isDark ? 'rgba(245,158,11,0.3)' : '#fde68a' }]}>
-                <Ionicons name="timer" size={22} color="#f59e0b" />
-                <Text style={[styles.alertCount, { color: '#f59e0b' }]}>{alerts?.deadlines || 0}</Text>
-                <Text style={[styles.alertLabel, { color: '#f59e0b' }]}>Deadlines</Text>
-              </View>
-              
-              <View style={[styles.alertCard, { backgroundColor: isDark ? 'rgba(59,130,246,0.15)' : '#eff6ff', borderColor: isDark ? 'rgba(59,130,246,0.3)' : '#bfdbfe' }]}>
-                <Ionicons name="clipboard" size={22} color="#3b82f6" />
-                <Text style={[styles.alertCount, { color: '#3b82f6' }]}>{alerts?.pendingReviews || 0}</Text>
-                <Text style={[styles.alertLabel, { color: '#3b82f6' }]}>Reviews</Text>
-              </View>
+        {/* ── ACTION REQUIRED ALERTS (Manager only) ── */}
+        {!isSolverView && <View style={styles.statsContainer}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Action Required</Text>
+          
+          <View style={styles.alertsRow}>
+            {alertCards.map((card) => (
+              <TouchableOpacity
+                key={card.label}
+                activeOpacity={0.75}
+                onPress={() => router.push(card.route)}
+                style={[
+                  styles.alertCard,
+                  {
+                    backgroundColor: isDark ? card.bgDark : card.bgLight,
+                    borderColor: isDark ? card.borderDark : card.borderLight,
+                  },
+                ]}
+              >
+                {/* Accent bar */}
+                <View style={[styles.alertAccentBar, { backgroundColor: card.accentColor }]} />
 
-            </View>
+                {/* Icon */}
+                <View style={[styles.alertIconWrap, { backgroundColor: isDark ? card.iconBgDark : card.iconBgLight }]}>
+                  <Ionicons name={card.icon} size={18} color={card.accentColor} />
+                </View>
+
+                {/* Count */}
+                <Text style={[styles.alertCount, { color: card.accentColor }]}>
+                  {card.count}
+                </Text>
+
+                {/* Label */}
+                <Text
+                  style={[styles.alertLabel, { color: isDark ? card.accentColor : card.accentColor }]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                >
+                  {card.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
+        </View>}
 
         {/* ── KEY METRICS ── */}
         <View style={styles.statsContainer}>
           <View style={styles.statsRow}>
-            <DashboardCard title={isSolverView ? "Active Tasks" : "Pending"} count={stats?.notFixedIssues || 0} icon="time-outline" color="#f59e0b" onPress={() => router.push('/(main)/(tabs)/dashboard/not-fixed')} />
+            <DashboardCard title={isSolverView ? "Active Tasks" : "Pending issues"} count={stats?.notFixedIssues || 0} icon="time-outline" color="#f59e0b" onPress={() => router.push('/(main)/(tabs)/dashboard/not-fixed')} />
             <DashboardCard title="Resolved" count={stats?.fixedIssues || 0} icon="checkmark-done" color="#10a37f" onPress={() => router.push('/(main)/(tabs)/dashboard/fixed')} />
           </View>
 
@@ -355,7 +423,7 @@ export default function DashboardScreen() {
               <View style={styles.statsRow}>
                 <DashboardCard 
                   title="Complaints Logged" 
-                  count={complaintsList?.length || 0} 
+                  count={complaintsList?.filter(c => c.target_solver_id === user?.id)?.length || 0} 
                   icon="warning-outline" 
                   color="#ef4444" 
                   style={styles.fullWidthCard} 
@@ -367,8 +435,9 @@ export default function DashboardScreen() {
             <>
               <View style={styles.statsRow}>
                 <DashboardCard 
-                  title="Total Complaints" 
-                  count={complaintsList?.length || 0} 
+                  title="Total Recorded Complaints" 
+                  count={complaintsList?.length || 0}
+ 
                   icon="warning-outline" 
                   color="#ef4444" 
                   onPress={() => router.push('/(main)/(tabs)/dashboard/complaints')} 
@@ -402,8 +471,8 @@ export default function DashboardScreen() {
                 style={styles.chart} 
                 withInnerLines={true} 
                 withOuterLines={false} 
-                fromZero={true} // 📍 FIXED: Prevents random bottom scaling
-                segments={lineSegments} // 📍 FIXED: Locks grid to whole numbers
+                fromZero={true} 
+                segments={lineSegments} 
               />
             </View>
           </ScrollView>
@@ -435,7 +504,7 @@ export default function DashboardScreen() {
                   style={styles.chart}
                   showValuesOnTopOfBars
                   withInnerLines={false}
-                  fromZero={true} // 📍 FIXED: Applies math fix to Bar Chart too
+                  fromZero={true} 
                   segments={barSegments} 
                 />
               </View>
@@ -505,6 +574,9 @@ export default function DashboardScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      <FullScreenSpinner visible={refreshing} message="Updating Dashboard..." />
+
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -513,31 +585,140 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollArea: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 20 : 10, paddingBottom: 20 },
-  greeting: { fontSize: 14, fontWeight: '500', marginBottom: 4 },
-  userName: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
-  content: { padding: 16 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12, marginLeft: 4 },
+
+  // ── HEADER ──
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 20 : 10,
+    paddingBottom: 20,
+  },
+  greeting: { fontSize: 13, fontWeight: '500', marginBottom: 3, letterSpacing: 0.2 },
+  userName: { fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  refreshButton: { padding: 8, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 0 },
+
+  // ── SECTION TITLE ──
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.1,
+    marginBottom: 10,
+    marginLeft: 2,
+  },
+
+  // ── CONTAINERS ──
   statsContainer: { marginBottom: 24 },
   statsRow: { flexDirection: 'row', marginBottom: 12, gap: 12 },
-  alertsRow: { flexDirection: 'row', gap: 12 },
   fullWidthCard: { flex: 1, marginRight: 0 },
-  alertCard: { flex: 1, padding: 16, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  alertCount: { fontSize: 24, fontWeight: '800', marginTop: 8, marginBottom: 4 },
-  alertLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  chartCard: { marginBottom: 20, padding: 20, borderRadius: 16, borderWidth: 1, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8 }, android: { elevation: 1 } }) },
-  chartTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4 },
-  chartSubtitle: { fontSize: 13, marginBottom: 24, lineHeight: 18 },
+
+  // ── ALERT CARDS — now match chart card language ──
+  alertsRow: { flexDirection: 'row', gap: 10 },
+  alertCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingTop: 0,          // accent bar sits flush at top
+    paddingBottom: 16,
+    paddingHorizontal: 12,
+    alignItems: 'flex-start',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  alertAccentBar: {
+    width: '100%',          // full-width top stripe — mirrors chart card section headers
+    height: 3,
+    borderRadius: 2,
+    marginBottom: 14,
+    marginLeft: -12,        // bleed to edges of paddingHorizontal
+    alignSelf: 'stretch',
+    // override width approach:
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  alertIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,          // pushes below the accent bar
+    marginBottom: 12,
+  },
+  alertCount: {
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginBottom: 4,
+    lineHeight: 34,
+  },
+  alertLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    lineHeight: 15,
+  },
+
+  // ── CHART CARDS ──
+  chartCard: {
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  chartTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3, marginBottom: 3 },
+  chartSubtitle: { fontSize: 13, marginBottom: 20, lineHeight: 18, opacity: 0.75 },
   chart: { borderRadius: 12, marginLeft: -10 },
-  
-  issueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' },
+
+  // ── RECENT ISSUES ──
+  issueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 5,
+    flexWrap: 'wrap',
+  },
   issueTitle: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
-  deadlineBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  deadlineBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   deadlineText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
-  issueMeta: { fontSize: 13, lineHeight: 18 }, 
-  
-  viewAllButton: { paddingVertical: 16, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
+  issueMeta: { fontSize: 12.5, lineHeight: 17 },
+
+  viewAllButton: {
+    paddingVertical: 15,
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   viewAllText: { fontSize: 13, fontWeight: '600' },
   bottomPadding: { height: 40 },
 });

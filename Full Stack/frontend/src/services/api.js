@@ -30,7 +30,7 @@ import { withRetry } from '../utils/networkRetry';
 //   return 'http://localhost:8001/api';
 // };
 
-const backendUrl = 'https://api.rakkarstudios.in';
+const backendUrl = 'http://localhost:8000';
 
 
 const API_BASE_URL = backendUrl;
