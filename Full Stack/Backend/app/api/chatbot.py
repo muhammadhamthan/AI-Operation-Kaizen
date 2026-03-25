@@ -144,6 +144,7 @@ async def get_session_detail(
     result = await chatbot_service.get_session_detail(
         session_id=session_id,
         user_id=current_user.id,
+        user_name=current_user.name,
     )
 
     if not result:

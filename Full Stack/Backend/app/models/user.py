@@ -163,9 +163,11 @@ class User(Base):
 
     # ── Indexes ──────────────────────────────────────────
     __table_args__ = (
-        Index("idx_users_role", "role"),
         Index("idx_users_phone", "phone"),
         Index("idx_users_email", "email"),
+        Index("idx_users_role", "role"),
+        Index("idx_users_is_active", "is_active"),
+        Index("idx_users_role_active", "role", "is_active"),
     )
 
     def __repr__(self) -> str:

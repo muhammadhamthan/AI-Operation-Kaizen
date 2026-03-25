@@ -26,6 +26,7 @@ import {
 import { calculateOverdueDays } from '../../../../src/utils/overdue';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Button from '../../../../src/components/common/Button';
+import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import Loader from '../../../../src/components/common/Loader';
 
@@ -78,6 +79,79 @@ export default function AwaitingReviewDetailScreen() {
       setRefreshing(false);
     }
   }, [id, isOnline, dispatch]);
+
+  // 📍 NEW: Dedicated Review Action Handler (Web & Native Safe)
+  const handleReviewAction = (actionType) => {
+    console.log(`\n=============================================`);
+    console.log(`📝 SUPERVISOR REVIEW ACTION: ${actionType}`);
+    console.log(`=============================================`);
+    console.log(`Issue ID:      ${issue?.id}`);
+    console.log(`Supervisor ID: ${user?.id}`);
+    console.log(`Supervisor:    ${user?.name}`);
+    console.log(`=============================================\n`);
+
+    if (actionType === 'APPROVE') {
+      if (Platform.OS === 'web') {
+        // Web Fallback
+        const confirmApprove = window.confirm("Are you sure you want to approve this fix? The issue will be marked as COMPLETED.");
+        if (confirmApprove) {
+          console.log(`[DEBUG] Issue #${issue?.id} APPROVED successfully.`);
+          // TODO: Add backend API call here (e.g., dispatch(approveIssue(issue.id)))
+          alert("Success! Issue has been approved and closed.");
+ 
+        }
+      } else {
+        // Native Mobile Flow
+        Alert.alert(
+          "Approve Fix",
+          "Are you sure you want to approve this fix? The issue will be marked as COMPLETED.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Approve",
+              style: "default",
+              onPress: () => {
+                console.log(`[DEBUG] Issue #${issue?.id} APPROVED successfully.`);
+                // TODO: Add backend API call here
+                Alert.alert("Success", "Issue has been approved and closed.");
+             
+              }
+            }
+          ]
+        );
+      }
+    } else if (actionType === 'REJECT') {
+      if (Platform.OS === 'web') {
+        // Web Fallback
+        const confirmReject = window.confirm("Are you sure you want to reject this fix? The issue will be sent back to the solver.");
+        if (confirmReject) {
+          console.log(`[DEBUG] Issue #${issue?.id} REJECTED successfully.`);
+          // TODO: Add backend API call here (e.g., dispatch(rejectIssue(issue.id)))
+          alert("Rejected! Issue has been returned to the solver.");
+    
+        }
+      } else {
+        // Native Mobile Flow
+        Alert.alert(
+          "Reject Fix",
+          "Are you sure you want to reject this fix? The issue will be sent back to the solver.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Reject",
+              style: "destructive",
+              onPress: () => {
+                console.log(`[DEBUG] Issue #${issue?.id} REJECTED successfully.`);
+                // TODO: Add backend API call here
+                Alert.alert("Rejected", "Issue has been returned to the solver.");
+      
+              }
+            }
+          ]
+        );
+      }
+    }
+  };
 
   const overdueDays = issue ? calculateOverdueDays(issue.deadline_at, issue.status) : null;
 
@@ -248,16 +322,16 @@ export default function AwaitingReviewDetailScreen() {
             <View style={{ gap: 12 }}>
               <Button 
                 title="Approve Fix" 
-                variant="primary" 
+                variant="success" 
                 icon="checkmark-circle-outline" 
-                onPress={() => Alert.alert('Approve', 'Issue will be marked as Completed.')} 
-                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f' }} // Force Green
+                onPress={() => handleReviewAction('APPROVE')} 
+                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }} 
               />
               <Button 
                 title="Reject Fix" 
                 variant="danger" 
                 icon="close-circle-outline" 
-                onPress={() => Alert.alert('Reject', 'Issue will be returned to the solver.')} 
+                onPress={() => handleReviewAction('REJECT')} 
               />
             </View>
           ) : (
