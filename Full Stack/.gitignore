@@ -19,6 +19,9 @@ node_modules/
 .metro-cache/
 Frontend/.metro-cache/
 
+Backend/*.log
+*.log
+
 # Testing
 /coverage
 
