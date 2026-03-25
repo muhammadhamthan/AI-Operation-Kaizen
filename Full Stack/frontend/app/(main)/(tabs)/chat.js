@@ -10,7 +10,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Alert, 
+  Alert,
+  RefreshControl, // 📍 ADDED RefreshControl import back
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -131,7 +132,6 @@ export default function ChatScreen() {
     
     setRefreshing(true);
     try {
-      // 📍 FIX: Refresh both history and the active session if one exists
       const fetches = [dispatch(loadChatHistory())];
       if (currentSessionId) {
         fetches.push(dispatch(loadConversation(currentSessionId)));
@@ -221,7 +221,6 @@ export default function ChatScreen() {
           <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
         </TouchableOpacity>
 
-        {/* 📍 FIX: Added Header Actions Row for Sync + Avatar */}
         <View style={styles.headerActions}>
           {Platform.OS === 'web' && (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
@@ -255,6 +254,16 @@ export default function ChatScreen() {
           ]}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
+          // 📍 FIX: Re-added RefreshControl so mobile users can pull-to-refresh
+          refreshControl={
+            Platform.OS === 'web' ? undefined : (
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={onRefresh} 
+                tintColor={theme.textSecondary} 
+              />
+            )
+          }
         >
           {isConversationLoading ? (
             <View style={styles.loadingHistoryContainer}>
@@ -349,7 +358,6 @@ export default function ChatScreen() {
         />
       </Animated.View>
 
-      {/* ── NEW CLEAN IMPLEMENTATION ── */}
       <FullScreenSpinner visible={refreshing} message="Syncing Chat..." color={theme.primary} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
