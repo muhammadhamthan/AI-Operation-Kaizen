@@ -25,9 +25,23 @@ import Avatar from '../../../../src/components/common/Avatar';
 import Toast from '../../../../src/components/common/Toast';
 import FilterModal from '../../../../src/components/modals/FilterModal';
 import { useDebounce } from '../../../../src/hooks/useDebounce';
-
-// ── ADDED REUSABLE SPINNER ──
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
+// ── PREMIUM STATUS PALETTE FOR CHIPS ──
+const STATUS_COLORS = {
+  OPEN: '#3b82f6',
+  ASSIGNED: '#8b5cf6',
+  IN_PROGRESS: '#eab308',
+  RESOLVED_PENDING_REVIEW: '#f97316',
+  COMPLETED: '#10a37f',
+  REOPENED: '#ef4444',
+  ESCALATED: '#dc2626',
+};
+
+const formatStatusText = (status) => {
+  if (!status) return '';
+  return status.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+};
 
 export default function IssuesTabScreen() {
   const { theme, isDark } = useTheme(); 
@@ -54,7 +68,6 @@ export default function IssuesTabScreen() {
 
   const debouncedSearch = useDebounce(searchText, 300);
 
-  // ── LOGIC UNTOUCHED ──
   useEffect(() => {
     if (user) dispatch(fetchIssues(user));
   }, [user, dispatch]);
@@ -75,7 +88,7 @@ export default function IssuesTabScreen() {
     return Array.from(uniqueSites.values());
   }, [allIssues]);
 
-const filteredIssues = useMemo(() => {
+  const filteredIssues = useMemo(() => {
     if (!allIssues || allIssues.length === 0) return [];
     
     return allIssues.filter(issue => {
@@ -171,7 +184,6 @@ const filteredIssues = useMemo(() => {
     
     if (user) {
       try {
-        // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
         await Promise.allSettled([
           dispatch(fetchIssues(user))
         ]);
@@ -205,7 +217,6 @@ const filteredIssues = useMemo(() => {
   const hasActiveFilters = getActiveFilterCount() > 0 || searchText !== '';
   const activeFilterCount = getActiveFilterCount();
 
-  // ── PREMIUM MONOCHROME PALETTE ──
   const activeBg = isDark ? '#ffffff' : '#101010';
   const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -216,16 +227,21 @@ const filteredIssues = useMemo(() => {
     const textStyle = [styles.activeChipText, { color: theme.text }];
     const iconColor = theme.textSecondary;
 
-    if (appliedFilters.statuses.length > 0) {
-      chips.push(
-        <View key="status" style={chipStyle}>
-          <Text style={textStyle}>Status: {appliedFilters.statuses.length}</Text>
-          <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, statuses: [] }))}>
-            <Ionicons name="close" size={14} color={iconColor} />
-          </TouchableOpacity>
-        </View>
-      );
+    // 📍 DYNAMIC COLOR CHIPS FOR STATUS
+    if (appliedFilters.statuses && appliedFilters.statuses.length > 0) {
+      appliedFilters.statuses.forEach(status => {
+        const color = STATUS_COLORS[status] || theme.textSecondary;
+        chips.push(
+          <View key={`status-${status}`} style={[styles.activeChip, { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
+            <Text style={[styles.activeChipText, { color }]}>{formatStatusText(status)}</Text>
+            <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, statuses: prev.statuses.filter(s => s !== status) }))}>
+              <Ionicons name="close" size={14} color={color} />
+            </TouchableOpacity>
+          </View>
+        );
+      });
     }
+
     if (appliedFilters.priorities.length > 0) {
       chips.push(
         <View key="priority" style={chipStyle}>
@@ -272,7 +288,6 @@ const filteredIssues = useMemo(() => {
     return chips;
   };
 
-  // 📍 FIX: Added `!refreshing` to prevent Loader hijacking
   if (loading && allIssues.length === 0 && !refreshing) return <Loader message="Loading issues..." />;
 
   return (
@@ -287,7 +302,6 @@ const filteredIssues = useMemo(() => {
           </Text>
         </View>
         
-        {/* 📍 FIX: Added Header Actions Row for Sync + Avatar */}
         <View style={styles.headerActions}>
           {Platform.OS === 'web' && (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
@@ -295,12 +309,10 @@ const filteredIssues = useMemo(() => {
             </TouchableOpacity>
           )}
 
-          {/* ── NEW: Navigate to Chat via Arrow ── */}
           <TouchableOpacity onPress={() => router.push('/(main)/(tabs)/chat')} activeOpacity={0.7} style={{ marginRight: 4, padding: 4 }}>
             <Ionicons name="arrow-undo-outline" size={24} color={theme.text} />
           </TouchableOpacity>
 
-          
           <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
             <Avatar uri={user?.avatar} name={user?.name} size="medium" />
           </TouchableOpacity>
@@ -387,7 +399,6 @@ const filteredIssues = useMemo(() => {
           />
         }
         showsVerticalScrollIndicator={false}
-        // 📍 FIX: Disables double spinner on web
         refreshControl={
           Platform.OS === 'web' ? undefined : (
             <RefreshControl
@@ -407,7 +418,6 @@ const filteredIssues = useMemo(() => {
         sites={realSites}
       />
 
-      {/* ── NEW CLEAN IMPLEMENTATION ── */}
       <FullScreenSpinner visible={refreshing} message="Updating Issues..." color={theme.primary} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}

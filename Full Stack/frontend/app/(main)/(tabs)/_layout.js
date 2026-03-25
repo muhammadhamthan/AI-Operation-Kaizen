@@ -6,16 +6,23 @@ import { useTheme } from '../../../src/theme/ThemeContext';
 import { useSelector } from 'react-redux';
 import { selectIsOnline } from '../../../src/store/slices/offlineSlice';
 import OfflineBanner from '../../../src/components/common/OfflineBanner';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // 📍 ADDED THIS
 
 export default function TabsLayout() {
   const { theme, isDark } = useTheme();
   const isOnline = useSelector(selectIsOnline);
+  const insets = useSafeAreaInsets(); // 📍 GRABS DYNAMIC SCREEN INSETS
 
   // ── STRICT MONOCHROME PALETTE ──
   const activeColor = isDark ? '#ffffff' : '#101010';
   const inactiveColor = isDark ? '#8e8ea0' : '#8e8ea0'; // Signature GPT muted gray
   const bgColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+
+  // 📍 DYNAMIC RESPONSIVE SIZING
+  // Ensures at least 16px of padding on Web, or standard 10 on Android, while fully respecting iOS notches
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 10);
+  const tabHeight = 55 + bottomPadding; 
 
   return (
     <>
@@ -34,8 +41,8 @@ export default function TabsLayout() {
             backgroundColor: bgColor,
             borderTopColor: borderColor,
             borderTopWidth: StyleSheet.hairlineWidth, // Ultra-thin, crisp border
-            height: Platform.OS === 'ios' ? 85 : 65, // Accommodates safe areas elegantly
-            paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+            height: tabHeight, // 📍 RESPONSIVE HEIGHT
+            paddingBottom: bottomPadding, // 📍 RESPONSIVE PADDING
             paddingTop: 8,
             elevation: 0, // Strips away Android default drop-shadow
             shadowOpacity: 0, // Strips away iOS default shadow

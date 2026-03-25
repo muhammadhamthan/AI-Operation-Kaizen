@@ -95,6 +95,7 @@ class Complaint(Base):
         Index("idx_complaints_issue", "issue_id"),
         Index("idx_complaints_assignment", "assignment_id"),
         Index("idx_complaints_solver", "target_solver_id"),
+        Index("idx_complaints_supervisor", "raised_by_supervisor_id"),
     )
 
     def __repr__(self) -> str:

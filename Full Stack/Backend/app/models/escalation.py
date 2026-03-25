@@ -55,6 +55,7 @@ class Escalation(Base):
         Index("idx_escalations_type", "escalation_type"),
         Index("idx_escalations_resolved", "resolved"),
         Index("idx_escalations_created", "created_at"),
+        Index("idx_escalations_assignment_id_resolved", "assignment_id", "resolved"),
     )
 
     def __repr__(self):

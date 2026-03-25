@@ -282,19 +282,6 @@ export default function DashboardScreen() {
       route: '/(main)/(tabs)/dashboard/not-fixed',
     },
     {
-      icon: 'time-outline',
-      count: alerts?.deadlines || 0,
-      label: 'Deadlines',
-      accentColor: '#f59e0b',
-      bgLight: '#fffbeb',
-      bgDark: 'rgba(245,158,11,0.08)',
-      borderLight: '#fde68a',
-      borderDark: 'rgba(245,158,11,0.2)',
-      iconBgLight: '#fef3c7',
-      iconBgDark: 'rgba(245,158,11,0.15)',
-      route: '/(main)/(tabs)/dashboard/not-fixed',
-    },
-    {
       icon: 'clipboard-outline',
       count: alerts?.pendingReviews || 0,
       label: 'Pending Review',
@@ -446,7 +433,7 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.statsRow}>
                 <DashboardCard title="Sites" count={sitesList?.length || 0} icon="business-outline" color="#3b82f6" onPress={() => router.push('/(main)/(tabs)/dashboard/sites')} />
-                <DashboardCard title="Team" count={solvers?.length || 0} icon="people-outline" color="#8b5cf6" onPress={() => router.push('/(main)/(tabs)/dashboard/solvers')} />
+                <DashboardCard title="Solvers" count={solvers?.length || 0} icon="people-outline" color="#8b5cf6" onPress={() => router.push('/(main)/(tabs)/dashboard/solvers')} />
               </View>
             </>
           )}
@@ -535,7 +522,7 @@ export default function DashboardScreen() {
                 <TouchableOpacity 
                   key={issue.id} 
                   style={[styles.issueRow, { borderTopColor: borderColor, borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth }]}
-                  onPress={() => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } })}
+                  onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/issue-detail', params: { id: issue.id } })}
                 >
                   <View style={{ flex: 1, paddingRight: 12 }}>
                     

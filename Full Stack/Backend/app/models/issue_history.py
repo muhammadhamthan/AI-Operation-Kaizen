@@ -82,6 +82,7 @@ class IssueHistory(Base):
         Index("idx_issue_history_issue", "issue_id"),
         Index("idx_issue_history_user", "changed_by_user_id"),
         Index("idx_issue_history_action", "action_type"),
+        Index("idx_issue_history_issue_new_status", "issue_id", "new_status"),
     )
 
     def __repr__(self) -> str:

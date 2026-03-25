@@ -98,6 +98,8 @@ class CallLog(Base):
         Index("idx_call_logs_status", "status"),
         Index("idx_call_logs_initiated", "initiated_at"),
         Index("idx_call_logs_attempt", "attempt_number"),
+        Index("idx_call_logs_call_sid","call_sid",postgresql_where=(call_sid.isnot(None)), unique=True),
+        Index("idx_call_logs_assignment_status_initiated","assignment_id","status","initiated_at"),
     )
 
     def __repr__(self) -> str:

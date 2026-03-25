@@ -31,4 +31,5 @@ SupervisorSite = Table(
         Boolean,
         default=True
     )
+    
 )

@@ -1,15 +1,42 @@
+
 {
-  "version": 2,
-  "builds": [
+
+  "cleanUrls": true,
+
+  "trailingSlash": false,
+
+  "rewrites": [
+
     {
-      "src": "api/index.py",
-      "use": "@vercel/python"
+
+      "source": "/(.*)",
+
+      "destination": "/index.html"
+
     }
+
   ],
-  "routes": [
+
+  "headers": [
+
     {
-      "src": "/(.*)",
-      "dest": "api/index.py"
+
+      "source": "/(.*)",
+
+      "headers": [
+
+        {
+
+          "key": "Cache-Control",
+
+          "value": "no-store, must-revalidate"
+
+        }
+
+      ]
+
     }
+
   ]
+
 }

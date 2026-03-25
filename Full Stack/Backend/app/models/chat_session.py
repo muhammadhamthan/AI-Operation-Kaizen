@@ -75,6 +75,7 @@ class ChatSession(Base):
         Index("idx_chat_sessions_user", "user_id"),
         Index("idx_chat_sessions_updated", "updated_at"),
         Index("idx_chat_sessions_active", "is_active"),
+        Index("idx_user_active_updated_desc","user_id","is_active", updated_at.desc()),
     )
 
     def __repr__(self):
