@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   View,
   Text,
@@ -11,18 +11,30 @@ import {
   Platform,
   Keyboard,
   Image,
-  ActivityIndicator
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
-import { useDispatch } from 'react-redux';
 import { setLocation } from '../../store/slices/offlineSlice';
 import { reverseGeocode } from '../../utils/locationCapture';
 import { selectIsOnline } from '../../store/slices/offlineSlice';
 
-const ChatInput = ({ onSend, showCamera = true }) => {
+// 📍 THE AVAILABLE ACTIONS
+const ALL_ACTIONS = [
+  { id: 'create_issue', label: 'Report a problem at a site', icon: 'alert-circle-outline' },
+  { id: 'approve_completion', label: 'Approve completed work', icon: 'checkmark-done-outline' },
+  { id: 'update_priority', label: 'Change issue priority', icon: 'trending-up-outline' },
+  { id: 'extend_deadlines', label: 'Extend deadline', icon: 'calendar-outline' },
+  { id: 'solver_complete_work', label: 'Mark work as finished', icon: 'checkmark-circle-outline' },
+  { id: 'solver_report_blocker', label: 'Report a blocker', icon: 'hand-left-outline' },
+  { id: 'raise_complaint', label: 'Raise a complaint', icon: 'warning-outline' },
+  { id: 'reassign_solver', label: 'Reassign solver', icon: 'people-outline' },
+];
+
+const ChatInput = ({ onSend, showCamera = true, userRole }) => {
   const { theme, isDark } = useTheme();
   const dispatch = useDispatch();
 
@@ -34,12 +46,25 @@ const ChatInput = ({ onSend, showCamera = true }) => {
   const [inputHeight, setInputHeight] = useState(24);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // 📍 ACTION MENU STATES
+  const [selectedAction, setSelectedAction] = useState(null);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+
   const sendScale = useRef(new Animated.Value(0)).current;
   const menuAnim = useRef(new Animated.Value(0)).current;
   const inputRef = useRef(null);
 
   const hasContent = message.trim().length > 0 || selectedImage !== null;
   const canSend = hasContent && isOnline;
+
+  // 📍 DYNAMIC ROLE FILTERING
+  const availableActions = useMemo(() => {
+    const role = (userRole || '').toLowerCase().replace(/_/g, '');
+    if (role === 'problemsolver') {
+      return ALL_ACTIONS.filter(a => ['solver_complete_work', 'solver_report_blocker'].includes(a.id));
+    }
+    return ALL_ACTIONS; // Managers and Supervisors see everything
+  }, [userRole]);
 
   useEffect(() => {
     Animated.spring(sendScale, {
@@ -55,6 +80,8 @@ const ChatInput = ({ onSend, showCamera = true }) => {
       Alert.alert("Offline", "Please reconnect to attach media.");
       return;
     }
+    if (isActionMenuOpen) setIsActionMenuOpen(false); // Close other menu
+    
     const toValue = isMenuOpen ? 0 : 1;
     setIsMenuOpen(!isMenuOpen);
     if (!isMenuOpen) Keyboard.dismiss();
@@ -79,9 +106,11 @@ const ChatInput = ({ onSend, showCamera = true }) => {
     }
   };
 
-  useEffect(() => {
-    console.log("📍 Captured Location Data:", stagedLocation);
-  }, [stagedLocation]);
+  const toggleActionMenu = () => {
+    if (isMenuOpen) closeMenu(); // Close attachment menu
+    setIsActionMenuOpen(!isActionMenuOpen);
+    if (!isActionMenuOpen) Keyboard.dismiss();
+  };
 
   const removeStagedItems = () => {
     setSelectedImage(null);
@@ -90,10 +119,29 @@ const ChatInput = ({ onSend, showCamera = true }) => {
 
   const handleSend = () => {
     if (canSend) {
-      onSend(message.trim(), selectedImage, stagedLocation);
+      // 📍 ATTACH ACTION INTENT TO STRING
+      let finalMessage = message.trim();
+      if (selectedAction) {
+        finalMessage = `[Action: ${selectedAction.id}]\n${finalMessage}`;
+      }
+
+      // 📍 LOGGING PAYLOAD FOR BACKEND VISIBILITY
+      console.log("\n=============================================");
+      console.log("🚀 SENDING PAYLOAD TO BACKEND:");
+      console.log(`Text Sent:  \n${finalMessage}`);
+      console.log(`Image URI:  ${selectedImage ? selectedImage : 'None'}`);
+      console.log(`Location:   ${stagedLocation ? `Lat: ${stagedLocation.latitude}, Lon: ${stagedLocation.longitude}` : 'None'}`);
+      console.log("=============================================\n");
+
+      onSend(finalMessage, selectedImage, stagedLocation, selectedAction?.id);
+      console.log("=============================================",selectedAction?.id); // by hamthan , selectedAction?.id
+      
+      // Cleanup States
       setMessage('');
       setSelectedImage(null);
       setStagedLocation(null);
+      setSelectedAction(null); 
+      setIsActionMenuOpen(false);
       setInputHeight(24);
       if (inputRef.current) inputRef.current.blur();
     }
@@ -145,7 +193,6 @@ const ChatInput = ({ onSend, showCamera = true }) => {
   // ── Color Palette ──
   const inputBg = isDark ? '#1e1e1e' : '#f7f7f8';
   const inputBorder = isDark ? '#333333' : '#e2e2e5';
-  const inputBorderFocused = isDark ? '#555555' : '#c8c8d0';
   const sendBg = isDark ? '#ffffff' : '#111111';
   const sendIconColor = isDark ? '#111111' : '#ffffff';
   const plusCircleBg = isDark ? '#2e2e2e' : '#ebebec';
@@ -158,7 +205,54 @@ const ChatInput = ({ onSend, showCamera = true }) => {
   return (
     <View style={[styles.wrapper, { backgroundColor: wrapperBg }]}>
 
-      {/* ── Floating Menu ── */}
+      {/* ── ACTION PILL AND DROPDOWN ── */}
+      <View style={styles.actionPillContainer}>
+        <TouchableOpacity 
+          style={[styles.actionPill, { backgroundColor: isDark ? '#2a2a2a' : '#ececed', borderColor: inputBorder }]} 
+          onPress={toggleActionMenu}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={selectedAction ? selectedAction.icon : "flash"} size={14} color={selectedAction ? theme.primary : theme.textSecondary} />
+          <Text style={[styles.actionPillText, { color: selectedAction ? theme.text : theme.textSecondary }]}>
+            {selectedAction ? selectedAction.label : "General Query"}
+          </Text>
+          <Ionicons name={isActionMenuOpen ? "chevron-up" : "chevron-down"} size={14} color={theme.textSecondary} />
+        </TouchableOpacity>
+
+        {isActionMenuOpen && (
+          <View style={[styles.actionDropdownMenu, { backgroundColor: menuBg, borderColor: inputBorder }]}>
+            <ScrollView 
+              style={styles.actionScroll} 
+              keyboardShouldPersistTaps="handled" 
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true} // 📍 FIX: Enables inner scrolling on Android
+            >
+              <TouchableOpacity 
+                style={styles.actionItem} 
+                onPress={() => { setSelectedAction(null); setIsActionMenuOpen(false); }}
+              >
+                <Ionicons name="chatbubbles-outline" size={18} color={theme.textSecondary} />
+                <Text style={[styles.actionItemText, { color: theme.textSecondary }]}>General Query (No Action)</Text>
+              </TouchableOpacity>
+              
+              <View style={[styles.menuDivider, { backgroundColor: inputBorder }]} />
+
+              {availableActions.map((action) => (
+                <TouchableOpacity 
+                  key={action.id} 
+                  style={styles.actionItem} 
+                  onPress={() => { setSelectedAction(action); setIsActionMenuOpen(false); }}
+                >
+                  <Ionicons name={action.icon} size={18} color={theme.primary} />
+                  <Text style={[styles.actionItemText, { color: theme.text }]}>{action.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+
+      {/* ── Floating Media Menu ── */}
       {showCamera && (
         <Animated.View
           style={[
@@ -261,7 +355,7 @@ const ChatInput = ({ onSend, showCamera = true }) => {
             value={message}
             onChangeText={setMessage}
             onContentSizeChange={(e) => setInputHeight(Math.max(24, Math.min(e.nativeEvent.contentSize.height, 120)))}
-            onFocus={closeMenu}
+            onFocus={() => { closeMenu(); setIsActionMenuOpen(false); }}
             multiline
             maxLength={2000}
           />
@@ -291,16 +385,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     position: 'relative',
-    // Top separator line
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(128,128,128,0.15)',
+    zIndex: 9999,
+    elevation: 9999,
   },
 
-  // Floating Menu — cleaner card
+  actionPillContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    marginBottom: 8, 
+    zIndex: 9999,
+  },
+  actionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 6,
+  },
+  actionPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  actionDropdownMenu: {
+    position: 'absolute',
+    bottom: '100%', 
+    left: 0,
+    marginBottom: 4,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxHeight: 240,
+    width: 280, 
+    zIndex: 10000,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 16 },
+      android: { elevation: 8 },
+      web: { boxShadow: '0px 6px 16px rgba(0,0,0,0.15)' } 
+    }),
+  },
+  actionScroll: {
+    paddingVertical: 4,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  actionItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: -0.1,
+  },
+
   floatingMenu: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 82 : 86,
+    bottom: '100%',
     left: 16,
+    marginBottom: 8,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 4,
@@ -310,6 +457,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 20 },
       android: { elevation: 10 },
+      web: { boxShadow: '0px 6px 16px rgba(0,0,0,0.15)' }
     }),
   },
   menuDivider: {
@@ -337,7 +485,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  // Main container — pill shape with hairline border
   container: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -377,7 +524,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Staged items
   stagedContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -436,7 +582,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  // Text input
   input: {
     fontSize: 15,
     lineHeight: 21,
@@ -447,7 +592,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  // Send button
   sendButtonWrapper: {
     justifyContent: 'center',
     alignItems: 'center',

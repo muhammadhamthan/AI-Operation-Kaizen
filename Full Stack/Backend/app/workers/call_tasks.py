@@ -441,13 +441,13 @@ def _sync_db() -> Session:
     return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
 
-def _build_twiml(solver_name: str, issue_title: str, site_name: str) -> str:
+def _build_twiml(solver_name: str, issue_title: str, site_name: str, issue_id: int) -> str:
     return (
         "<Response>"
         "<Say voice='alice' language='en-IN'>"
         f"Hello {solver_name}. "
         f"You have been assigned a facility issue at {site_name}. "
-        f"Issue: {issue_title}. "
+        f"Issue: {issue_title} (ID: {issue_id}). "
         "Please open your app and begin work immediately. "
         "</Say>"
         "</Response>"
@@ -459,9 +459,9 @@ def _build_twiml(solver_name: str, issue_title: str, site_name: str) -> str:
 # ══════════════════════════════════════════════════════════════
 
 @celery_app.task(name="call_tasks.schedule_solver_call", max_retries=0)
-def schedule_solver_call(assignment_id: int) -> None:
+def schedule_solver_call(assignment_id: int, issue_id: int = None) -> None:
     logger.info("[schedule_solver_call] assignment #%s", assignment_id)
-    place_solver_call.delay(assignment_id)
+    place_solver_call.delay(assignment_id , issue_id=issue_id)  # issue_id is optional for backward compatibility
 
 
 # ══════════════════════════════════════════════════════════════
@@ -474,7 +474,7 @@ def schedule_solver_call(assignment_id: int) -> None:
     max_retries=3,
     default_retry_delay=30,
 )
-def place_solver_call(self, assignment_id: int, round_start: str = None) -> None:
+def place_solver_call(self, assignment_id: int, round_start: str = None, issue_id: int = None) -> None:
     from app.models.issue_assignment import IssueAssignment
     from app.models.call_log import CallLog
     from app.models.escalation import Escalation
@@ -530,7 +530,7 @@ def place_solver_call(self, assignment_id: int, round_start: str = None) -> None
             call = twilio.calls.create(
                 to=f"+91{solver.phone}",
                 from_=settings.TWILIO_PHONE_NUMBER,
-                twiml=_build_twiml(solver.name, issue_title, site_name),
+                twiml=_build_twiml(solver.name, issue_title, site_name , issue_id),
                 status_callback=(
                     f"{settings.BASE_URL}/api/v1/webhooks/twilio/status"
                     f"?assignment_id={assignment_id}"
