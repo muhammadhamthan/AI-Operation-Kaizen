@@ -460,7 +460,8 @@ export const sendChatMessage = async (
   text,
   sessionId = null,
   currentIssueId = null,
-  imageUrl = null
+  imageUrl = null,
+  intent = null // added by hamthan
 ) => {
   try {
     const requestBody = {
@@ -471,7 +472,8 @@ export const sendChatMessage = async (
       metadata: {
         platform: Platform.OS,
         timestamp: new Date().toISOString(),
-      }
+      },
+      intent: intent // added by hamthan
     };
 
     const response = await api.post('/api/v1/chat/', requestBody);
