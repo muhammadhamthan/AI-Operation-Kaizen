@@ -16,6 +16,7 @@ import {
   Image,
   Animated,
   Platform,
+  Alert, // ✅ Added Alert import
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,6 +28,7 @@ import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import Loader from '../../../../src/components/common/Loader';
 import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
+import Button from '../../../../src/components/common/Button'; // ✅ Added Button import
 
 export default function IssueDetailScreen() {
   const { theme, isDark } = useTheme(); 
@@ -385,7 +387,6 @@ export default function IssueDetailScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Last Call Result</Text>
-                {/* ✅ FIXED: Replaced Button Badge with simple semantic text */}
                 <Text style={[styles.infoValue, { 
                   color: currentAssignment.last_call_status === 'ANSWERED' ? '#10a37f' : '#ef4444',
                   textTransform: 'capitalize' 
@@ -397,33 +398,19 @@ export default function IssueDetailScreen() {
           </View>
         )}
 
-        {/* ── ACTIVITY LOG ── */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Activity Log</Text>
-          {timeline && timeline.length > 0 ? (
-            timeline.map((item, index) => (
-              <View key={index} style={styles.historyItem}>
-                <View style={[styles.historyThread, { backgroundColor: borderColor }]} />
-                <View style={styles.historyContent}>
-                  <Text style={[styles.historyAction, { color: theme.text }]}>
-                    {item.action_type.replace(/_/g, ' ')}
-                  </Text>
-                  <Text style={[styles.historyDetails, { color: theme.textSecondary }]}>
-                    {item.details}
-                  </Text>
-                  <Text style={[styles.historyTime, { color: theme.textSecondary }]}>
-                    {formatDateTime(item.created_at)} • {item.changed_by?.name || 'System'}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={[styles.description, { color: theme.textSecondary, fontStyle: 'italic' }]}>
-              No activity recorded yet.
-            </Text>
-          )}
-        </View>
-
+        {/* ── ACTIONS ── */}
+        {/* ✅ Added the simple Raise Complaint button for RESOLVED_PENDING_REVIEW */}
+        {issue.status === 'RESOLVED_PENDING_REVIEW' && (
+          <View style={styles.actions}>
+            <Button 
+              title="Raise Complaint" 
+              variant="danger" 
+              icon="alert-circle-outline" 
+              onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')} 
+            />
+          </View>
+        )}
+        
         <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
@@ -461,7 +448,7 @@ const styles = StyleSheet.create({
   },
 
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 8, lineHeight: 28 },
+  issueTitle: { fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 8, lineHeight: 28 },
   description: { fontSize: 15, lineHeight: 24, letterSpacing: -0.1 },
 
   sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
@@ -540,5 +527,6 @@ const styles = StyleSheet.create({
   historyDetails: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
   historyTime: { fontSize: 12, fontWeight: '500' },
   
+  actions: { marginHorizontal: 16, marginTop: 32 }, // ✅ Added actions style
   bottomPadding: { height: 40 },
 });

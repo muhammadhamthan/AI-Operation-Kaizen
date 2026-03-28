@@ -72,7 +72,6 @@ async def send_chat_message(
 
     return response
 
-
 # ══════════════════════════════════════════════════════════
 # SESSIONS: List all sessions (sidebar)
 # ══════════════════════════════════════════════════════════

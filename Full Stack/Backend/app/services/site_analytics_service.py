@@ -139,9 +139,16 @@ class SiteAnalyticsService:
         # ─────────────────────────────────────
         # 2️⃣ Complaint count (JOIN)
         # ─────────────────────────────────────
+        # complaint_stmt = (
+        #     select(sql_func.count(Complaint.id))
+        #     .join(Issue, Complaint.issue_id == Issue.id)
+        #     .where(Issue.site_id == site_id)
+        # )
+        
+        # Using the relationship from Complaint to Issue is more efficient than a manual join:
         complaint_stmt = (
             select(sql_func.count(Complaint.id))
-            .join(Issue, Complaint.issue_id == Issue.id)
+            .join(Complaint.issue)
             .where(Issue.site_id == site_id)
         )
 
@@ -153,7 +160,7 @@ class SiteAnalyticsService:
         score = 100
 
         if total > 0:
-            penalty = (overdue * 5) + (escalated * 5) + (complaints_count * 10)
+            penalty = (overdue * 5) + (escalated * 5) + (complaints_count * 10) # we havce to update this formula with all values 
             bonus = completed * 2
             score = max(0, min(100, round(100 - penalty + bonus)))
 

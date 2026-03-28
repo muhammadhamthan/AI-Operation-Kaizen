@@ -150,17 +150,7 @@ export default function NotFixedDetailScreen() {
           </View>
         )}
 
-        {/* ── TIMELINE (Using new Redux Timeline data) ── */}
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Activity Log</Text>
-          {timeline && timeline.length > 0 ? (
-            <IssueTimeline history={timeline} />
-          ) : (
-            <Text style={[styles.description, { color: theme.textSecondary, fontStyle: 'italic' }]}>
-              No activity recorded yet.
-            </Text>
-          )}
-        </View>
+       
 
         {/* ── ACTIONS ── */}
         <View style={styles.actions}>

@@ -6,9 +6,13 @@ First message → auto-creates session with AI-generated title.
 Subsequent messages → attach to existing session.
 """
 
+from email.mime import message
 import logging
 from typing import Optional, Dict, Any
+from urllib import response
 
+from fastapi import responses
+from requests import session
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func as sql_func, desc
@@ -42,65 +46,151 @@ class ChatbotService:
     # ══════════════════════════════════════════════════════
 
     async def process_message(
-        self,
-        user: User,
-        message: str,
-        session_id: Optional[int] = None,
-        image_url: Optional[str] = None,
-        issue_id: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> ChatResponse:
+    self,
+    user: User,
+    message: str,
+    session_id: Optional[int] = None,
+    image_url: Optional[str] = None,
+    issue_id: Optional[int] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> ChatResponse:
 
-        # ── 1. Get or create session ────────────────────
+    # ── 1. Get or create session ────────────────────
         session = await self._get_or_create_session(
-            user=user,
-            session_id=session_id,
-            first_message=message,
-            issue_id=issue_id,
-        )
+        user=user,
+        session_id=session_id,
+        first_message=message,
+        issue_id=issue_id,
+    )
 
-        # ── 2. Log user message ─────────────────────────
+    # ── 2. Log user message ─────────────────────────
         await self._log_chat(
-            session_id=session.id,
-            user_id=user.id,
-            issue_id=issue_id,
-            role=ChatRole.USER,
-            message=message,
-            attachments=[image_url] if image_url else [],
-        )
+        session_id=session.id,
+        user_id=user.id,
+        issue_id=issue_id,
+        role=ChatRole.USER,
+        message=message,
+        attachments=[image_url] if image_url else [],
+    )
 
-        # ── 3. Call AI agent ─────────────────────────────
-        try:
-            from app.services.ai_service import master_agent
-            agent_response = master_agent(message)
+    # ── 3. Call AI agent ─────────────────────────────
+        from app.services.ai_service import master_agent, run_sql_agent
+        from app.services.issue_service import IssueService
+        
+        agent_response = await master_agent(user.id, message)
+        print("🤖 Agent decision:", agent_response)
 
-            response = ChatResponse(
-                message=agent_response,
-                intent="fetch",
-                session_id=session.id,
-                actions_taken=["sql_agent"],
-            )
+        intent = agent_response.get("intent")
+        func   = agent_response.get("function")   # None if clarification
+        args   = agent_response.get("args", {})
 
-        except Exception as e:
-            logger.error(f"Agent error: {e}", exc_info=True)
-            response = ChatResponse(
-                message=f"❌ Something went wrong: {str(e)}",
-                intent="error",
-                session_id=session.id,
-                actions_taken=[f"error: {str(e)}"],
-            )
+        issue_service = IssueService(self.db)
 
-        # ── 4. Log AI response ──────────────────────────
-        await self._log_chat(
+    # ── 4. Clarification — missing args ─────────────
+        if intent == "clarification":
+            ai_message = agent_response.get("message", "Could you provide more details?")
+            await self._log_chat(
             session_id=session.id,
             user_id=None,
-            issue_id=response.issue_id or issue_id,
+            issue_id=issue_id,
             role=ChatRole.AI,
-            message=response.message,
+            message=ai_message,
             attachments=[],
         )
+            await self.db.commit()
+            return ChatResponse(
+            message=ai_message,
+            intent="clarification",
+            actions_taken=[],
+        )
 
-        # ── 5. Update session timestamp ──────────────────
+    # ── 5. Function calls ────────────────────────────
+        if intent == "function_call":
+    
+    # ✅ Support both single (legacy) and multi-call responses
+            calls = agent_response.get("calls") or [
+        {"function": agent_response.get("function"), "args": agent_response.get("args", {})}
+    ]
+            clarifications = agent_response.get("clarifications", [])
+
+            responses = []
+
+        for call in calls:
+            func = call["function"]
+            args = call["args"]
+
+            if func == "create_issue":
+                r = await issue_service.create_from_chat(
+                user=user, message=args["message"],
+                image_url=image_url, ai_service=None)
+
+            elif func == "approve_completion":
+                r = await issue_service.approve_completion(user, args["issue_id"])
+
+            elif func == "update_priority":
+                r = await issue_service.update_priority(
+                user, args["issue_id"], {"priority": args["priority"]})
+
+            elif func == "extend_deadlines":
+                r = await issue_service.extend_deadline(
+                user, args["issue_id"], args.get("days", 3))
+
+            elif func == "solver_complete_work":
+                r = await issue_service.solver_complete_work(
+                user, args.get("message", "completed work"),
+                image_url, args["issue_id"], None)
+
+            elif func == "solver_report_blocker":
+                r = await issue_service.solver_report_blocker(
+                user, args.get("message", "blocker reported"), args["issue_id"])
+
+            elif func == "raise_complaint":
+                from app.services.complaint_service import ComplaintService
+                r = await ComplaintService(self.db).create_from_chat(
+                user=user, issue_id=args["issue_id"],
+                message=args["message"], image_url=image_url)
+
+            elif func == "reassign_solver":
+                from app.services.assignment_service import AssignmentService
+                r = await AssignmentService(self.db).reassign_from_chat(
+                user=user, issue_id=args.get("issue_id"),
+                solver_name=args.get("solver_name"))
+
+            elif func == "query_function":
+                from app.services.ai_service import run_sql_agent
+                result = await run_sql_agent(user.id, args["query"])
+                r = ChatResponse(message=result, intent="query_function",
+                             actions_taken=["sql_agent"])
+
+            elif func == "llm_function":
+                r = ChatResponse(message=args.get("message", ""),
+                             intent="llm_function", actions_taken=["llm_response"])
+            else:
+                r = ChatResponse(message="Unknown function.", intent="unknown", actions_taken=[])
+
+            responses.append(r)
+
+    # ✅ Merge all responses into one
+        combined_message = "\n\n".join([r.message for r in responses])
+        if clarifications:
+            combined_message += "\n\n⚠️ " + "\n".join(clarifications)
+
+        response = ChatResponse(
+        message=combined_message,
+        intent="function_call",
+        actions_taken=[c["function"] for c in calls]
+    )
+    # ── 6. Log AI response ───────────────────────────
+        await self._log_chat(
+        session_id=session.id,
+        user_id=None,
+        issue_id=issue_id,
+        role=ChatRole.AI,
+        message=response.message,
+        attachments=[],
+    )
+
+    # ── 7. Update session timestamp ──────────────────
         session.updated_at = sql_func.now()
         await self.db.commit()
 
