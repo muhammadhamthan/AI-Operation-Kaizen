@@ -89,25 +89,24 @@ class AssignmentService:
             .where(
                 ProblemSolverSkill.skill_type == problem_type.lower(),
                 ProblemSolverSkill.is_available == True,
-<<<<<<< HEAD
-                (
-                    (ProblemSolverSkill.site_id == site_id) |
-                    (ProblemSolverSkill.site_id.is_(None)) # this line no needed
-                ),
-            )
-            .order_by(
-                ProblemSolverSkill.site_id.is_(None).asc(), # this line no needed
-                ProblemSolverSkill.priority.desc(),
-            )
-            .all()
-=======
                 ProblemSolverSkill.site_id == site_id,   # exact site match only
             )
             .order_by(ProblemSolverSkill.priority.desc())
->>>>>>> dae9f0acb0c57d0b21ebad762b2e31d129ab8610
         )
         result = await self.db.execute(skills_stmt)
         site_skills = result.scalars().all()
+        if not site_skills:
+            fallback_stmt = (
+                select(ProblemSolverSkill)
+                .where(
+                    ProblemSolverSkill.skill_type == problem_type.lower(),
+                    ProblemSolverSkill.is_available == True
+                )
+                .order_by(ProblemSolverSkill.priority.desc())
+            )
+
+            result = await self.db.execute(fallback_stmt)
+            site_skills = result.scalars().all()
 
         if not site_skills:
             logger.info(
@@ -125,7 +124,7 @@ class AssignmentService:
             )
             .where(
                 IssueAssignment.assigned_to_solver_id.in_(candidate_ids),
-                IssueAssignment.status == AssignmentStatus.ACTIVE,
+                IssueAssignment.status == [AssignmentStatus.ACTIVE,AssignmentStatus.REOPENED],
             )
             .group_by(IssueAssignment.assigned_to_solver_id)
         )
