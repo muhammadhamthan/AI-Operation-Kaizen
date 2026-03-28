@@ -5,76 +5,92 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  Platform,
+  RefreshControl,
   Image,
   Animated,
-  Platform,
-  Alert,
-  RefreshControl,
   ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSmartBack } from '../../../../src/hooks/useSmartBack';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker'; 
-import * as Location from 'expo-location'; // 📍 IMPORTED FOR NATIVE GPS
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { 
   fetchIssueById, 
-  fetchIssueTimeline, 
-  selectIssueById, 
+  fetchIssueTimeline,
   selectCurrentIssue, 
-  selectIssueTimeline,
-  selectIssuesLoading,
-  clearCurrentIssue
+  selectIssuesLoading, 
+  clearCurrentIssue 
 } from '../../../../src/store/slices/issuesSlice';
-import { formatDate, formatDateTime } from '../../../../src/utils/formatters';
+import { formatDate, formatDateTime } from '../../../../src/utils/formatters'; 
 import { calculateOverdueDays } from '../../../../src/utils/overdue';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
-import Loader from '../../../../src/components/common/Loader';
+import Button from '../../../../src/components/common/Button';
 import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
-import Button from '../../../../src/components/common/Button'; 
+import ImageGallery from '../../../../src/components/issue/ImageGallery';
+import CallHistorySection from '../../../../src/components/issue/CallHistorySection';
+import Loader from '../../../../src/components/common/Loader';
 
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
-export default function IssueDetailScreen() {
+export default function EscalatedDetailScreen() {
   const { theme, isDark } = useTheme(); 
   const router = useRouter();
-  const { id, highlighted } = useLocalSearchParams();
   
-  const dispatch = useDispatch();
+  const { id, fromNotification, highlighted } = useLocalSearchParams();
 
+  const handleSmartBack = useCallback(() => {
+    if (fromNotification === 'true') {
+      router.replace('/(main)/(tabs)/dashboard');
+      setTimeout(() => {
+        router.navigate('/(main)/(tabs)/chat');
+      }, 100); 
+    } else {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(main)/(tabs)/dashboard');
+      }
+    }
+  }, [fromNotification, router]);
+
+  useSmartBack(handleSmartBack);
+
+  const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
-  const cachedIssue = useSelector((state) => selectIssueById(state, parseInt(id)));
-  const fullIssue = useSelector(selectCurrentIssue);
-  const timeline = useSelector(selectIssueTimeline) || [];
+  const issue = useSelector(selectCurrentIssue);
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
 
   const [refreshing, setRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // 📍 NEW CAMERA & LOCATION STATES
+  // 📍 CAMERA & LOCATION STATES
   const [selectedImage, setSelectedImage] = useState(null);
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [capturedLocation, setCapturedLocation] = useState(null);
 
-  const issue = (fullIssue && fullIssue.id === parseInt(id)) ? fullIssue : cachedIssue;
+  const [highlightAnim] = useState(new Animated.Value(highlighted === 'true' ? 1 : 0));
 
   useEffect(() => {
     if (id) {
       dispatch(fetchIssueById(parseInt(id)));
       dispatch(fetchIssueTimeline(parseInt(id)));
     }
-    return () => { dispatch(clearCurrentIssue()); };
+    return () => {
+      dispatch(clearCurrentIssue());
+    };
   }, [id, dispatch]);
-  
-  const [highlightAnim] = useState(new Animated.Value(highlighted === 'true' ? 1 : 0));
 
   useEffect(() => {
     if (highlighted === 'true') {
@@ -106,16 +122,12 @@ export default function IssueDetailScreen() {
     }
   }, [id, isOnline, dispatch]);
 
-  // 📍 CAMERA LOGIC
   const handleTakePhoto = async () => {
-    console.log("\n[DEBUG] --- STARTING PHOTO CAPTURE FLOW ---");
     setIsCapturingLocation(true); 
-
     try {
       let loc = null;
       if (Platform.OS !== 'web') {
         try {
-          console.log("[DEBUG] Native Device: Requesting GPS...");
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
             const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -123,9 +135,7 @@ export default function IssueDetailScreen() {
             const position = await Promise.race([locationPromise, timeoutPromise]);
             loc = { latitude: position.coords.latitude, longitude: position.coords.longitude };
           }
-        } catch(e) {
-          console.log("[DEBUG] Native location fetch failed:", e.message);
-        }
+        } catch(e) {}
       }
 
       if (loc) {
@@ -138,7 +148,6 @@ export default function IssueDetailScreen() {
 
       let result;
       if (Platform.OS === 'web') {
-        console.log("[DEBUG] Web: Triggering File Picker.");
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
@@ -174,16 +183,8 @@ export default function IssueDetailScreen() {
   };
 
   const handleSubmitPhoto = () => {
-    console.log("\n=============================================");
-    console.log("📸 FIX PHOTO UPLOADED");
-    console.log(`Issue ID:      ${issue.id}`);
-    console.log(`Solver:        ${user?.name}`);
-    console.log(`Location:      ${capturedLocation ? `${capturedLocation.latitude}, ${capturedLocation.longitude}` : 'Bypassed (Web)'}`);
-    console.log("=============================================\n");
-
     setSelectedImage(null);
     setCapturedLocation(null);
-    
     if (Platform.OS === 'web') {
       alert("Sent Successfully! Fix photo uploaded for review.");
     } else {
@@ -191,10 +192,7 @@ export default function IssueDetailScreen() {
     }
   };
 
-  // 📍 REVIEW LOGIC
   const handleReviewAction = (actionType) => {
-    console.log(`[DEBUG] Supervisor Action: ${actionType} on Issue #${issue?.id}`);
-
     if (actionType === 'APPROVE') {
       if (Platform.OS === 'web') {
         if (window.confirm("Approve this fix? Issue will be marked as COMPLETED.")) {
@@ -222,54 +220,29 @@ export default function IssueDetailScreen() {
     }
   };
 
+  const handleAction = (action) => {
+    Alert.alert('Coming Soon', `${action} functionality will be available in Phase 2-3`);
+  };
+
   if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
   if (!issue) return <Loader message="Loading issue details..." />;
 
-  // ── SMART DATA EXTRACTION ──
-  const siteName = issue.site_name || issue.site?.name || 'N/A';
-  const siteLocation = issue.site_location || issue.site?.location || null;
-  const category = issue.issue_type || 'General Maintenance';
-  const raisedByName = issue.supervisor_name || issue.raised_by?.name || 'N/A';
-
-  const currentAssignment = issue.assignments && issue.assignments.length > 0 
-    ? issue.assignments[0] 
-    : issue.assignment || null;
-
-  const solverName = currentAssignment?.solver_name || currentAssignment?.assigned_to?.name || null;
-  const solverPhone = currentAssignment?.solver_phone || currentAssignment?.assigned_to?.phone || null;
-  const dueDate = currentAssignment?.due_date || issue.deadline_at || null;
-
+  const currentAssignment = issue.assignments && issue.assignments.length > 0 ? issue.assignments[0] : null;
   const overdueDays = calculateOverdueDays(issue.deadline_at);
   const isOverdue = overdueDays > 0 && issue.status !== 'COMPLETED';
-
-  // ── ROLE + STATUS DERIVED FLAGS ──
-  const isProblemSolver = user?.role === 'problemsolver' || user?.role === 'problem_solver';
-  const isSupervisor    = user?.role === 'supervisor';
-  const isManager       = user?.role === 'manager';
-
-  const showMarkDoneBtn = isProblemSolver && issue.status === 'IN_PROGRESS';
-  const showApproveBtn  = (isSupervisor || isManager) && issue.status === 'RESOLVED_PENDING_REVIEW';
-
-  const getInitials = (name) => {
-    if (!name || name === 'N/A') return 'NA';
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  const getStatusColor = (status) => {
-    const colors = { OPEN: '#3b82f6', ASSIGNED: '#f59e0b', IN_PROGRESS: '#8b5cf6', RESOLVED_PENDING_REVIEW: '#eab308', COMPLETED: '#10a37f', REOPENED: '#ef4444', ESCALATED: '#ef4444' };
-    return colors[status] || '#8e8ea0';
-  };
-
-  const getPriorityColor = (priority) => {
-    const colors = { high: '#ef4444', medium: '#f59e0b', low: '#10a37f' };
-    return colors[priority] || '#8e8ea0';
-  };
 
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
   const successAccent = '#10a37f';
+  
+  const isProblemSolver = user?.role === 'problemsolver' || user?.role === 'problem_solver';
+  const isSupervisor    = user?.role === 'supervisor';
+  const isManager       = user?.role === 'manager';
+
+  const showMarkDoneBtn = isProblemSolver && (issue.status?.toUpperCase() === 'IN_PROGRESS' || issue.status?.toUpperCase() === 'ASSIGNED');
+  const showApproveBtn  = (isSupervisor || isManager) && issue.status?.toUpperCase() === 'RESOLVED_PENDING_REVIEW';
 
   const highlightColor = highlightAnim.interpolate({
     inputRange: [0, 1],
@@ -277,14 +250,12 @@ export default function IssueDetailScreen() {
   });
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]}>
-      
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
+        <TouchableOpacity onPress={handleSmartBack} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
-        
+        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Escalated Issue #{issue.id}</Text>
         <View style={styles.headerRight}>
           {Platform.OS === 'web' ? (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
@@ -299,63 +270,50 @@ export default function IssueDetailScreen() {
       <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          Platform.OS === 'web' ? undefined : (
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />
-          )
-        }
+        refreshControl={Platform.OS === 'web' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
       >
-        
         <Animated.View style={[styles.card, styles.flatCard, { backgroundColor: highlightColor, borderColor }]}>
-          <Text style={[styles.issueTitle, { color: theme.text }]}>{issue.title}</Text>
           <View style={styles.badgeRow}>
-            <StatusBadge label={issue.status.replace(/_/g, ' ')} color={getStatusColor(issue.status)} />
-            <StatusBadge label={issue.priority.toUpperCase()} color={getPriorityColor(issue.priority)} />
+            <StatusBadge status={issue.status} size="small" />
+            <StatusBadge status={issue.priority} type="priority" size="small" />
             {isOverdue && <StatusBadge label={`${overdueDays}d overdue`} color="#ef4444" />}
           </View>
+          <Text style={[styles.title, { color: theme.text }]}>{issue.title}</Text>
+          <Text style={[styles.description, { color: theme.textSecondary }]}>{issue.description}</Text>
         </Animated.View>
 
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Description</Text>
-          <Text style={[styles.description, { color: theme.text }]}>{issue.description}</Text>
-        </View>
-
-        <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Details</Text>
-          
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="location-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Site</Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>{siteName}</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site_name || 'N/A'}</Text>
             </View>
           </View>
-          
-          {siteLocation && (
+          {issue.site_location && (
             <View style={styles.infoRow}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="map-outline" size={18} color={theme.textSecondary} /></View>
               <View style={styles.infoContent}>
                 <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Location</Text>
-                <Text style={[styles.infoValue, { color: theme.text }]}>{siteLocation}</Text>
+                <Text style={[styles.infoValue, { color: theme.text }]}>{issue.site_location}</Text>
               </View>
             </View>
           )}
-
-          {dueDate && (
+          {currentAssignment?.due_date && (
             <View style={styles.infoRow}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="calendar-outline" size={18} color={theme.textSecondary} /></View>
               <View style={styles.infoContent}>
                 <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Deadline</Text>
-                <Text style={[styles.infoValue, { color: theme.text }]}>{formatDate(dueDate)}</Text>
+                <Text style={[styles.infoValue, { color: theme.text }]}>{formatDate(currentAssignment.due_date)}</Text>
               </View>
             </View>
           )}
-          
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="construct-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Category</Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>{category}</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{issue.issue_type || 'General Maintenance'}</Text>
             </View>
           </View>
         </View>
@@ -363,26 +321,22 @@ export default function IssueDetailScreen() {
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>People Involved</Text>
           <View style={styles.peopleGrid}>
-            <View style={[styles.personRow, solverName && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-              <View style={[styles.avatarCircle, { backgroundColor: '#3b82f6' }]}><Text style={styles.avatarText}>{getInitials(raisedByName)}</Text></View>
+            <View style={[styles.personRow, currentAssignment && { borderBottomColor: borderColor, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <Avatar name={issue.supervisor_name} size="medium" />
               <View style={styles.personInfo}>
-                <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>{raisedByName}</Text>
+                <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>{issue.supervisor_name || 'N/A'}</Text>
                 <Text style={[styles.personRole, { color: theme.textSecondary }]}>Raised By</Text>
               </View>
             </View>
-            
-            {solverName && (
+            {currentAssignment && (
               <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
-                <View style={[styles.avatarCircle, { backgroundColor: '#10a37f' }]}><Text style={styles.avatarText}>{getInitials(solverName)}</Text></View>
+                <Avatar name={currentAssignment.solver_name} size="medium" />
                 <View style={styles.personInfo}>
-                  <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>{solverName}</Text>
+                  <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>{currentAssignment.solver_name}</Text>
                   <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
                 </View>
-                {solverPhone && (
-                   <View style={styles.phoneBadge}>
-                     <Ionicons name="call" size={12} color="#fff" />
-                     <Text style={styles.phoneBadgeText}>{solverPhone}</Text>
-                   </View>
+                {currentAssignment.solver_phone && (
+                   <Text style={[styles.personRole, { color: theme.textSecondary, marginTop: 4 }]}>{currentAssignment.solver_phone}</Text>
                 )}
               </View>
             )}
@@ -391,7 +345,6 @@ export default function IssueDetailScreen() {
 
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Metadata</Text>
-
           {issue.complaints_count !== undefined && (
             <View style={styles.infoRow}>
               <View style={[styles.iconWrapper, { backgroundColor: issue.complaints_count > 0 ? 'rgba(239,68,68,0.1)' : iconBg }]}><Ionicons name="warning-outline" size={18} color={issue.complaints_count > 0 ? '#ef4444' : theme.textSecondary} /></View>
@@ -401,7 +354,6 @@ export default function IssueDetailScreen() {
               </View>
             </View>
           )}
-
           {issue.track_status && (
             <View style={styles.infoRow}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="analytics-outline" size={18} color={theme.textSecondary} /></View>
@@ -411,15 +363,6 @@ export default function IssueDetailScreen() {
               </View>
             </View>
           )}
-          
-          <View style={styles.infoRow}>
-            <View style={[styles.iconWrapper, { backgroundColor: isOverdue ? 'rgba(239,68,68,0.1)' : iconBg }]}><Ionicons name="flag-outline" size={18} color={isOverdue ? '#ef4444' : theme.textSecondary} /></View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Deadline</Text>
-              <Text style={[styles.infoValue, { color: isOverdue ? '#ef4444' : theme.text }]}>{formatDate(issue.deadline_at)}{isOverdue && ` (${overdueDays} days overdue)`}</Text>
-            </View>
-          </View>
-          
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="add-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -427,7 +370,6 @@ export default function IssueDetailScreen() {
               <Text style={[styles.infoValue, { color: theme.text }]}>{formatDateTime(issue.created_at)}</Text>
             </View>
           </View>
-          
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="refresh-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -437,125 +379,94 @@ export default function IssueDetailScreen() {
           </View>
         </View>
 
-        {/* ── IMAGES ── */}
         {issue.images && issue.images.length > 0 && (
           <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Media Attached</Text>
-            {issue.images.map((img, index) => (
-              <View key={index} style={styles.imageContainer}>
-                <View style={styles.imageHeader}>
-                  <StatusBadge label={img.image_type} color={img.image_type === 'BEFORE' ? '#f59e0b' : '#10a37f'} />
-                  {img.ai_flag && img.ai_flag !== 'NOT_CHECKED' && (
-                    <StatusBadge label={`AI: ${img.ai_flag}`} color={img.ai_flag === 'OK' ? '#10a37f' : '#ef4444'} />
-                  )}
-                </View>
-                <View style={[styles.imageWrapper, { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0', borderColor }]}><Image source={{ uri: img.image_url }} style={styles.image} resizeMode="cover" /></View>
-                <View style={styles.imageFooter}>
-                  <Text style={[styles.uploaderName, { color: theme.text }]}>Uploaded by: {img.uploader_name || 'System'}</Text>
-                  <Text style={[styles.imageDate, { color: theme.textSecondary }]}>{formatDateTime(img.created_at)}</Text>
-                </View>
-              </View>
-            ))}
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Photos</Text>
+            <ImageGallery images={issue.images || []} />
           </View>
         )}
 
-        {/* ── CALL STATUS ── */}
-        {currentAssignment && (currentAssignment.total_call_attempts > 0 || currentAssignment.last_call_status) && (
-          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Call Status</Text>
-            <View style={styles.infoRow}>
-              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="call-outline" size={18} color={theme.textSecondary} /></View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Total Attempts</Text>
-                <Text style={[styles.infoValue, { color: theme.text }]}>{currentAssignment.total_call_attempts || 0}</Text>
-              </View>
-            </View>
-            <View style={[styles.infoRow, { marginBottom: 0 }]}>
-              <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="pulse-outline" size={18} color={theme.textSecondary} /></View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Last Call Result</Text>
-                <Text style={[styles.infoValue, { color: currentAssignment.last_call_status === 'ANSWERED' ? '#10a37f' : '#ef4444', textTransform: 'capitalize' }]}>{currentAssignment.last_call_status ? currentAssignment.last_call_status.toLowerCase() : 'Unknown'}</Text>
-              </View>
-            </View>
+        {isProblemSolver && issue.call_logs?.length > 0 && (
+          <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor, padding: 0, overflow: 'hidden' }]}>
+            <CallHistorySection callLogs={issue.call_logs} />
           </View>
         )}
 
-        {/* ── ACTIONS ── */}
         <View style={styles.actions}>
-
-          {/* 📍 PROBLEM SOLVER: Camera Flow (IN_PROGRESS) */}
-          {showMarkDoneBtn && (
+          {isProblemSolver && (
             <View style={styles.solverActionContainer}>
-              {!selectedImage ? (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={[styles.primaryActionBtn, { backgroundColor: successAccent, opacity: isCapturingLocation ? 0.7 : 1 }]}
-                  onPress={handleTakePhoto}
-                  disabled={isCapturingLocation}
-                >
-                  <View style={styles.primaryActionBtnInner}>
-                    {isCapturingLocation ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="camera" size={24} color="#fff" />}
-                    <Text style={styles.primaryActionBtnText}>{isCapturingLocation ? "Preparing..." : "Take Fix Photo"}</Text>
+              {showMarkDoneBtn ? (
+                !selectedImage ? (
+                  <TouchableOpacity activeOpacity={0.8} style={[styles.primaryActionBtn, { backgroundColor: successAccent, opacity: isCapturingLocation ? 0.7 : 1 }]} onPress={handleTakePhoto} disabled={isCapturingLocation}>
+                    <View style={styles.primaryActionBtnInner}>
+                      {isCapturingLocation ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="camera" size={24} color="#fff" />}
+                      <Text style={styles.primaryActionBtnText}>{isCapturingLocation ? "Preparing..." : "Take Fix Photo"}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.previewContainer, { backgroundColor: surfaceColor, borderColor }]}>
+                    <View style={styles.previewHeader}>
+                      <Ionicons name="image-outline" size={20} color={theme.text} />
+                      <Text style={[styles.previewTitle, { color: theme.text }]}>Photo Ready</Text>
+                    </View>
+                    <Image source={{ uri: selectedImage }} style={[styles.previewImage, { borderColor }]} />
+                    <Text style={[styles.previewSubtext, { color: theme.textSecondary }]}>Does this photo clearly show the resolved issue?</Text>
+                    <View style={styles.previewActions}>
+                      <TouchableOpacity style={[styles.previewBtn, { backgroundColor: iconBg, borderColor, borderWidth: 1 }]} onPress={() => { setSelectedImage(null); setCapturedLocation(null); }}>
+                        <Text style={[styles.previewBtnText, { color: theme.text }]}>Retake</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.previewBtn, { backgroundColor: successAccent, flex: 2 }]} onPress={handleSubmitPhoto}>
+                        <Ionicons name="send" size={18} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={[styles.previewBtnText, { color: '#fff' }]}>Send Photo</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </TouchableOpacity>
+                )
               ) : (
-                <View style={[styles.previewContainer, { backgroundColor: surfaceColor, borderColor }]}>
-                  <View style={styles.previewHeader}>
-                    <Ionicons name="image-outline" size={20} color={theme.text} />
-                    <Text style={[styles.previewTitle, { color: theme.text }]}>Photo Ready</Text>
-                  </View>
-                  <Image source={{ uri: selectedImage }} style={[styles.previewImage, { borderColor }]} />
-                  <Text style={[styles.previewSubtext, { color: theme.textSecondary }]}>Does this photo clearly show the resolved issue?</Text>
-                  <View style={styles.previewActions}>
-                    <TouchableOpacity style={[styles.previewBtn, { backgroundColor: iconBg, borderColor, borderWidth: 1 }]} onPress={() => { setSelectedImage(null); setCapturedLocation(null); }}>
-                      <Text style={[styles.previewBtnText, { color: theme.text }]}>Retake</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.previewBtn, { backgroundColor: successAccent, flex: 2 }]} onPress={handleSubmitPhoto}>
-                      <Ionicons name="send" size={18} color="#fff" style={{ marginRight: 6 }} />
-                      <Text style={[styles.previewBtnText, { color: '#fff' }]}>Send Photo</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <Text style={{ color: theme.textSecondary, textAlign: 'center', fontStyle: 'italic' }}>
+                  No actions available for this status.
+                </Text>
               )}
             </View>
           )}
 
-          {/* 📍 SUPERVISOR / MANAGER: Approve/Reject (RESOLVED_PENDING_REVIEW) */}
-          {showApproveBtn && (
-            <View style={{ gap: 12, marginTop: showMarkDoneBtn ? 12 : 0 }}>
-              <Button 
-                title="Approve & Close" 
-                variant="success" 
-                icon="checkmark-done-circle-outline" 
-                onPress={() => handleReviewAction('APPROVE')} 
-                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }} 
-              />
-              <Button 
-                title="Reject Fix" 
-                variant="danger" 
-                icon="close-circle-outline" 
-                onPress={() => handleReviewAction('REJECT')} 
-                style={{ borderRadius: 10 }} 
-              />
+          {isSupervisor && (
+            <View style={{ gap: 12 }}>
+              {showApproveBtn ? (
+                <>
+                  <Button title="Approve & Close" variant="success" icon="checkmark-done-circle-outline" onPress={() => handleReviewAction('APPROVE')} style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }} />
+                  <Button title="Reject Fix" variant="danger" icon="close-circle-outline" onPress={() => handleReviewAction('REJECT')} style={{ borderRadius: 10 }} />
+                </>
+              ) : (
+                <>
+                  <Button title="Raise Complaint" variant="danger" icon="alert-circle-outline" onPress={() => handleAction('Raise Complaint')} />
+                  <Button title="Mark Complete" variant="success" icon="checkmark-circle-outline" onPress={() => handleAction('Mark Complete')} />
+                </>
+              )}
             </View>
           )}
 
-          {/* SUPERVISOR: Raise Complaint */}
-          {(isSupervisor || isManager) && issue.status === 'COMPLETED' && (
-            <Button 
-              title="Raise Complaint" 
-              variant="danger" 
-              icon="alert-circle-outline" 
-              onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')}
-              style={styles.buttonMargin}
-            />
+          {isManager && (
+            <View style={{ gap: 12 }}>
+              {showApproveBtn ? (
+                <>
+                  <Button title="Approve & Close" variant="success" icon="checkmark-done-circle-outline" onPress={() => handleReviewAction('APPROVE')} style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }} />
+                  <Button title="Reject Fix" variant="danger" icon="close-circle-outline" onPress={() => handleReviewAction('REJECT')} style={{ borderRadius: 10 }} />
+                </>
+              ) : (
+                <>
+                  <Button title="Escalate" variant="danger" icon="arrow-up-circle-outline" onPress={() => handleAction('Escalate')} />
+                  <Button title="Re-assign" variant="secondary" icon="swap-horizontal-outline" onPress={() => handleAction('Re-assign')} />
+                </>
+              )}
+            </View>
           )}
-
         </View>
+
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <FullScreenSpinner visible={refreshing} message="Updating Issue..." color={theme.primary} />
+      <FullScreenSpinner visible={refreshing} message="Updating Issue Details..." color={theme.primary} />
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -573,7 +484,7 @@ const styles = StyleSheet.create({
   card: { marginHorizontal: 16, marginTop: 16, padding: 20 },
   flatCard: { borderRadius: 16, borderWidth: 1, ...Platform.select({ ios: { shadowOpacity: 0 }, android: { elevation: 0 } }) },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  issueTitle: { fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 8, lineHeight: 28 },
+  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 8, lineHeight: 28 },
   description: { fontSize: 15, lineHeight: 24, letterSpacing: -0.1 },
   sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 14 },
@@ -583,20 +494,9 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
   peopleGrid: { flexDirection: 'column' },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 12 },
-  avatarCircle: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
   personInfo: { flex: 1, justifyContent: 'center' },
   personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
   personRole: { fontSize: 13 },
-  phoneBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#8b5cf6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
-  phoneBadgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  imageContainer: { marginBottom: 24 },
-  imageHeader: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  imageWrapper: { width: '100%', height: 220, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  image: { width: '100%', height: '100%' },
-  imageFooter: { marginTop: 10 },
-  uploaderName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  imageDate: { fontSize: 12 },
   actions: { marginHorizontal: 16, marginTop: 32 },
   buttonMargin: { marginTop: 12 },
   solverActionContainer: { width: '100%' },

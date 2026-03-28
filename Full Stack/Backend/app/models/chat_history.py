@@ -88,6 +88,7 @@ class ChatHistory(Base):
         Index("idx_chat_issue", "issue_id"),
         Index("idx_chat_user", "user_id"),
         Index("idx_chat_created", created_at.desc()),
+        Index("idx_chat_history_session_created","session_id",created_at.asc()),
     )
 
     def __repr__(self) -> str:

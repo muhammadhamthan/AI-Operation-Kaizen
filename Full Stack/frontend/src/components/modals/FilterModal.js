@@ -13,19 +13,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 
+// ── EXACT COLOR PALETTE MAPPED TO CARDS ──
 const STATUS_OPTIONS = [
-  { label: 'Open', value: 'OPEN' },
-  { label: 'Assigned', value: 'ASSIGNED' },
-  { label: 'In Progress', value: 'IN_PROGRESS' },
-  { label: 'Resolved (Pending Review)', value: 'RESOLVED_PENDING_REVIEW' },
-  { label: 'Completed', value: 'COMPLETED' },
-  { label: 'Reopened', value: 'REOPENED' },
-  { label: 'Escalated', value: 'ESCALATED' },
+  { label: 'Open', value: 'OPEN', color: '#3b82f6' },
+  { label: 'Assigned', value: 'ASSIGNED', color: '#8b5cf6' },
+  { label: 'In Progress', value: 'IN_PROGRESS', color: '#eab308' },
+  { label: 'Resolved (Pending Review)', value: 'RESOLVED_PENDING_REVIEW', color: '#f97316' },
+  { label: 'Completed', value: 'COMPLETED', color: '#10a37f' },
+  { label: 'Reopened', value: 'REOPENED', color: '#ef4444' },
+  { label: 'Escalated', value: 'ESCALATED', color: '#dc2626' },
 ];
 
 const PRIORITY_OPTIONS = [
   { label: 'High', value: 'high', color: '#ef4444' },
-  { label: 'Medium', value: 'medium', color: '#f97316' },
+  { label: 'Medium', value: 'medium', color: '#f59e0b' },
   { label: 'Low', value: 'low', color: '#10a37f' },
 ];
 
@@ -115,14 +116,36 @@ const FilterModal = ({
 
   const translateY = slideAnim.interpolate({ inputRange: [0, 1], outputRange: [600, 0] });
 
-  // ── STRICT MONOCHROME PALETTE ──
-  const activeBg = isDark ? '#ffffff' : '#101010'; // Stark contrast
+  // ── STRICT MONOCHROME PALETTE (Fallbacks) ──
+  const activeBg = isDark ? '#ffffff' : '#101010'; 
   const activeText = isDark ? '#000000' : '#ffffff';
   const inactiveBg = isDark ? '#212121' : '#f9f9f9';
   const inactiveBorder = isDark ? '#333333' : '#e5e5e5';
   const inactiveText = isDark ? '#a1a1aa' : '#52525b';
 
-  const renderChip = (option, isSelected, onToggle, showColor = false) => {
+  // ── PREMIUM CHIP RENDERER ──
+  const renderChip = (option, isSelected, onToggle, hasColorTheme = false) => {
+    
+    // Default colors for generic chips (Categories, Sites, Dates)
+    let chipBg = isSelected ? activeBg : inactiveBg;
+    let chipBorder = isSelected ? activeBg : inactiveBorder;
+    let chipTextColor = isSelected ? activeText : inactiveText;
+
+    // Apply bright, obvious background if the option has a color (Status & Priority)
+    if (hasColorTheme && option.color) {
+      if (isSelected) {
+        // Active State: Highly visible solid background tint (approx 20-30% opacity)
+        chipBg = isDark ? `${option.color}40` : `${option.color}33`; 
+        chipBorder = option.color; // Pure color border
+        chipTextColor = isDark ? '#ffffff' : option.color; // High contrast text
+      } else {
+        // Inactive State: Obvious but secondary tint (approx 10-15% opacity)
+        chipBg = isDark ? `${option.color}1A` : `${option.color}15`; 
+        chipBorder = isDark ? `${option.color}40` : `${option.color}30`; 
+        chipTextColor = option.color; // Pure color text, not faded!
+      }
+    }
+
     return (
       <TouchableOpacity
         key={option.value}
@@ -130,20 +153,17 @@ const FilterModal = ({
         style={[
           styles.chip,
           { 
-            backgroundColor: isSelected ? activeBg : inactiveBg,
-            borderColor: isSelected ? activeBg : inactiveBorder,
+            backgroundColor: chipBg,
+            borderColor: chipBorder,
             borderWidth: 1,
           },
         ]}
         onPress={onToggle}
       >
-        {showColor && option.color && (
-          <View style={[styles.colorDot, { backgroundColor: option.color }]} />
-        )}
         <Text
           style={[
             styles.chipText,
-            { color: isSelected ? activeText : inactiveText },
+            { color: chipTextColor },
           ]}
         >
           {option.label}
@@ -178,7 +198,8 @@ const FilterModal = ({
                 <View style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Status</Text>
                   <View style={styles.chipsContainer}>
-                    {STATUS_OPTIONS.map(option => renderChip(option, selectedStatuses.includes(option.value), () => toggleStatus(option.value)))}
+                    {/* ✅ Passed "true" for hasColorTheme */}
+                    {STATUS_OPTIONS.map(option => renderChip(option, selectedStatuses.includes(option.value), () => toggleStatus(option.value), true))}
                   </View>
                 </View>
 
@@ -188,8 +209,6 @@ const FilterModal = ({
                     {PRIORITY_OPTIONS.map(option => renderChip(option, selectedPriorities.includes(option.value), () => togglePriority(option.value), true))}
                   </View>
                 </View>
-
-               
 
                 {sites.length > 0 && (
                   <View style={styles.section}>
@@ -347,18 +366,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 12, // More structured squircle matching GPT interfaces
+    borderRadius: 12, 
     gap: 6,
   },
   chipText: {
     fontSize: 14,
-    fontWeight: '500',
-  },
-  colorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 2,
+    fontWeight: '700', // BUMPED TO 700 so text is loud and proud
   },
   toggleRow: {
     flexDirection: 'row',

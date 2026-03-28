@@ -87,7 +87,7 @@ class AssignmentService:
         skills_stmt = (
             select(ProblemSolverSkill)
             .where(
-                ProblemSolverSkill.skill_type == problem_type,
+                ProblemSolverSkill.skill_type == problem_type.lower(),
                 ProblemSolverSkill.is_available == True,
 <<<<<<< HEAD
                 (
@@ -108,20 +108,6 @@ class AssignmentService:
         )
         result = await self.db.execute(skills_stmt)
         site_skills = result.scalars().all()
-
-        # Fall back to global solvers (site_id = NULL) if no site-specific match
-        if not site_skills:
-            skills_stmt = (
-                select(ProblemSolverSkill)
-                .where(
-                    ProblemSolverSkill.skill_type == problem_type.lower(),
-                    ProblemSolverSkill.is_available == True,
-                    ProblemSolverSkill.site_id.is_(None),
-                )
-                .order_by(ProblemSolverSkill.priority.desc())
-            )
-            result = await self.db.execute(skills_stmt)
-            site_skills = result.scalars().all()
 
         if not site_skills:
             logger.info(
@@ -290,251 +276,251 @@ class AssignmentService:
             ],
         )
 
-    # ══════════════════════════════════════════════════════
-    # 3. DASHBOARD: Paginated assignment list  (API read)
-    # ══════════════════════════════════════════════════════
+    # # ══════════════════════════════════════════════════════
+    # # 3. DASHBOARD: Paginated assignment list  (API read)
+    # # ══════════════════════════════════════════════════════
 
-    async def list_assignments(
-        self,
-        current_user: User,
-        status_filter: Optional[AssignmentStatus] = None,
-        solver_id: Optional[int] = None,
-        issue_id: Optional[int] = None,
-        skip: int = 0,
-        limit: int = 20,
-    ) -> AssignmentListResponse:
-        """
-        Role-aware paginated list.
-        PROBLEMSOLVER → only their own assignments
-        SUPERVISOR    → only assignments they created
-        MANAGER/ADMIN → all assignments
+    # async def list_assignments(
+    #     self,
+    #     current_user: User,
+    #     status_filter: Optional[AssignmentStatus] = None,
+    #     solver_id: Optional[int] = None,
+    #     issue_id: Optional[int] = None,
+    #     skip: int = 0,
+    #     limit: int = 20,
+    # ) -> AssignmentListResponse:
+    #     """
+    #     Role-aware paginated list.
+    #     PROBLEMSOLVER → only their own assignments
+    #     SUPERVISOR    → only assignments they created
+    #     MANAGER/ADMIN → all assignments
 
-        Eager-loads issue, solvers, supervisor, call_logs in one pass.
-        """
-        stmt = (
-            select(IssueAssignment)
-            .options(
-                selectinload(IssueAssignment.issue),
-                selectinload(IssueAssignment.assigned_solver),
-                selectinload(IssueAssignment.assigned_by_supervisor),
-                selectinload(IssueAssignment.call_logs),
-            )
-        )
+    #     Eager-loads issue, solvers, supervisor, call_logs in one pass.
+    #     """
+    #     stmt = (
+    #         select(IssueAssignment)
+    #         .options(
+    #             selectinload(IssueAssignment.issue),
+    #             selectinload(IssueAssignment.assigned_solver),
+    #             selectinload(IssueAssignment.assigned_by_supervisor),
+    #             selectinload(IssueAssignment.call_logs),
+    #         )
+    #     )
 
-        # Role scope
-        if current_user.role == UserRole.PROBLEMSOLVER:
-            stmt = stmt.where(IssueAssignment.assigned_to_solver_id == current_user.id)
-        elif current_user.role == UserRole.SUPERVISOR:
-            stmt = stmt.where(IssueAssignment.assigned_by_supervisor_id == current_user.id)
+    #     # Role scope
+    #     if current_user.role == UserRole.PROBLEMSOLVER:
+    #         stmt = stmt.where(IssueAssignment.assigned_to_solver_id == current_user.id)
+    #     elif current_user.role == UserRole.SUPERVISOR:
+    #         stmt = stmt.where(IssueAssignment.assigned_by_supervisor_id == current_user.id)
 
-        # Filters
-        if status_filter:
-            stmt = stmt.where(IssueAssignment.status == status_filter)
-        if solver_id:
-            stmt = stmt.where(IssueAssignment.assigned_to_solver_id == solver_id)
-        if issue_id:
-            stmt = stmt.where(IssueAssignment.issue_id == issue_id)
+    #     # Filters
+    #     if status_filter:
+    #         stmt = stmt.where(IssueAssignment.status == status_filter)
+    #     if solver_id:
+    #         stmt = stmt.where(IssueAssignment.assigned_to_solver_id == solver_id)
+    #     if issue_id:
+    #         stmt = stmt.where(IssueAssignment.issue_id == issue_id)
 
-        # Count
-        count_stmt = select(sql_func.count()).select_from(stmt.subquery())
-        total: int = (await self.db.execute(count_stmt)).scalar()
+    #     # Count
+    #     count_stmt = select(sql_func.count()).select_from(stmt.subquery())
+    #     total: int = (await self.db.execute(count_stmt)).scalar()
 
-        # Paginated fetch
-        stmt = stmt.order_by(IssueAssignment.created_at.desc()).offset(skip).limit(limit)
-        assignments = (await self.db.execute(stmt)).scalars().all()
+    #     # Paginated fetch
+    #     stmt = stmt.order_by(IssueAssignment.created_at.desc()).offset(skip).limit(limit)
+    #     assignments = (await self.db.execute(stmt)).scalars().all()
 
-        return AssignmentListResponse(
-            total=total,
-            assignments=[self._to_response(a) for a in assignments],
-        )
+    #     return AssignmentListResponse(
+    #         total=total,
+    #         assignments=[self._to_response(a) for a in assignments],
+    #     )
 
-    # ══════════════════════════════════════════════════════
-    # 4. DASHBOARD: Single assignment detail  (API read)
-    # ══════════════════════════════════════════════════════
+    # # ══════════════════════════════════════════════════════
+    # # 4. DASHBOARD: Single assignment detail  (API read)
+    # # ══════════════════════════════════════════════════════
 
-    async def get_assignment(self, assignment_id: int) -> Optional[AssignmentResponse]:
-        stmt = (
-            select(IssueAssignment)
-            .where(IssueAssignment.id == assignment_id)
-            .options(
-                selectinload(IssueAssignment.issue),
-                selectinload(IssueAssignment.assigned_solver),
-                selectinload(IssueAssignment.assigned_by_supervisor),
-                selectinload(IssueAssignment.call_logs),
-            )
-        )
-        assignment = (await self.db.execute(stmt)).scalar_one_or_none()
-        return self._to_response(assignment) if assignment else None
+    # async def get_assignment(self, assignment_id: int) -> Optional[AssignmentResponse]:
+    #     stmt = (
+    #         select(IssueAssignment)
+    #         .where(IssueAssignment.id == assignment_id)
+    #         .options(
+    #             selectinload(IssueAssignment.issue),
+    #             selectinload(IssueAssignment.assigned_solver),
+    #             selectinload(IssueAssignment.assigned_by_supervisor),
+    #             selectinload(IssueAssignment.call_logs),
+    #         )
+    #     )
+    #     assignment = (await self.db.execute(stmt)).scalar_one_or_none()
+    #     return self._to_response(assignment) if assignment else None
 
-    # ══════════════════════════════════════════════════════
-    # 5. DASHBOARD: Call logs for one assignment  (API read)
-    # ══════════════════════════════════════════════════════
+    # # ══════════════════════════════════════════════════════
+    # # 5. DASHBOARD: Call logs for one assignment  (API read)
+    # # ══════════════════════════════════════════════════════
 
-    async def get_call_logs(self, assignment_id: int) -> CallLogListResponse:
-        """
-        All call attempts for an assignment, ordered by attempt number.
-        Eager-loads solver to avoid N+1 per log row.
-        """
-        stmt = (
-            select(CallLog)
-            .where(CallLog.assignment_id == assignment_id)
-            .options(selectinload(CallLog.solver))
-            .order_by(CallLog.attempt_number)
-        )
-        logs = (await self.db.execute(stmt)).scalars().all()
+    # async def get_call_logs(self, assignment_id: int) -> CallLogListResponse:
+    #     """
+    #     All call attempts for an assignment, ordered by attempt number.
+    #     Eager-loads solver to avoid N+1 per log row.
+    #     """
+    #     stmt = (
+    #         select(CallLog)
+    #         .where(CallLog.assignment_id == assignment_id)
+    #         .options(selectinload(CallLog.solver))
+    #         .order_by(CallLog.attempt_number)
+    #     )
+    #     logs = (await self.db.execute(stmt)).scalars().all()
 
-        return CallLogListResponse(
-            total=len(logs),
-            assignment_id=assignment_id,
-            call_logs=[
-                CallLogResponse(
-                    id=log.id,
-                    assignment_id=log.assignment_id,
-                    solver_id=log.solver_id,
-                    solver_name=log.solver.name if log.solver else None,
-                    solver_phone=log.solver.phone if log.solver else None,
-                    attempt_number=log.attempt_number,
-                    initiated_at=log.initiated_at,
-                    answered_at=log.answered_at,
-                    ended_at=log.ended_at,
-                    status=log.status,
-                    updated_at=log.updated_at,
-                )
-                for log in logs
-            ],
-        )
+    #     return CallLogListResponse(
+    #         total=len(logs),
+    #         assignment_id=assignment_id,
+    #         call_logs=[
+    #             CallLogResponse(
+    #                 id=log.id,
+    #                 assignment_id=log.assignment_id,
+    #                 solver_id=log.solver_id,
+    #                 solver_name=log.solver.name if log.solver else None,
+    #                 solver_phone=log.solver.phone if log.solver else None,
+    #                 attempt_number=log.attempt_number,
+    #                 initiated_at=log.initiated_at,
+    #                 answered_at=log.answered_at,
+    #                 ended_at=log.ended_at,
+    #                 status=log.status,
+    #                 updated_at=log.updated_at,
+    #             )
+    #             for log in logs
+    #         ],
+    #     )
 
-    # ══════════════════════════════════════════════════════
-    # 6. DASHBOARD: Solver performance stats  (Manager)
-    # ══════════════════════════════════════════════════════
+    # # ══════════════════════════════════════════════════════
+    # # 6. DASHBOARD: Solver performance stats  (Manager)
+    # # ══════════════════════════════════════════════════════
 
-    async def query_solver_performance(
-        self,
-        solver_name: Optional[str] = None,
-    ) -> list[dict]:
-        """
-        Returns aggregate performance stats for all active solvers
-        (or a single solver by name).
+    # async def query_solver_performance(
+    #     self,
+    #     solver_name: Optional[str] = None,
+    # ) -> list[dict]:
+    #     """
+    #     Returns aggregate performance stats for all active solvers
+    #     (or a single solver by name).
 
-        All counts are computed in ONE query using conditional aggregation
-        (SQL CASE/SUM) rather than one query per solver per metric.
+    #     All counts are computed in ONE query using conditional aggregation
+    #     (SQL CASE/SUM) rather than one query per solver per metric.
 
-        Returns a list of dicts — caller (chatbot or API) formats as needed.
-        """
-        # ── 1. Resolve solver(s) ─────────────────────────────────
-        solver_stmt = select(User).where(
-            User.role == UserRole.PROBLEMSOLVER,
-            User.is_active == True,
-        )
-        if solver_name:
-            solver_stmt = solver_stmt.where(User.name.ilike(f"%{solver_name}%"))
+    #     Returns a list of dicts — caller (chatbot or API) formats as needed.
+    #     """
+    #     # ── 1. Resolve solver(s) ─────────────────────────────────
+    #     solver_stmt = select(User).where(
+    #         User.role == UserRole.PROBLEMSOLVER,
+    #         User.is_active == True,
+    #     )
+    #     if solver_name:
+    #         solver_stmt = solver_stmt.where(User.name.ilike(f"%{solver_name}%"))
 
-        solvers = (await self.db.execute(solver_stmt)).scalars().all()
+    #     solvers = (await self.db.execute(solver_stmt)).scalars().all()
 
-        if not solvers:
-            return []
+    #     if not solvers:
+    #         return []
 
-        solver_ids = [s.id for s in solvers]
-        solver_map = {s.id: s for s in solvers}
+    #     solver_ids = [s.id for s in solvers]
+    #     solver_map = {s.id: s for s in solvers}
 
-        # ── 2. Assignment counts — one aggregate query ────────────
-        from sqlalchemy import case
-        asgn_stmt = (
-            select(
-                IssueAssignment.assigned_to_solver_id.label("solver_id"),
-                sql_func.count(IssueAssignment.id).label("total"),
-                sql_func.sum(
-                    case((IssueAssignment.status == AssignmentStatus.ACTIVE, 1), else_=0)
-                ).label("active"),
-                sql_func.sum(
-                    case((IssueAssignment.status == AssignmentStatus.COMPLETED, 1), else_=0)
-                ).label("completed"),
-                sql_func.sum(
-                    case((IssueAssignment.status == AssignmentStatus.REOPENED, 1), else_=0)
-                ).label("reopened"),
-            )
-            .where(IssueAssignment.assigned_to_solver_id.in_(solver_ids))
-            .group_by(IssueAssignment.assigned_to_solver_id)
-        )
-        asgn_rows = (await self.db.execute(asgn_stmt)).all()
-        asgn_map = {row.solver_id: row for row in asgn_rows}
+    #     # ── 2. Assignment counts — one aggregate query ────────────
+    #     from sqlalchemy import case
+    #     asgn_stmt = (
+    #         select(
+    #             IssueAssignment.assigned_to_solver_id.label("solver_id"),
+    #             sql_func.count(IssueAssignment.id).label("total"),
+    #             sql_func.sum(
+    #                 case((IssueAssignment.status == AssignmentStatus.ACTIVE, 1), else_=0)
+    #             ).label("active"),
+    #             sql_func.sum(
+    #                 case((IssueAssignment.status == AssignmentStatus.COMPLETED, 1), else_=0)
+    #             ).label("completed"),
+    #             sql_func.sum(
+    #                 case((IssueAssignment.status == AssignmentStatus.REOPENED, 1), else_=0)
+    #             ).label("reopened"),
+    #         )
+    #         .where(IssueAssignment.assigned_to_solver_id.in_(solver_ids))
+    #         .group_by(IssueAssignment.assigned_to_solver_id)
+    #     )
+    #     asgn_rows = (await self.db.execute(asgn_stmt)).all()
+    #     asgn_map = {row.solver_id: row for row in asgn_rows}
 
-        # ── 3. Complaint counts — one aggregate query ─────────────
-        complaint_stmt = (
-            select(
-                Complaint.target_solver_id.label("solver_id"),
-                sql_func.count(Complaint.id).label("complaints"),
-            )
-            .where(Complaint.target_solver_id.in_(solver_ids))
-            .group_by(Complaint.target_solver_id)
-        )
-        complaint_rows = (await self.db.execute(complaint_stmt)).all()
-        complaint_map = {row.solver_id: row.complaints for row in complaint_rows}
+    #     # ── 3. Complaint counts — one aggregate query ─────────────
+    #     complaint_stmt = (
+    #         select(
+    #             Complaint.target_solver_id.label("solver_id"),
+    #             sql_func.count(Complaint.id).label("complaints"),
+    #         )
+    #         .where(Complaint.target_solver_id.in_(solver_ids))
+    #         .group_by(Complaint.target_solver_id)
+    #     )
+    #     complaint_rows = (await self.db.execute(complaint_stmt)).all()
+    #     complaint_map = {row.solver_id: row.complaints for row in complaint_rows}
 
-        # ── 4. Assemble results ───────────────────────────────────
-        results = []
-        for sid in solver_ids:
-            solver = solver_map[sid]
-            asgn = asgn_map.get(sid)
-            results.append({
-                "solver_id": sid,
-                "solver_name": solver.name,
-                "total": int(asgn.total) if asgn else 0,
-                "active": int(asgn.active) if asgn else 0,
-                "completed": int(asgn.completed) if asgn else 0,
-                "reopened": int(asgn.reopened) if asgn else 0,
-                "complaints": complaint_map.get(sid, 0),
-            })
+    #     # ── 4. Assemble results ───────────────────────────────────
+    #     results = []
+    #     for sid in solver_ids:
+    #         solver = solver_map[sid]
+    #         asgn = asgn_map.get(sid)
+    #         results.append({
+    #             "solver_id": sid,
+    #             "solver_name": solver.name,
+    #             "total": int(asgn.total) if asgn else 0,
+    #             "active": int(asgn.active) if asgn else 0,
+    #             "completed": int(asgn.completed) if asgn else 0,
+    #             "reopened": int(asgn.reopened) if asgn else 0,
+    #             "complaints": complaint_map.get(sid, 0),
+    #         })
 
-        return results
+    #     return results
 
-    # ══════════════════════════════════════════════════════
-    # PRIVATE HELPERS
-    # ══════════════════════════════════════════════════════
+    # # ══════════════════════════════════════════════════════
+    # # PRIVATE HELPERS
+    # # ══════════════════════════════════════════════════════
 
-    async def _get_issue_or_none(self, issue_id: int) -> Optional[Issue]:
-        return (
-            await self.db.execute(select(Issue).where(Issue.id == issue_id))
-        ).scalar_one_or_none()
+    # async def _get_issue_or_none(self, issue_id: int) -> Optional[Issue]:
+    #     return (
+    #         await self.db.execute(select(Issue).where(Issue.id == issue_id))
+    #     ).scalar_one_or_none()
 
-    @staticmethod
-    def _enqueue_call(assignment_id: int) -> None:
-        """
-        Enqueues the Celery call chain.
-        Must be called AFTER db.commit() so the assignment row exists in DB.
-        """
-        try:
-            from app.workers.call_tasks import schedule_solver_call
-            schedule_solver_call.delay(assignment_id)
-            logger.info("Celery call chain queued for assignment #%s", assignment_id)
-        except Exception:
-            logger.exception(
-                "Failed to queue Celery task for assignment #%s", assignment_id
-            )
+    # @staticmethod
+    # def _enqueue_call(assignment_id: int) -> None:
+    #     """
+    #     Enqueues the Celery call chain.
+    #     Must be called AFTER db.commit() so the assignment row exists in DB.
+    #     """
+    #     try:
+    #         from app.workers.call_tasks import schedule_solver_call
+    #         schedule_solver_call.delay(assignment_id)
+    #         logger.info("Celery call chain queued for assignment #%s", assignment_id)
+    #     except Exception:
+    #         logger.exception(
+    #             "Failed to queue Celery task for assignment #%s", assignment_id
+    #         )
 
-    @staticmethod
-    def _to_response(assignment: IssueAssignment) -> AssignmentResponse:
-        """
-        Serialise an IssueAssignment ORM object to AssignmentResponse.
-        Caller must have eager-loaded all relationships before calling this.
-        """
-        logs = assignment.call_logs or []
-        return AssignmentResponse(
-            id=assignment.id,
-            issue_id=assignment.issue_id,
-            issue_title=assignment.issue.title if assignment.issue else None,
-            assigned_to_solver_id=assignment.assigned_to_solver_id,
-            solver_name=assignment.assigned_solver.name if assignment.assigned_solver else None,
-            solver_phone=assignment.assigned_solver.phone if assignment.assigned_solver else None,
-            assigned_by_supervisor_id=assignment.assigned_by_supervisor_id,
-            supervisor_name=assignment.assigned_by_supervisor.name if assignment.assigned_by_supervisor else None,
-            due_date=assignment.due_date,
-            status=assignment.status,
-            call_attempts=len(logs),
-            last_call_status=logs[-1].status.value if logs else None,
-            created_at=assignment.created_at,
-            updated_at=assignment.updated_at,
-        )
+    # @staticmethod
+    # def _to_response(assignment: IssueAssignment) -> AssignmentResponse:
+    #     """
+    #     Serialise an IssueAssignment ORM object to AssignmentResponse.
+    #     Caller must have eager-loaded all relationships before calling this.
+    #     """
+    #     logs = assignment.call_logs or []
+    #     return AssignmentResponse(
+    #         id=assignment.id,
+    #         issue_id=assignment.issue_id,
+    #         issue_title=assignment.issue.title if assignment.issue else None,
+    #         assigned_to_solver_id=assignment.assigned_to_solver_id,
+    #         solver_name=assignment.assigned_solver.name if assignment.assigned_solver else None,
+    #         solver_phone=assignment.assigned_solver.phone if assignment.assigned_solver else None,
+    #         assigned_by_supervisor_id=assignment.assigned_by_supervisor_id,
+    #         supervisor_name=assignment.assigned_by_supervisor.name if assignment.assigned_by_supervisor else None,
+    #         due_date=assignment.due_date,
+    #         status=assignment.status,
+    #         call_attempts=len(logs),
+    #         last_call_status=logs[-1].status.value if logs else None,
+    #         created_at=assignment.created_at,
+    #         updated_at=assignment.updated_at,
+    #     )
 
 
 

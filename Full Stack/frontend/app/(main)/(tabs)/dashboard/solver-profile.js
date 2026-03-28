@@ -1,5 +1,5 @@
-import React, { useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSelector, useDispatch } from 'react-redux';
@@ -15,6 +15,11 @@ import EmptyState from '../../../../src/components/common/EmptyState';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Loader from '../../../../src/components/common/Loader';
 
+// ── ADDED REUSABLE IMPORTS ──
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
 export default function SolverProfileScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -24,6 +29,10 @@ export default function SolverProfileScreen() {
 
   const currentUser = useSelector(selectCurrentUser);
   const loading = useSelector(selectPerformanceLoading);
+  const isOnline = useSelector(selectIsOnline);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   // Use the correct role name
   const solverId = currentUser?.role === 'problem_solver' || currentUser?.role === 'problemsolver'
@@ -34,20 +43,34 @@ export default function SolverProfileScreen() {
 
   useEffect(() => {
     if (currentUser && !solver) {
-      dispatch(fetchSolversPerformance(currentUser));
+      dispatch(fetchSolversPerformance());
     }
   }, [dispatch, currentUser, solver]);
+
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    
+    setRefreshing(true);
+    try {
+      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+      await Promise.allSettled([
+        dispatch(fetchSolversPerformance())
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [isOnline, dispatch]);
 
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
 
-  // The backend doesn't currently embed issue arrays in the solvers list, 
-  // so we default to empty arrays to prevent crashes.
-  const activeIssues = [];
-  const completedIssues = [];
-
-  if (loading && !solver) {
+  // 📍 FIX: Added `!refreshing` to prevent Loader hijacking
+  if (loading && !refreshing && !solver) {
     return <Loader message="Loading profile..." fullScreen />;
   }
 
@@ -85,10 +108,33 @@ export default function SolverProfileScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Solver Profile</Text>
-        <View style={styles.placeholder} />
+        
+        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? scoreColor : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        // 📍 FIX: Disables double spinner on web
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
+      >
 
         {/* IDENTITY */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
@@ -132,7 +178,7 @@ export default function SolverProfileScreen() {
            { label: 'Total', value: perf.total_assigned || 0 },
             { label: 'Completed', value: perf.completed_count || 0 },
             { label: 'Active', value: activeCount },
-            { label: 'Overdue', value: perf.overdue_count || 0 }, // ✅ NOW USING OVERDUE DATA
+            { label: 'Overdue', value: perf.overdue_count || 0 }, 
           ].map((stat, idx) => (
             <View key={idx} style={[styles.statCard, { backgroundColor: surfaceColor, borderColor }]}>
               <Text style={[styles.statValue, { color: theme.text }]}>{stat.value}</Text>
@@ -194,10 +240,13 @@ export default function SolverProfileScreen() {
           </View>
         )}
 
-       
-
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Profile..." color={scoreColor} />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -207,7 +256,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   content: { flex: 1 },
   card: { marginHorizontal: 16, marginTop: 16, padding: 20 },
   flatCard: { borderRadius: 16, borderWidth: 1 },

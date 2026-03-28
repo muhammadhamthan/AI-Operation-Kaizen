@@ -34,6 +34,7 @@ from sqlalchemy import select, func as sql_func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from difflib import SequenceMatcher
 from app.models.user import User
 from app.models.site import Site
 from app.models.issue import Issue
@@ -79,25 +80,33 @@ class IssueService:
         ai_service,
     ) -> ChatResponse:
         
-        """
-        Full flow:
-          1. Resolve supervisor's sites
-          2. AI extracts issue details
-          3. Match site by name
-          4. Persist Issue
-          5. Persist BEFORE image (if provided)
-          6. Add OPEN history entry
-          7. Auto-assign best solver
-          8. Return ChatResponse
-        """
-        actions: list[str] = []
+        actions = []
 
-        # ── 1. Supervisor sites ──────────────────────────
-        site_ids = await self._get_supervisor_site_ids(user.id)
+        # ── Step 1 — Role check ─────────────────────────
+        if user.role not in [UserRole.SUPERVISOR, UserRole.MANAGER]:
+            return ChatResponse(
+                message="❌ Only supervisors and managers can create issues.",
+                intent="create_issue",
+                actions_taken=["Permission denied"],
+            )
 
-        stmt = select(Site)
-        if site_ids:
-            stmt = stmt.where(Site.id.in_(site_ids))
+        # ── Step 2 — Site access check ───────────────────
+        if user.role == UserRole.SUPERVISOR:
+            site_ids = await self._get_supervisor_site_ids(user.id)
+
+            if not site_ids:
+                return ChatResponse(
+                    message="❌ You are not assigned to any site.",
+                    intent="create_issue",
+                    actions_taken=["No site access"],
+                )
+
+            stmt = select(Site).where(Site.id.in_(site_ids))
+
+        elif user.role == UserRole.MANAGER:
+            # Managers can access all sites
+            stmt = select(Site)
+
         result = await self.db.execute(stmt)
         sites: list[Site] = result.scalars().all()
         site_names = [s.name for s in sites]
@@ -163,6 +172,7 @@ class IssueService:
             issue.id, user.id, None, "OPEN",
             ActionType.ASSIGN, f"Created via chat by {user.name}",
         )
+        
 
         # ── 7. Auto-assign ───────────────────────────────
         #changed by ismail
@@ -189,7 +199,7 @@ class IssueService:
         # Celery calls the solver immediately, then retries with priority-based
         # delays until answered or escalation threshold is reached.
         if solver and assignment:
-            self._enqueue_call(assignment.id)
+            self._enqueue_call(assignment.id,issue.id)
             actions.append(f"📞 Call chain queued → {solver.phone}")
 
 
@@ -315,6 +325,7 @@ class IssueService:
         )
         await self.db.commit()
 
+        
         return ChatResponse(
             message=f"✅ Issue #{issue_id} priority updated: {old} → {priority.value}",
             intent="update_priority",
@@ -737,33 +748,35 @@ class IssueService:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
-    def _match_site(self, location_name: str, sites: list[Site]) -> Optional[Site]:
-        """
-        Fuzzy site matching by name.
-        Order: exact → substring → word-overlap.
-        """
+    def _similar(a, b):
+        return SequenceMatcher(None, a, b).ratio()
+
+    def _match_site(self, location_name: str, sites: list[Site]):
         loc = location_name.lower().strip()
 
-        # Exact
+        # 1. Exact match
         for s in sites:
             if s.name.lower() == loc:
                 return s
 
-        # Substring
+        # 2. Startswith (Plant -> Plant 2)
         for s in sites:
             name = s.name.lower()
-            if loc in name or name in loc:
+            if name.startswith(loc) or loc.startswith(name):
                 return s
 
-        # Word overlap
-        loc_words = set(loc.split())
+        # 3. Spelling mistake fuzzy match
         best, best_score = None, 0
         for s in sites:
-            overlap = len(loc_words & set(s.name.lower().split()))
-            if overlap > best_score:
-                best_score, best = overlap, s
+            score = _similar(loc, s.name.lower())
+            if score > best_score:
+                best_score = score
+                best = s
 
-        return best if best_score > 0 else None
+        if best_score > 0.75:
+            return best
+
+        return None
 
     def _add_history(
         self,
@@ -785,14 +798,14 @@ class IssueService:
         ))
 
     @staticmethod
-    def _enqueue_call(assignment_id: int) -> None:
+    def _enqueue_call(assignment_id: int, issue_id: int) -> None:
         """
         Enqueues the Celery call chain.
         Must be called AFTER db.commit() so the assignment row exists in DB.
         """
         try:
             from app.workers.call_tasks import schedule_solver_call
-            schedule_solver_call.delay(assignment_id)
+            schedule_solver_call.delay(assignment_id, issue_id)
             logger.info("Celery call chain queued for assignment #%s", assignment_id)
         except Exception:
             logger.exception(

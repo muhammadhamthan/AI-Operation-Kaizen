@@ -25,9 +25,26 @@ import Avatar from '../../../../src/components/common/Avatar';
 import Toast from '../../../../src/components/common/Toast';
 import FilterModal from '../../../../src/components/modals/FilterModal';
 import { useDebounce } from '../../../../src/hooks/useDebounce';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
+// ── PREMIUM STATUS PALETTE FOR CHIPS ──
+const STATUS_COLORS = {
+  OPEN: '#3b82f6',
+  ASSIGNED: '#8b5cf6',
+  IN_PROGRESS: '#eab308',
+  RESOLVED_PENDING_REVIEW: '#f97316',
+  COMPLETED: '#10a37f',
+  REOPENED: '#ef4444',
+  ESCALATED: '#dc2626',
+};
+
+const formatStatusText = (status) => {
+  if (!status) return '';
+  return status.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+};
 
 export default function IssuesTabScreen() {
-  const { theme, isDark } = useTheme(); // 🚀 Added isDark for precise monochrome shading
+  const { theme, isDark } = useTheme(); 
   const router = useRouter();
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
@@ -51,17 +68,15 @@ export default function IssuesTabScreen() {
 
   const debouncedSearch = useDebounce(searchText, 300);
 
-  // ── LOGIC UNTOUCHED ──
   useEffect(() => {
     if (user) dispatch(fetchIssues(user));
-  }, [user]);
+  }, [user, dispatch]);
 
   const realSites = useMemo(() => {
     if (!allIssues) return [];
     const uniqueSites = new Map();
 
     allIssues.forEach(issue => {
-      // Look at the backend JSON: it uses site_id and site_name
       if (issue.site_id && issue.site_name) {
         uniqueSites.set(issue.site_id, {
           id: issue.site_id,
@@ -73,8 +88,7 @@ export default function IssuesTabScreen() {
     return Array.from(uniqueSites.values());
   }, [allIssues]);
 
-const filteredIssues = useMemo(() => {
-    // 1. Safety check: return empty if no issues exist yet
+  const filteredIssues = useMemo(() => {
     if (!allIssues || allIssues.length === 0) return [];
     
     return allIssues.filter(issue => {
@@ -85,30 +99,28 @@ const filteredIssues = useMemo(() => {
           issue.title?.toLowerCase().includes(searchLower) ||
           issue.description?.toLowerCase().includes(searchLower) ||
           issue.id?.toString().includes(searchLower) ||
-          issue.site_name?.toLowerCase().includes(searchLower); // ✅ Changed to site_name
+          issue.site_name?.toLowerCase().includes(searchLower); 
         
         if (!matchesSearch) return false;
       }
 
-      // 3. STATUS FILTER (Array matching)
+      // 3. STATUS FILTER
       if (appliedFilters.statuses && appliedFilters.statuses.length > 0) {
         if (!appliedFilters.statuses.includes(issue.status)) return false;
       }
 
-      // 4. PRIORITY FILTER (Array matching)
+      // 4. PRIORITY FILTER
       if (appliedFilters.priorities && appliedFilters.priorities.length > 0) {
         if (!appliedFilters.priorities.includes(issue.priority)) return false;
       }
 
-      // 5. SITE FILTER (Exact match)
+      // 5. SITE FILTER
       if (appliedFilters.site) {
         if (issue.site_id !== appliedFilters.site) return false;
       }
 
-      // 6. CATEGORY FILTER (Text-based guessing since backend lacks issue_type)
+      // 6. CATEGORY FILTER
       if (appliedFilters.categories && appliedFilters.categories.length > 0) {
-        // ✅ Since "issue_type" doesn't exist, we check if the category name 
-        // appears anywhere in the title or description
         const matchesCategory = appliedFilters.categories.some(category => {
           const catLower = category.toLowerCase();
           return issue.title?.toLowerCase().includes(catLower) || 
@@ -119,7 +131,7 @@ const filteredIssues = useMemo(() => {
 
       // 7. DATE RANGE FILTER
       if (appliedFilters.dateRange && appliedFilters.dateRange !== 'all') {
-        if (!issue.created_at) return false; // Safety check
+        if (!issue.created_at) return false; 
 
         const issueDate = new Date(issue.created_at);
         const now = new Date();
@@ -140,22 +152,18 @@ const filteredIssues = useMemo(() => {
 
       // 8. OVERDUE ONLY FILTER
       if (appliedFilters.overdueOnly) {
-        // If it's already finished, it cannot be overdue
         if (issue.status === 'COMPLETED' || issue.status === 'RESOLVED_PENDING_REVIEW') {
           return false;
         }
         
         if (issue.deadline_at) {
           const deadline = new Date(issue.deadline_at);
-          // If the deadline is in the future, it's not overdue yet
           if (deadline >= new Date()) return false; 
         } else {
-          // If there is no deadline set, it cannot be considered overdue
           return false; 
         }
       }
 
-      // If the issue survives all of the above IF statements, it belongs on the screen!
       return true;
     });
   }, [allIssues, debouncedSearch, appliedFilters]);
@@ -173,10 +181,20 @@ const filteredIssues = useMemo(() => {
       return;
     }
     setRefreshing(true);
-    if (user) await dispatch(fetchIssues(user));
-    setLastRefresh(Date.now());
-    setRefreshing(false);
-  }, [user, isOnline, lastRefresh]);
+    
+    if (user) {
+      try {
+        await Promise.allSettled([
+          dispatch(fetchIssues(user))
+        ]);
+      } finally {
+        setLastRefresh(Date.now());
+        setRefreshing(false);
+      }
+    } else {
+      setRefreshing(false);
+    }
+  }, [user, isOnline, lastRefresh, dispatch]);
 
   const handleIssuePress = (issue) => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } });
   const handleApplyFilters = (filters) => setAppliedFilters(filters);
@@ -199,7 +217,6 @@ const filteredIssues = useMemo(() => {
   const hasActiveFilters = getActiveFilterCount() > 0 || searchText !== '';
   const activeFilterCount = getActiveFilterCount();
 
-  // ── PREMIUM MONOCHROME PALETTE ──
   const activeBg = isDark ? '#ffffff' : '#101010';
   const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
@@ -210,16 +227,21 @@ const filteredIssues = useMemo(() => {
     const textStyle = [styles.activeChipText, { color: theme.text }];
     const iconColor = theme.textSecondary;
 
-    if (appliedFilters.statuses.length > 0) {
-      chips.push(
-        <View key="status" style={chipStyle}>
-          <Text style={textStyle}>Status: {appliedFilters.statuses.length}</Text>
-          <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, statuses: [] }))}>
-            <Ionicons name="close" size={14} color={iconColor} />
-          </TouchableOpacity>
-        </View>
-      );
+    // 📍 DYNAMIC COLOR CHIPS FOR STATUS
+    if (appliedFilters.statuses && appliedFilters.statuses.length > 0) {
+      appliedFilters.statuses.forEach(status => {
+        const color = STATUS_COLORS[status] || theme.textSecondary;
+        chips.push(
+          <View key={`status-${status}`} style={[styles.activeChip, { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
+            <Text style={[styles.activeChipText, { color }]}>{formatStatusText(status)}</Text>
+            <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, statuses: prev.statuses.filter(s => s !== status) }))}>
+              <Ionicons name="close" size={14} color={color} />
+            </TouchableOpacity>
+          </View>
+        );
+      });
     }
+
     if (appliedFilters.priorities.length > 0) {
       chips.push(
         <View key="priority" style={chipStyle}>
@@ -241,7 +263,6 @@ const filteredIssues = useMemo(() => {
       );
     }
    if (appliedFilters.site) {
-      // Look up the name of the site matching the selected ID
       const selectedSiteObj = realSites.find(s => s.id === appliedFilters.site);
       const siteDisplayName = selectedSiteObj ? selectedSiteObj.name : 'Site Selected';
 
@@ -267,7 +288,7 @@ const filteredIssues = useMemo(() => {
     return chips;
   };
 
-  if (loading && allIssues.length === 0) return <Loader message="Loading issues..." />;
+  if (loading && allIssues.length === 0 && !refreshing) return <Loader message="Loading issues..." />;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }]}>
@@ -280,9 +301,22 @@ const filteredIssues = useMemo(() => {
             {user?.role === 'manager' ? 'All Sites' : `${user?.role === 'supervisor' ? 'Your Sites' : 'Assigned to You'}`}
           </Text>
         </View>
-        <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
-          <Avatar uri={user?.avatar} name={user?.name} size="medium" />
-        </TouchableOpacity>
+        
+        <View style={styles.headerActions}>
+          {Platform.OS === 'web' && (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity onPress={() => router.push('/(main)/(tabs)/chat')} activeOpacity={0.7} style={{ marginRight: 4, padding: 4 }}>
+            <Ionicons name="arrow-undo-outline" size={24} color={theme.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
+            <Avatar uri={user?.avatar} name={user?.name} size="medium" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -365,7 +399,15 @@ const filteredIssues = useMemo(() => {
           />
         }
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
       />
 
       <FilterModal
@@ -375,6 +417,8 @@ const filteredIssues = useMemo(() => {
         initialFilters={appliedFilters}
         sites={realSites}
       />
+
+      <FullScreenSpinner visible={refreshing} message="Updating Issues..." color={theme.primary} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -393,6 +437,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   headerSubtitle: { fontSize: 14, fontWeight: '500', marginTop: 4 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, 
+  webRefreshButton: { padding: 4 }, 
 
   headerComponentWrapper: {
     paddingBottom: 8,

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,29 +6,60 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Platform,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { PieChart } from 'react-native-chart-kit';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useTheme } from '../../../../src/theme/ThemeContext';
-import { selectSiteById } from '../../../../src/store/slices/sitesSlice';
+import { selectSiteById, fetchSitesWithAnalytics, selectSitesLoading } from '../../../../src/store/slices/sitesSlice';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import EmptyState from '../../../../src/components/common/EmptyState';
+import Loader from '../../../../src/components/common/Loader';
+
+// ── ADDED REUSABLE IMPORTS ──
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function SiteDetailScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
+  const dispatch = useDispatch();
   const params = useLocalSearchParams();
   const id = parseInt(params.id, 10);
 
-  // ✅ Get site data from our standard Redux slice
   const site = useSelector(state => selectSiteById(state, id));
+  const loading = useSelector(selectSitesLoading);
+  const isOnline = useSelector(selectIsOnline);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const onRefresh = useCallback(async () => {
+    if (!isOnline) {
+      setToastMessage("Can't refresh while offline");
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+    
+    setRefreshing(true);
+    try {
+      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
+      await Promise.allSettled([
+        dispatch(fetchSitesWithAnalytics())
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [isOnline, dispatch]);
 
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const surfaceColor = isDark ? '#171717' : '#ffffff';
@@ -43,7 +74,6 @@ export default function SiteDetailScreen() {
     }
   };
 
-  // ✅ Chart data mapped to real snake_case backend keys
   const chartData = useMemo(() => {
     if (!site?.analytics) return null;
     const a = site.analytics;
@@ -66,6 +96,9 @@ export default function SiteDetailScreen() {
     }));
   }, [site, theme.text]);
 
+  // 📍 FIX: Added `!refreshing` to prevent Loader hijacking
+  if (loading && !refreshing && !site) return <Loader message="Loading site details..." />;
+
   if (!site) {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -83,18 +116,41 @@ export default function SiteDetailScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
 
-      {/* HEADER */}
+      {/* ── HEADER ── */}
       <View style={[styles.header, { borderBottomColor: borderColor, backgroundColor: bgColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Site Overview</Text>
-        <View style={styles.placeholder} />
+        
+        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
+        <View style={styles.headerRight}>
+          {Platform.OS === 'web' ? (
+            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
+              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        // 📍 FIX: Disables double spinner on web
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+            />
+          )
+        }
+      >
 
-        {/* SITE OVERVIEW & SCORE */}
+        {/* ── SITE OVERVIEW & SCORE ── */}
         <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
           <View style={styles.titleRow}>
             <View style={{ flex: 1 }}>
@@ -128,7 +184,7 @@ export default function SiteDetailScreen() {
           </View>
         </View>
 
-        {/* ISSUES CHART */}
+        {/* ── ISSUES CHART ── */}
         <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Issue Distribution</Text>
           {chartData ? (
@@ -149,7 +205,7 @@ export default function SiteDetailScreen() {
           )}
         </View>
 
-        {/* ASSIGNED SOLVERS (Mapped from real backend solvers list) */}
+        {/* ── ASSIGNED SOLVERS ── */}
         {analytics.solvers && analytics.solvers.length > 0 && (
           <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Assigned Solvers</Text>
@@ -174,7 +230,7 @@ export default function SiteDetailScreen() {
           </View>
         )}
 
-        {/* RECENT COMPLAINTS PLACEHOLDER */}
+        {/* ── RECENT COMPLAINTS PLACEHOLDER ── */}
         <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Recent Complaints</Text>
           {(analytics.complaints_count || 0) > 0 ? (
@@ -187,7 +243,7 @@ export default function SiteDetailScreen() {
           )}
         </View>
 
-        {/* RECENT ISSUES PLACEHOLDER */}
+        {/* ── RECENT ISSUES PLACEHOLDER ── */}
         <View style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Recent Issues</Text>
           {(analytics.total_issues || 0) > 0 ? (
@@ -204,6 +260,11 @@ export default function SiteDetailScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* ── NEW CLEAN IMPLEMENTATION ── */}
+      <FullScreenSpinner visible={refreshing} message="Updating Site Data..." color={theme.primary} />
+
+      {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
 }
@@ -213,7 +274,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   backButton: { padding: 4, marginLeft: -4 },
   headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
+  webRefreshButton: { padding: 4 },
   content: { flex: 1 },
   card: { marginHorizontal: 16, marginTop: 16, padding: 20, borderRadius: 16, borderWidth: 1 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
