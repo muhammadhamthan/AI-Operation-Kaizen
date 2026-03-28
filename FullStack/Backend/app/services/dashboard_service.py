@@ -10,7 +10,7 @@ Key fixes vs original:
   4. get_supervisor_dashboard(): reuses _build_summary() improvement.
   5. All async/await correct (original was mixing sync Session with async patterns).
 """
-
+import time
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
@@ -79,16 +79,15 @@ class DashboardService:
         )
         recent = recent_result.scalars().all()
 
-        # Active escalations
         escalated_result = await self.db.execute(
-            select(func.count())
-            .select_from(Escalation)
+            select(func.count(func.distinct(Escalation.issue_id)))
             .join(Issue, Issue.id == Escalation.issue_id)
             .where(
                 Issue.site_id.in_(site_ids),
                 Escalation.resolved == False,
             )
         )
+        
         escalated = escalated_result.scalar() or 0
 
         # Issues approaching deadline in next 24 hours
@@ -96,7 +95,7 @@ class DashboardService:
             select(func.count()).select_from(Issue).where(
                 Issue.site_id.in_(site_ids),
                 Issue.deadline_at < now + timedelta(hours=24),
-                Issue.status.notin_([IssueStatus.COMPLETED]),
+                Issue.status.notin_([IssueStatus.COMPLETED, IssueStatus.ESCALATED, IssueStatus.REOPENED]),
             )
         )
         approaching = approaching_result.scalar() or 0
@@ -217,8 +216,10 @@ class DashboardService:
 
     async def get_solver_dashboard(self, user: User) -> SolverDashboard:
         # Active assignments
-        assign_result = await self.db.execute(
-            select(IssueAssignment)
+        # 1️⃣ Total active count
+        count_result = await self.db.execute(
+            select(func.count())
+            .select_from(IssueAssignment)
             .where(
                 IssueAssignment.assigned_to_solver_id == user.id,
                 IssueAssignment.status.in_(
@@ -226,7 +227,32 @@ class DashboardService:
                 ),
             )
         )
-        assignments = assign_result.scalars().all()
+        total_active = count_result.scalar() or 0
+
+
+        # 2️⃣ Get only 10 assignments for dashboard
+        assign_result = await self.db.execute(
+            select(
+                IssueAssignment.id.label("assignment_id"),
+                IssueAssignment.issue_id,
+                Issue.title.label("issue_title"),
+                Site.name.label("site_name"),
+                Issue.priority,
+                IssueAssignment.due_date,
+            )
+            .join(Issue, Issue.id == IssueAssignment.issue_id)
+            .join(Site, Site.id == Issue.site_id)
+            .where(
+                IssueAssignment.assigned_to_solver_id == user.id,
+                IssueAssignment.status.in_(
+                    [AssignmentStatus.ACTIVE, AssignmentStatus.REOPENED]
+                ),
+            )
+            .order_by(IssueAssignment.due_date.asc())
+            .limit(10)
+        )
+
+        assignments = assign_result.all()
 
         # Completed count
         completed_result = await self.db.execute(
@@ -248,16 +274,16 @@ class DashboardService:
         return SolverDashboard(
             active_assignments=[
                 SolverAssignment(
-                    assignment_id=a.id,
+                    assignment_id=a.assignment_id,
                     issue_id=a.issue_id,
-                    issue_title=a.issue.title if a.issue else "",
-                    site_name=a.issue.site.name if (a.issue and a.issue.site) else None,
-                    priority=a.issue.priority.value if a.issue else "medium",
+                    issue_title=a.issue_title,
+                    site_name=a.site_name,
+                    priority=a.priority.value if a.priority else None,
                     due_date=a.due_date,
                 )
                 for a in assignments
             ],
-            total_active=len(assignments),
+            total_active=total_active,
             total_completed=completed,
             complaints_against=complaints,
         )

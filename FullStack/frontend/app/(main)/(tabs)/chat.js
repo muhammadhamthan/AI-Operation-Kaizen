@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
   Alert,
-  RefreshControl, // 📍 ADDED RefreshControl import back
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -38,7 +38,6 @@ import Avatar from '../../../src/components/common/Avatar';
 import { navigateToNotification } from '../../../src/utils/notificationNavigation';
 import { sendChatMessage } from '../../../src/services/api';
 
-// ── ADDED REUSABLE IMPORTS ──
 import { selectIsOnline } from '../../../src/store/slices/offlineSlice';
 import Toast from '../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../src/components/common/FullScreenSpinner';
@@ -143,7 +142,7 @@ export default function ChatScreen() {
     }
   }, [isOnline, currentSessionId, dispatch]);
 
-  const handleSendMessage = async (text, imageUri = null) => {
+  const handleSendMessage = async (text, imageUri = null,location = null,intent = null) => { //updatwd by hamthan,intent = null
     const userMessage = {
       id: Date.now(),
       message: text || '', 
@@ -156,9 +155,12 @@ export default function ChatScreen() {
     setIsLoading(true); 
 
     try {
-      const result = await sendChatMessage(
-        text || 'Uploaded an image', 
-        currentSessionId 
+      const result = await sendChatMessage( // by hamthan , added intent as parameter
+        text || 'Uploaded an image',
+        currentSessionId,
+        null,
+        imageUri,
+        intent
       );
 
       if (!result.success) return;
@@ -254,7 +256,6 @@ export default function ChatScreen() {
           ]}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
-          // 📍 FIX: Re-added RefreshControl so mobile users can pull-to-refresh
           refreshControl={
             Platform.OS === 'web' ? undefined : (
               <RefreshControl 
@@ -330,7 +331,12 @@ export default function ChatScreen() {
           )}
         </ScrollView>
 
-        <ChatInput onSend={handleSendMessage} showCamera={showCamera} />
+        {/* 📍 FIX: Passed userRole explicitly into ChatInput */}
+        <ChatInput 
+          onSend={handleSendMessage} 
+          showCamera={showCamera} 
+          userRole={user?.role} 
+        />
       </KeyboardAvoidingView>
 
       {drawerOpen && (

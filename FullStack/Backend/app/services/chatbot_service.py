@@ -55,14 +55,14 @@ class ChatbotService:
         issue_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> ChatResponse:
-
-        # ── 1. Get or create session ──────────────────────────
+# ── 1. Get or create session ──────────────────────────
         session = await self._get_or_create_session(
             user=user,
             session_id=session_id,
             first_message=message,
             issue_id=issue_id,
         )
+        
 
         # ── 2. Log USER message ───────────────────────────────
         await self._log_chat(

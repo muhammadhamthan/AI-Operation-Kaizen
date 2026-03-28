@@ -7,5 +7,5 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
-result = get_password_hash("9500267492")
+result = get_password_hash("8754477767")
 print(result)

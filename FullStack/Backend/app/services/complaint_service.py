@@ -164,7 +164,7 @@ class ComplaintService:
         # ── 7. Queue call chain (fire-and-forget) ─────────
         # Complaint triggers a full new call+retry cycle for the same assignment.
         # Solver will be called repeatedly until they answer or threshold hit.
-        self._enqueue_call(assignment.id)
+        self._enqueue_call(assignment.id , issue.id)
 
         return ChatResponse(
             message=(
@@ -264,14 +264,14 @@ class ComplaintService:
     # ══════════════════════════════════════════════════════
 
     @staticmethod
-    def _enqueue_call(assignment_id: int) -> None:
+    def _enqueue_call(assignment_id: int, issue_id: int) -> None:
         """
         Enqueues the Celery call chain.
         Must be called AFTER db.commit() so the assignment row exists in DB.
         """
         try:
             from app.workers.call_tasks import schedule_solver_call
-            schedule_solver_call.delay(assignment_id)
+            schedule_solver_call.delay(assignment_id, issue_id=issue_id)
             logger.info("Celery call chain queued for assignment #%s (complaint re-call)", assignment_id)
         except Exception:
             logger.exception(
