@@ -27,10 +27,10 @@ import { withRetry } from '../utils/networkRetry';
 //   }
   
 //   // Native apps need full URL
-//   return 'http://localhost:8001/api';  http://api.kairoxaitech.com/
+//   return 'http://localhost:8001/api';
 // };
 
-const backendUrl = 'https://api.kairoxaitech.com';
+const backendUrl = 'http://localhost:8000';
 
 
 const API_BASE_URL = backendUrl;
