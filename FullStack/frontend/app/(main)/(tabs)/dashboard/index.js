@@ -279,7 +279,7 @@ export default function DashboardScreen() {
       borderDark: 'rgba(239,68,68,0.2)',
       iconBgLight: '#fee2e2',
       iconBgDark: 'rgba(239,68,68,0.15)',
-      route: '/(main)/(tabs)/dashboard/not-fixed',
+      route: '/(main)/(tabs)/dashboard/escalated',
     },
     {
       icon: 'clipboard-outline',

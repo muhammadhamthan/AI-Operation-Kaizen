@@ -56,7 +56,6 @@ class SolverPerformance(BaseModel):
     total_assignments: int = Field(default=0)
     completed: int = Field(default=0)
     reopened: int = Field(default=0)
-    avg_response_time_hours: Optional[float] = None
     complaints_count: int = Field(default=0)
 
 
