@@ -30,7 +30,7 @@ import { withRetry } from '../utils/networkRetry';
 //   return 'http://localhost:8001/api';  http://api.kairoxaitech.com/
 // };
 
-const backendUrl = 'http://api.kairoxaitech.com';
+const backendUrl = 'https://api.kairoxaitech.com';
 
 
 const API_BASE_URL = backendUrl;

@@ -587,8 +587,17 @@ def place_solver_call(self, assignment_id: int, round_start: str = None, issue_i
 # TASK 3 — Retry after priority delay
 # ══════════════════════════════════════════════════════════════
 
-@celery_app.task(name="call_tasks.retry_solver_call", max_retries=0)
-def retry_solver_call(assignment_id: int, call_sid: str, round_start: str) -> None:
+@celery_app.task(
+    name="call_tasks.retry_solver_call",
+    bind=True,           # ← needed for self.retry
+    max_retries=3,       # ← max webhook wait retries (not call retries)
+)
+def retry_solver_call(
+    self,
+    assignment_id: int,
+    call_sid: str,
+    round_start: str,
+) -> None:
     from app.models.issue_assignment import IssueAssignment
     from app.models.call_log import CallLog
     from app.models.escalation_rule import EscalationRule
@@ -601,61 +610,89 @@ def retry_solver_call(assignment_id: int, call_sid: str, round_start: str) -> No
         if not assignment:
             return
 
-        if assignment.status not in (AssignmentStatus.ACTIVE, AssignmentStatus.REOPENED):
+        if assignment.status not in (
+            AssignmentStatus.ACTIVE, AssignmentStatus.REOPENED
+        ):
             logger.info(
                 "[retry_solver_call] assignment #%s status=%s — stop",
                 assignment_id, assignment.status,
             )
             return
 
-        # ── Check THIS specific call ──────────────────────────
+        # Already escalated — stop the whole chain
+        already_escalated = db.execute(
+            select(Escalation).where(
+                Escalation.assignment_id == assignment_id,
+                Escalation.resolved == False,
+            )
+        ).scalar_one_or_none()
+        if already_escalated:
+            return
+
+        # ── Check this specific call's status ────────────────
         this_call_log = db.execute(
             select(CallLog).where(CallLog.call_sid == call_sid)
         ).scalar_one_or_none()
 
         if not this_call_log:
-            logger.warning("[retry_solver_call] no log for SID=%s — stop", call_sid)
+            logger.warning(
+                "[retry_solver_call] no log for SID=%s — stop", call_sid,
+            )
             return
 
+        # ── ANSWERED: solver picked up, stop the chain ───────
         if this_call_log.status == CallStatus.ANSWERED:
             logger.info(
                 "[retry_solver_call] SID=%s answered — stop chain", call_sid,
             )
             return
 
-        # If webhook hasn't arrived yet, call is still INITIATED.
-        # Don't count it as missed — just retry. The webhook will
-        # update it to ANSWERED or MISSED independently.
-        if this_call_log.status == CallStatus.INITIATED: # IMPORTANT: check THIS call, THIS MIGHT THROW EXTRA CALLS WHEN THE DELAY IN WEBHOOKS
-            logger.info(
-                "[retry_solver_call] SID=%s still INITIATED (webhook pending) "
-                "— placing next call anyway for assignment #%s",
-                call_sid, assignment_id,
-            )
-            place_solver_call.delay(assignment_id, round_start)
-            return
+        # ── INITIATED: webhook hasn't arrived yet ─────────────
+        # Strategy: wait up to 3 × 30s = 90 extra seconds for webhook.
+        # After that, mark as MISSED and continue normally.
+        # This handles both slow webhooks AND lost webhooks safely.
+        # A real answered call would have triggered the webhook well
+        # before the retry delay (2min HIGH / 15min MEDIUM / 30min LOW).
+        if this_call_log.status == CallStatus.INITIATED:
+            webhook_wait_attempt = self.request.retries  # 0, 1, 2, 3
 
-        # ── Status is MISSED — check threshold ───────────────
-        escalated = db.execute(
-            select(Escalation).where(
-                Escalation.assignment_id == assignment_id,
-                Escalation.resolved == False,
-            )
-        ).scalar_one_or_none()
-        if escalated:
-            return
+            if webhook_wait_attempt < self.max_retries:
+                logger.warning(
+                    "[retry_solver_call] SID=%s still INITIATED "
+                    "(webhook attempt %d/%d) — waiting 30s more",
+                    call_sid,
+                    webhook_wait_attempt + 1,
+                    self.max_retries,
+                )
+                # Re-check this same call after 30 seconds
+                # This does NOT place a new Twilio call — just waits
+                raise self.retry(countdown=30)
+            else:
+                # Webhook never arrived after 3×30s = 90 seconds
+                # Safe to mark MISSED — if solver actually answered,
+                # Twilio retries its webhook for 24 hours and will
+                # eventually update the record
+                logger.error(
+                    "[retry_solver_call] SID=%s still INITIATED after "
+                    "%d webhook checks — marking MISSED (webhook lost)",
+                    call_sid, self.max_retries,
+                )
+                this_call_log.status = CallStatus.MISSED
+                this_call_log.ended_at = datetime.now(timezone.utc)
+                db.commit()
+                # Fall through to missed-count check below
 
+        # ── MISSED: count this round and decide next action ───
         round_start_dt = datetime.fromisoformat(round_start)
 
-        # Count only confirmed MISSED calls in this round
-        missed_count = db.execute(
+        missed_logs = db.execute(
             select(CallLog).where(
                 CallLog.assignment_id == assignment_id,
                 CallLog.status == CallStatus.MISSED,
                 CallLog.initiated_at >= round_start_dt,
             )
         ).scalars().all()
-        missed_count = len(missed_count)
+        missed_count = len(missed_logs)
 
         issue = assignment.issue
         rule = db.execute(
@@ -674,11 +711,11 @@ def retry_solver_call(assignment_id: int, call_sid: str, round_start: str) -> No
             _do_escalate_sync(db, assignment, missed_count, rule)
             return
 
+        # Under threshold — place the next call
         place_solver_call.delay(assignment_id, round_start)
 
     finally:
         db.close()
-
 
 # ══════════════════════════════════════════════════════════════
 # SYNC ESCALATION
