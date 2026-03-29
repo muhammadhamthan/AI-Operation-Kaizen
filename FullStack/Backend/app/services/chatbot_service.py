@@ -257,6 +257,18 @@ class ChatbotService:
             message=response.message,
             attachments=[],
         )
+        
+        from app.services.redis_memory_service import load_memory, save_memory
+        memory = load_memory(user.id)
+        memory.chat_memory.add_user_message(message)      # ← user message
+        memory.chat_memory.add_ai_message(response.message)  # ← full AI response
+        save_memory(user.id, memory)
+        
+        if response.message.startswith("[PENDING:"):
+            from app.services.redis_memory_service import load_memory, save_memory
+            memory = load_memory(user.id)
+            memory.chat_memory.add_ai_message(response.message)
+            save_memory(user.id, memory)
 
         # ── 6. Touch session + commit ─────────────────────────
         await self._touch_session(session.id)

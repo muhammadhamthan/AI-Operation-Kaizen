@@ -129,8 +129,10 @@ class IssueService:
         if not site:
             return ChatResponse(
                 message=(
+                    f"[PENDING:create_issue|site_clarification|{message}]\n"
                     f"❌ Couldn't find site '{extraction['site_location']}'. "
                     f"Available: {', '.join(site_names)}"
+                    f"Please reply with the correct site name."
                 ),
                 intent="create_issue",
                 actions_taken=["Site matching failed"],
@@ -748,7 +750,7 @@ class IssueService:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
-    def _similar(a, b):
+    def _similar(self, a: str, b: str) -> float:
         return SequenceMatcher(None, a, b).ratio()
 
     def _match_site(self, location_name: str, sites: list[Site]):
@@ -768,7 +770,7 @@ class IssueService:
         # 3. Spelling mistake fuzzy match
         best, best_score = None, 0
         for s in sites:
-            score = _similar(loc, s.name.lower())
+            score = self._similar(loc, s.name.lower())
             if score > best_score:
                 best_score = score
                 best = s
