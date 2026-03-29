@@ -768,7 +768,7 @@ class IssueService:
         # 3. Spelling mistake fuzzy match
         best, best_score = None, 0
         for s in sites:
-            score = _similar(loc, s.name.lower())
+            score = self._similar(loc, s.name.lower())
             if score > best_score:
                 best_score = score
                 best = s
