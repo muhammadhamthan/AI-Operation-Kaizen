@@ -1510,23 +1510,3 @@ async def master_agent(session_id: str, user_input: str, indent: str|None):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
-# ==================================================
-# CLI
-# ==================================================
-
-if __name__ == "__main__":
-
-    print("🔥 MASTER AI SYSTEM READY")
-
-    while True:
-
-        msg = input("\nYou: ")
-
-        if msg.lower() in ["exit","quit"]:
-            break
-
-        result = master_agent(msg)
-
-        print("\n==============================")
-        print(result)
-        print("==============================")
