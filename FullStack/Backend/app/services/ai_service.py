@@ -867,32 +867,6 @@ If this is a follow-up or elaboration request, give full detail based on history
 
     return final_answer
 
-async def run_general_llm(session_id: str, user_input: str):
-    memory = load_memory(session_id)
-
-    history_messages = memory.chat_memory.messages[-10:]
-    history_text = ""
-    for msg in history_messages:
-        role = "User" if msg.type == "human" else "AI"
-        history_text += f"{role}: {msg.content}\n"
-
-    response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": "You are a helpful AI assistant."},
-            {"role": "user", "content": f"{history_text}\nUser: {user_input}"}
-        ],
-        temperature=0.3
-    )
-
-    final_answer = response.choices[0].message.content
-
-    memory.chat_memory.add_user_message(user_input)
-    memory.chat_memory.add_ai_message(final_answer)
-    save_memory(session_id, memory)
-
-    return final_answer
-
 # ==================================================
 # INTENT DETECTION
 # ==================================================
@@ -1320,7 +1294,7 @@ RULE 5 — PARTIAL ARGS IN MESSAGE:
 # MASTER AGENT (INDENT-AWARE)
 # ==================================================
 
-async def master_agent(session_id: str, user_input: str, indent: str|None):
+async def master_agent(session_id: str, user_input: str, indent: str):
 
     # ✅ Greeting check — before anything else
     if is_greeting(user_input):
@@ -1357,8 +1331,32 @@ async def master_agent(session_id: str, user_input: str, indent: str|None):
 
     # ✅ Load Redis memory
     memory = load_memory(session_id)
-
     history_messages = memory.chat_memory.messages[-10:]
+
+# ✅ NEW: Check if last AI message was a site clarification
+    last_ai_msg = next(
+    (m.content for m in reversed(history_messages) if m.type == "ai"),
+    None
+)
+    if last_ai_msg and "[PENDING:create_issue|site_clarification|" in last_ai_msg:
+        
+        match = re.search(
+        r"\[PENDING:create_issue\|site_clarification\|(.*?)\]",
+        last_ai_msg
+    )
+        if match:
+            original_message = match.group(1)
+            corrected_message = f"{original_message} (site: {user_input.strip()})"
+        
+            memory.chat_memory.add_user_message(user_input)
+            memory.chat_memory.add_ai_message(f"Called: create_issue({{'message': '{corrected_message}'}})")
+            save_memory(session_id, memory)
+        
+            return {
+            "intent": "function_call",
+            "calls": [{"function": "create_issue", "args": {"message": corrected_message}}],
+            "clarifications": []
+        }
     history_text = ""
     for msg in history_messages:
         role = "User" if msg.type == "human" else "AI"
@@ -1510,23 +1508,29 @@ async def master_agent(session_id: str, user_input: str, indent: str|None):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
-# ==================================================
-# CLI
-# ==================================================
 
-if __name__ == "__main__":
+async def run_general_llm(session_id: str, user_input: str):
+    memory = load_memory(session_id)
 
-    print("🔥 MASTER AI SYSTEM READY")
+    history_messages = memory.chat_memory.messages[-10:]
+    history_text = ""
+    for msg in history_messages:
+        role = "User" if msg.type == "human" else "AI"
+        history_text += f"{role}: {msg.content}\n"
 
-    while True:
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": f"{history_text}\nUser: {user_input}"}
+        ],
+        temperature=0.3
+    )
 
-        msg = input("\nYou: ")
+    final_answer = response.choices[0].message.content
 
-        if msg.lower() in ["exit","quit"]:
-            break
+    memory.chat_memory.add_user_message(user_input)
+    memory.chat_memory.add_ai_message(final_answer)
+    save_memory(session_id, memory)
 
-        result = master_agent(msg)
-
-        print("\n==============================")
-        print(result)
-        print("==============================")
+    return final_answer
