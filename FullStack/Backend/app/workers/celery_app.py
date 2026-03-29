@@ -18,6 +18,15 @@ celery_app = Celery(
     include=["app.workers.call_tasks"],
 )
 
+# ADD THESE LINES
+# celery_app.conf.broker_use_ssl = {
+#     "ssl_cert_reqs": "none"
+# }
+
+# celery_app.conf.redis_backend_use_ssl = {
+#     "ssl_cert_reqs": "none"
+# }
+
 celery_app.conf.update(
     broker_transport_options={
         # Remove the complex dictionary that's causing the TypeError
@@ -25,6 +34,7 @@ celery_app.conf.update(
         'socket_connect_timeout': 30,
         'retry_on_timeout': True,
     },
+    
     broker_connection_retry_on_startup=True,
     broker_connection_retry=True,
     broker_connection_max_retries=10,

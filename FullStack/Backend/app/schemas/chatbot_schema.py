@@ -199,6 +199,32 @@ class ChatRequest(BaseModel):
             {},
         ],
     )
+    intent: Optional[str] = Field(
+        None,
+        description=(
+            "The detected intent — what the user wanted to do. "
+            "Used by frontend to optionally render different UI elements."
+        ),
+        examples=[
+            "create_issue",
+            "query_issues",
+            "check_status",
+            "raise_complaint",
+            "approve_completion",
+            "update_issue",
+            "update_work_status",
+            "complete_work",
+            "check_assignment",
+            "report_blocker",
+            "query_escalations",
+            "query_overdue",
+            "query_solver_performance",
+            "reassign_solver",
+            "general_chat",
+        ],
+    )
+    
+    
 
 
 # ══════════════════════════════════════════════════════════

@@ -95,10 +95,7 @@ class AssignmentService:
         )
         result = await self.db.execute(skills_stmt)
         site_skills = result.scalars().all()
-<<<<<<< HEAD:Full Stack/Backend/app/services/assignment_service.py
-=======
         
->>>>>>> 9544bc8754700abe0ba91f8a52ddea6008d99b10:FullStack/Backend/app/services/assignment_service.py
         if not site_skills:
             fallback_stmt = (
                 select(ProblemSolverSkill)
@@ -128,11 +125,7 @@ class AssignmentService:
             )
             .where(
                 IssueAssignment.assigned_to_solver_id.in_(candidate_ids),
-<<<<<<< HEAD:Full Stack/Backend/app/services/assignment_service.py
-                IssueAssignment.status == [AssignmentStatus.ACTIVE,AssignmentStatus.REOPENED],
-=======
                 IssueAssignment.status.in_([AssignmentStatus.ACTIVE, AssignmentStatus.REOPENED]),
->>>>>>> 9544bc8754700abe0ba91f8a52ddea6008d99b10:FullStack/Backend/app/services/assignment_service.py
             )
             .group_by(IssueAssignment.assigned_to_solver_id)
         )
