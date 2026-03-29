@@ -195,7 +195,7 @@ class SolverPerformanceService:
             label, label_color = "Good", "#f59e0b"
         else:
             label, label_color = "Needs Attention", "#ef4444"
-
+            
         # ── Issue statuses (single query, not N queries) ──────
         issue_ids = [a.issue_id for a in all_assignments]
         issue_statuses: dict = {}

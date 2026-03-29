@@ -423,9 +423,9 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 RETRY_DELAY: dict[str, int] = {
-    "high":   2 * 60,
-    "medium": 15 * 60,
-    "low":    30 * 60,
+    "high":   40,
+    "medium": 1 * 80,
+    "low":    2 * 60,
 }
 DEFAULT_RETRY_DELAY = 10 * 60
 

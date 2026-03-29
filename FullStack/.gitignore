@@ -4,6 +4,9 @@
 .idea/
 .vscode/
 
+*.zip
+Full Stack/Backend.zip
+
 # Dependencies
 node_modules/
 /node_modules
