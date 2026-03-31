@@ -450,7 +450,7 @@ def create_issue_from_data(data):
 
     skill = data.get("skill_name")
     location = data.get("site_location")
-    days = data.get("days_to_fix",2)
+    days = data.get("days_to_fix",2)#this line 2 days is default deadline need to be removed and follow up should work
 
     conn = connect_db()
 

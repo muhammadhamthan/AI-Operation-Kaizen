@@ -243,7 +243,7 @@ class IssueService:
     ) -> ChatResponse:
         if not issue_id:
             return ChatResponse(
-                message="Please specify: 'approve issue 8'",
+                message="Please specify: Issue ID",
                 intent="approve_completion", actions_taken=[],
             )
 
@@ -253,7 +253,7 @@ class IssueService:
                 message=f"Issue #{issue_id} not found.",
                 intent="approve_completion", actions_taken=[],
             )
-        if issue.status != IssueStatus.RESOLVED_PENDING_REVIEW and issue.status != IssueStatus.REOPENED:
+        if issue.status != IssueStatus.RESOLVED_PENDING_REVIEW:
             return ChatResponse(
                 message=f"Issue #{issue_id} is '{issue.status.value}', not awaiting review.",
                 intent="approve_completion", actions_taken=[],
@@ -299,14 +299,14 @@ class IssueService:
         """
         if not issue_id:
             return ChatResponse(
-                message="Specify: 'change priority of issue 3 to high'",
+                message="Please Specify: 'The issue ID to change the priority'",
                 intent="update_priority", actions_taken=[],
             )
 
         issue = await self._get_issue_or_none(issue_id)
         if not issue:
             return ChatResponse(
-                message=f"Issue #{issue_id} not found.",
+                message=f"Issue #{issue_id} not found , So please check the issue Id correctly",
                 intent="update_priority", actions_taken=[],
             )
 
@@ -340,22 +340,22 @@ class IssueService:
     # ══════════════════════════════════════════════════════
 
     async def extend_deadline(
-        self, user: User, issue_id: Optional[int], days: int = 3,
+        self, user: User, issue_id: Optional[int], days: int,
     ) -> ChatResponse:
         if not issue_id:
             return ChatResponse(
-                message="Specify: 'extend deadline of issue 2 by 3 days'",
+                message="Please Specify: 'The Issue ID to extend the deadline'",
                 intent="extend_deadline", actions_taken=[],
             )
 
         issue = await self._get_issue_or_none(issue_id)
         if not issue:
             return ChatResponse(
-                message=f"Issue #{issue_id} not found.",
+                message=f"Issue #{issue_id} not found , So please check the issue Id correctly",
                 intent="extend_deadline", actions_taken=[],
             )
 
-        base = issue.deadline_at or datetime.now(timezone.utc)
+        base = issue.deadline_at
         new_deadline = base + timedelta(days=days)
         issue.deadline_at = new_deadline
 
@@ -380,13 +380,13 @@ class IssueService:
     # 5. SOLVER: Mark IN_PROGRESS
     # ══════════════════════════════════════════════════════
 
-    async def solver_update_status(
+    async def solver_update_status( #This funtion currently not in use
         self, solver: User, message: str, issue_id: Optional[int],
     ) -> ChatResponse:
         assignment = await self._get_active_assignment(solver.id, issue_id)
         if not assignment:
             return ChatResponse(
-                message="No active assignment found.",
+                message="No active assignment found for this issue id.",
                 intent="update_work_status", actions_taken=[],
             )
 
@@ -429,17 +429,23 @@ class IssueService:
         issue_id: Optional[int],
         ai_service,
     ) -> ChatResponse:
-        assignment = await self._get_active_assignment(solver.id, issue_id)
-        if not assignment:
+        
+        if not issue_id:
             return ChatResponse(
-                message="No active assignment found.",
+                message="Please provide a correct valid issue id",
+                intent="complete_work", actions_taken=[],
+            )
+        assignment = await self._get_active_assignment(solver.id, issue_id)
+        if not assignment: 
+            return ChatResponse(
+                message="No active assignment found",
                 intent="complete_work", actions_taken=[],
             )
 
         issue = await self._get_issue_or_none(assignment.issue_id)
         if not issue:
             return ChatResponse(
-                message="Assigned issue not found.",
+                message="Assigned issue not found. There might be the issue id you provide is not yet assigned / Invaild issue id",
                 intent="complete_work", actions_taken=[],
             )
 
@@ -498,7 +504,7 @@ class IssueService:
     # 7. SOLVER: Report Blocker
     # ══════════════════════════════════════════════════════
 
-    async def solver_report_blocker(
+    async def solver_report_blocker( #Optional function
         self, solver: User, message: str, issue_id: Optional[int],
     ) -> ChatResponse:
         """

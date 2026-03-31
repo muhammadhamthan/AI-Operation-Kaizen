@@ -67,37 +67,14 @@ class ComplaintService:
           6. Commit
           7. Enqueue Celery call chain (fire-and-forget)
         """
-        # ── 1. Resolve issue ─────────────────────────────
-        if not issue_id:
-            # Auto-pick the supervisor's most recently updated eligible issue
-            stmt = (
-                select(Issue)
-                .where(
-                    Issue.raised_by_supervisor_id == user.id,
-                    Issue.status.in_([
-                        IssueStatus.RESOLVED_PENDING_REVIEW,
-                        IssueStatus.COMPLETED,
-                        IssueStatus.IN_PROGRESS,
-                    ]),
-                )
-                .order_by(Issue.updated_at.desc())
-                .limit(1)
-            )
-            recent = (await self.db.execute(stmt)).scalar_one_or_none()
-            if not recent:
-                return ChatResponse(
-                    message="No eligible issue found. Specify: 'complaint about issue 5'",
-                    intent="raise_complaint", actions_taken=[],
-                )
-            issue_id = recent.id
-
+        # ── 1. Resolve issue ────────────────────────────
         issue = (await self.db.execute(
             select(Issue).where(Issue.id == issue_id)
         )).scalar_one_or_none()
 
-        if not issue:
+        if not issue_id:
             return ChatResponse(
-                message=f"Issue #{issue_id} not found.",
+                message="No eligible issue found. Specified issue id might be Invaild , So please provide a vaild issue id'",
                 intent="raise_complaint", actions_taken=[],
             )
 
@@ -153,7 +130,10 @@ class ComplaintService:
             user_id=None,
             issue_id=issue_id,
             role_in_chat=ChatRole.SYSTEM,
-            message=f"⚠️ Complaint filed by {user.name}. Assignment #{assignment.id} reopened.",
+            message=(
+                f"⚠️ Complaint #{complaint.id} filed for Issue #{issue_id}.\n"
+                f"Issue reopened. Calling solver again now."
+            ),
             attachments=[],
         ))
 
