@@ -28,8 +28,10 @@ Rules:
 
 import logging
 from typing import Optional, Tuple
+from difflib import SequenceMatcher
 
-from sqlalchemy import select, func as sql_func
+
+from sqlalchemy import select, func as sql_func, case
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -86,36 +88,43 @@ class AssignmentService:
         # Order: site-specific first (site_id IS NOT NULL), then by priority DESC
         skills_stmt = (
             select(ProblemSolverSkill)
-            .where(
-                ProblemSolverSkill.skill_type == problem_type.lower(),
-                ProblemSolverSkill.is_available == True,
-                ProblemSolverSkill.site_id == site_id,   # exact site match only
+            .where(ProblemSolverSkill.is_available == True)
+            .order_by(
+                case(
+                    (ProblemSolverSkill.site_id == site_id, 0),
+                    else_=1,
+                ),
+                ProblemSolverSkill.priority.desc(),
             )
-            .order_by(ProblemSolverSkill.priority.desc())
         )
         result = await self.db.execute(skills_stmt)
-        site_skills = result.scalars().all()
-        
-        if not site_skills:
-            fallback_stmt = (
-                select(ProblemSolverSkill)
-                .where(
-                    ProblemSolverSkill.skill_type == problem_type.lower(),
-                    ProblemSolverSkill.is_available == True
-                )
-                .order_by(ProblemSolverSkill.priority.desc())
-            )
+        all_skills = result.scalars().all()
 
-            result = await self.db.execute(fallback_stmt)
-            site_skills = result.scalars().all()
-
-        if not site_skills:
-            logger.info(
-                "No available solver for skill='%s' site_id=%s", problem_type, site_id
-            )
+        if not all_skills:
+            logger.info("No available solvers in system")
             return None, None
 
-        # ── Step 2: Get active workload for all candidates in one query ──
+        # Split — already priority-sorted from DB
+        site_skills   = [s for s in all_skills if s.site_id == site_id]
+        global_skills = [s for s in all_skills if s.site_id is None]
+
+        # ── Step 2: Fuzzy match — site-specific first, fallback global ──
+        matched = self._match_skill_type(problem_type, site_skills)
+        pool = site_skills
+        if not matched:
+            matched = self._match_skill_type(problem_type, global_skills)
+            pool = global_skills
+
+        if not matched:
+            logger.info(
+                "No skill match for '%s' site_id=%s", problem_type, site_id
+            )
+            return None, None
+        
+                # Candidates are already priority-sorted from the DB query
+        site_skills = [s for s in pool if s.skill_type == matched]
+
+        # ── Step 3: Get active workload for all candidates in one query ──
         candidate_ids = [s.solver_id for s in site_skills]
 
         workload_stmt = (
@@ -263,6 +272,7 @@ class AssignmentService:
 
         # Enqueue call chain after commit (assignment.id now exists in DB)
         self._enqueue_call(new_assignment.id)
+        self._trigger_score_refresh_for_issue(issue_id)
 
         return ChatResponse(
             message=f"✅ Issue #{issue_id} reassigned to {solver.name}.\n📞 Calling solver now...",
@@ -275,6 +285,62 @@ class AssignmentService:
                 "Call chain queued",
             ],
         )
+        
+    def _match_skill_type(
+        self,
+        problem_type: str,
+        skills: list[ProblemSolverSkill],
+    ) -> Optional[str]:
+        """
+        Multi-strategy matcher (fastest to slowest):
+        1. Exact match
+        2. Prefix match         — 'network' matches 'network engineer'
+        3. Word subset match    — 'electrical work' matches 'electrical'
+        4. Fuzzy ratio          — typo tolerance ('electrcal' → 'electrical')
+        """
+        if not skills:
+            return None
+
+        pt = problem_type.lower().strip()
+        pt_words = set(pt.split())
+        sm = SequenceMatcher(None, pt, "")
+        best, best_score = None, 0.0
+
+        for s in skills:
+            name = s.skill_type.lower().strip()
+            name_words = set(name.split())
+
+            # 1. Exact
+            if name == pt:
+                return s.skill_type
+
+            # 2. Prefix — 'network' in 'network engineer' or vice versa
+            if name.startswith(pt) or pt.startswith(name):
+                return s.skill_type
+
+            # 3. Word subset — any word from DB skill found in problem_type
+            #    'electrical work urgent' → skill 'electrical' → match
+            if name_words & pt_words:
+                return s.skill_type
+
+            # 4. Fuzzy — handles typos, keep best score across all skills
+            sm.set_seq2(name)
+            score = sm.ratio()
+            if score > best_score:
+                best_score, best = score, s.skill_type
+
+        return best if best_score > 0.6 else None  # lowered from 0.75 for better recall
+    
+    def _trigger_score_refresh_for_issue(issue_id: int) -> None:
+        """
+        Fire-and-forget: enqueue Celery task to refresh site + solver scores
+        for this issue. Must be called AFTER db.commit().
+        """
+        try:
+            from app.workers.score_task import trigger_issue_score_refresh
+            trigger_issue_score_refresh.delay(issue_id)
+        except Exception:
+            logger.exception("Failed to enqueue score refresh for issue #%s", issue_id)
 
     # # ══════════════════════════════════════════════════════
     # # 3. DASHBOARD: Paginated assignment list  (API read)

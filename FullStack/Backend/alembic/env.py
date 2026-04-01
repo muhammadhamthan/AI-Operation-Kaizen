@@ -32,7 +32,7 @@ from app.models.escalation_rule import EscalationRule
 config = context.config
 
 # Set the SQLAlchemy URL from our config
-config.set_main_option("sqlalchemy.url", session.SYNC_DATABASE_URL)
+config.set_main_option("sqlalchemy.url", session.ASYNC_DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

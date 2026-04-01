@@ -71,23 +71,6 @@ async def get_site_analytics(
     return result
 
 
-# ══════════════════════���═══════════════════════════════════
-# CRUD ENDPOINTS (existing — unchanged)
-# ══════════════════════════════════════════════════════════
-
-@router.get("", response_model=SiteListResponse, summary="List all sites")
-async def list_sites(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    result = await db.execute(select(Site).order_by(Site.id))
-    sites = result.scalars().all()
-    return SiteListResponse(
-        total=len(sites),
-        sites=[SiteResponse.model_validate(s) for s in sites],
-    )
-
-
 # @router.post(
 #     "",
 #     response_model=SiteResponse,

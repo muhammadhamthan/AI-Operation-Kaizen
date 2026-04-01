@@ -54,6 +54,7 @@ class ChatbotService:
         image_url: Optional[str] = None,
         issue_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        indent : Optional[str] = None
     ) -> ChatResponse:
 # ── 1. Get or create session ──────────────────────────
         session = await self._get_or_create_session(
@@ -75,154 +76,177 @@ class ChatbotService:
         )
 
         # ── 3. Call AI agent ──────────────────────────────────
-        from app.services.ai_service import master_agent
+        from app.services.ai_service import master_agent,run_sql_agent,run_general_llm
         from app.services.issue_service import IssueService
+        from app.schemas.chatbot_schema import ChatResponse
 
-        agent_response = await master_agent(user.id, message)
-        logger.info("Agent decision: %s", agent_response.get("intent"))
-
-        intent = agent_response.get("intent")
-        issue_service = IssueService(self.db)
-
-        # ── 4. Build response (ALL paths build `response` first,
-        #       then we log it ONCE at step 5 before returning) ─
-        #
-        #   OLD (broken):
-        #     if clarification → log → return   ← returned before step 5
-        #     if function_call → build response
-        #     step 5: log       ← only ran for function_call
-        #
-        #   NEW (fixed):
-        #     if clarification  → build response  ┐
-        #     elif function_call → build response  ├─ no return yet
-        #     else               → build response  ┘
-        #     step 5: log AI reply  ← always runs
-        #     step 6: commit + return
-
-        if intent == "clarification":
-            # AI needs more info from the user
-            ai_message = agent_response.get("message", "Could you provide more details?")
+        
+        if indent == "sql_query":
+            result_text = await run_sql_agent(str(user.id), message)
             response = ChatResponse(
                 session_id=session.id,
-                message=ai_message,
-                intent="clarification",
-                actions_taken=[],
+                message=result_text,
+                intent="sql_query",
+                actions_taken=["sql_agent"]
             )
 
-        elif intent == "function_call":
-            # One or more functions to execute
-            calls = agent_response.get("calls") or [
-                {
-                    "function": agent_response.get("function"),
-                    "args": agent_response.get("args", {}),
-                }
-            ]
-            clarifications = agent_response.get("clarifications", [])
-            call_responses: List[ChatResponse] = []
-
-            for call in calls:
-                func = call["function"]
-                args = call["args"]
-
-                if func == "create_issue":
-                    r = await issue_service.create_from_chat(
-                        user=user,
-                        message=args["message"],
-                        image_url=image_url,
-                        ai_service=None,
-                    )
-
-                elif func == "approve_completion":
-                    r = await issue_service.approve_completion(user, args["issue_id"])
-
-                elif func == "update_priority":
-                    r = await issue_service.update_priority(
-                        user, args["issue_id"], args["priority"]
-                    )
-
-                elif func == "extend_deadlines":
-                    r = await issue_service.extend_deadline(
-                        user, args["issue_id"], args.get("days", 3)
-                    )
-
-                elif func == "solver_complete_work":
-                    r = await issue_service.solver_complete_work(
-                        user,
-                        args.get("message", "completed work"),
-                        image_url,
-                        args["issue_id"],
-                        None,
-                    )
-
-                elif func == "solver_report_blocker":
-                    r = await issue_service.solver_report_blocker(
-                        user,
-                        args.get("message", "blocker reported"),
-                        args["issue_id"],
-                    )
-
-                elif func == "raise_complaint":
-                    from app.services.complaint_service import ComplaintService
-                    r = await ComplaintService(self.db).create_from_chat(
-                        user=user,
-                        issue_id=args["issue_id"],
-                        message=args["message"],
-                        image_url=image_url,
-                    )
-
-                elif func == "reassign_solver":
-                    from app.services.assignment_service import AssignmentService
-                    r = await AssignmentService(self.db).reassign_from_chat(
-                        user=user,
-                        issue_id=args.get("issue_id"),
-                        solver_name=args.get("solver_name"),
-                    )
-
-                elif func == "query_function":
-                    from app.services.ai_service import run_sql_agent
-                    result_text = await run_sql_agent(user.id, args["query"])
-                    r = ChatResponse(
-                        message=result_text,
-                        intent="query_function",
-                        actions_taken=["sql_agent"],
-                    )
-
-                elif func == "llm_function":
-                    r = ChatResponse(
-                        message=args.get("message", ""),
-                        intent="llm_function",
-                        actions_taken=["llm_response"],
-                    )
-
-                else:
-                    r = ChatResponse(
-                        message="Unknown function.",
-                        intent="unknown",
-                        actions_taken=[],
-                    )
-
-                call_responses.append(r)
-
-            combined_message = "\n\n".join(r.message for r in call_responses)
-            if clarifications:
-                combined_message += "\n\n⚠️ " + "\n".join(clarifications)
-
+        elif indent == "general_query":
+            result_text = await run_general_llm(str(user.id), message)
             response = ChatResponse(
                 session_id=session.id,
-                message=combined_message,
-                intent="function_call",
-                actions_taken=[c["function"] for c in calls],
+                message=result_text,
+                intent="general_query",
+                actions_taken=["llm_chat"]
             )
 
         else:
-            # Unknown / fallback intent
-            ai_msg = agent_response.get("message", "I'm not sure how to help with that.")
-            response = ChatResponse(
-                session_id=session.id,
-                message=ai_msg,
-                intent=intent or "unknown",
-                actions_taken=[],
-            )
+            # Issue / approval / workflow actions
+            agent_response = await master_agent(user.id, message, indent)
+            logger.info("Agent decision: %s", agent_response.get("intent"))
+
+            intent = agent_response.get("intent")
+            issue_service = IssueService(self.db)
+
+            # ── 4. Build response (ALL paths build `response` first,
+            #       then we log it ONCE at step 5 before returning) ─
+            #
+            #   OLD (broken):
+            #     if clarification → log → return   ← returned before step 5
+            #     if function_call → build response
+            #     step 5: log       ← only ran for function_call
+            #
+            #   NEW (fixed):
+            #     if clarification  → build response  ┐
+            #     elif function_call → build response  ├─ no return yet
+            #     else               → build response  ┘
+            #     step 5: log AI reply  ← always runs
+            #     step 6: commit + return
+
+            if intent == "clarification":
+                # AI needs more info from the user
+                ai_message = agent_response.get("message", "Could you provide more details?")
+                response = ChatResponse(
+                    session_id=session.id,
+                    message=ai_message,
+                    intent="clarification",
+                    actions_taken=[],
+                )
+
+            elif intent == "function_call":
+                # One or more functions to execute
+                calls = agent_response.get("calls") or [
+                    {
+                        "function": agent_response.get("function"),
+                        "args": agent_response.get("args", {}),
+                    }
+                ]
+                clarifications = agent_response.get("clarifications", [])
+                call_responses: List[ChatResponse] = []
+
+                for call in calls:
+                    func = call["function"]
+                    args = call["args"]
+
+                    if func == "create_issue":
+                        r = await issue_service.create_from_chat(
+                            user=user,
+                            message=args["message"],
+                            image_url=image_url,
+                            ai_service=None,
+                        )
+
+                    elif func == "approve_completion":
+                        r = await issue_service.approve_completion(user, args["issue_id"])
+
+                    elif func == "update_priority":
+                        r = await issue_service.update_priority(
+                            user, args["issue_id"], args["priority"]
+                        )
+
+                    elif func == "extend_deadlines":
+                        r = await issue_service.extend_deadline(
+                            user, args["issue_id"], args.get("days", 3)
+                        )
+
+                    elif func == "solver_complete_work":
+                        r = await issue_service.solver_complete_work(
+                            user,
+                            args.get("message", "completed work"),
+                            image_url,
+                            args["issue_id"],
+                            None,
+                        )
+
+                    elif func == "solver_report_blocker":
+                        r = await issue_service.solver_report_blocker(
+                            user,
+                            args.get("message", "blocker reported"),
+                            args["issue_id"],
+                        )
+
+                    elif func == "raise_complaint":
+                        from app.services.complaint_service import ComplaintService
+                        r = await ComplaintService(self.db).create_from_chat(
+                            user=user,
+                            issue_id=args["issue_id"],
+                            message=args["message"],
+                            image_url=image_url,
+                        )
+
+                    elif func == "reassign_solver":
+                        from app.services.assignment_service import AssignmentService
+                        r = await AssignmentService(self.db).reassign_from_chat(
+                            user=user,
+                            issue_id=args.get("issue_id"),
+                            solver_name=args.get("solver_name"),
+                        )
+
+                    elif func == "query_function":
+                        from app.services.ai_service import run_sql_agent
+                        result_text = await run_sql_agent(user.id, args["query"])
+                        r = ChatResponse(
+                            message=result_text,
+                            intent="query_function",
+                            actions_taken=["sql_agent"],
+                        )
+
+                    elif func == "llm_function":
+                        r = ChatResponse(
+                            message=args.get("message", ""),
+                            intent="llm_function",
+                            actions_taken=["llm_response"],
+                        )
+                        
+
+                    else:
+                        r = ChatResponse(
+                            message="Unknown function.",
+                            intent="unknown",
+                            actions_taken=[],
+                        )
+
+                    call_responses.append(r)
+
+                combined_message = "\n\n".join(r.message for r in call_responses)
+                if clarifications:
+                    combined_message += "\n\n⚠️ " + "\n".join(clarifications)
+
+                response = ChatResponse(
+                    session_id=session.id,
+                    message=combined_message,
+                    intent="function_call",
+                    actions_taken=[c["function"] for c in calls],
+                )
+
+            else:
+                # Unknown / fallback intent
+                ai_msg = agent_response.get("message", "I'm not sure how to help with that.")
+                response = ChatResponse(
+                    session_id=session.id,
+                    message=ai_msg,
+                    intent=intent or "unknown",
+                    actions_taken=[],
+                )
 
         # ── 5. Log AI reply — runs for EVERY intent path ──────
         await self._log_chat(
@@ -233,6 +257,18 @@ class ChatbotService:
             message=response.message,
             attachments=[],
         )
+        
+        from app.services.redis_memory_service import load_memory, save_memory
+        memory = load_memory(user.id)
+        memory.chat_memory.add_user_message(message)      # ← user message
+        memory.chat_memory.add_ai_message(response.message)  # ← full AI response
+        save_memory(user.id, memory)
+        
+        if response.message.startswith("[PENDING:"):
+            from app.services.redis_memory_service import load_memory, save_memory
+            memory = load_memory(user.id)
+            memory.chat_memory.add_ai_message(response.message)
+            save_memory(user.id, memory)
 
         # ── 6. Touch session + commit ─────────────────────────
         await self._touch_session(session.id)

@@ -8,6 +8,18 @@ from typing import Optional, List
 from datetime import datetime
 
 
+class SolverListItem(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    role: str
+    is_active: bool
+    score: int
+    label: str
+    label_color: str
+
+
 class SolverPerformanceDetail(BaseModel):
     """Complete solver performance — replaces frontend calculateSolverScore()."""
     solver_id: int
@@ -65,4 +77,4 @@ class SolverWithPerformance(BaseModel):
 
 class SolverPerformanceListResponse(BaseModel):
     total: int
-    solvers: List[SolverWithPerformance]
+    solvers: List[SolverListItem]

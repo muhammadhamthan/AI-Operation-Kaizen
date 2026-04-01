@@ -24,6 +24,8 @@ import { selectIsOnline } from '../../store/slices/offlineSlice';
 
 // 📍 THE AVAILABLE ACTIONS
 const ALL_ACTIONS = [
+  { id: 'general_query', label: 'General Query', icon: 'chatbubbles-outline' },
+  { id: 'sql_query', label: 'Database Query / Reports', icon: 'analytics-outline' },
   { id: 'create_issue', label: 'Report a problem at a site', icon: 'alert-circle-outline' },
   { id: 'approve_completion', label: 'Approve completed work', icon: 'checkmark-done-outline' },
   { id: 'update_priority', label: 'Change issue priority', icon: 'trending-up-outline' },
@@ -133,7 +135,8 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
       console.log(`Location:   ${stagedLocation ? `Lat: ${stagedLocation.latitude}, Lon: ${stagedLocation.longitude}` : 'None'}`);
       console.log("=============================================\n");
 
-      onSend(finalMessage, selectedImage, stagedLocation, selectedAction?.id);
+      const intentToSend = selectedAction?.id || "general_query";
+      onSend(finalMessage, selectedImage, stagedLocation, intentToSend);
       console.log("=============================================",selectedAction?.id); // by hamthan , selectedAction?.id
       
       // Cleanup States

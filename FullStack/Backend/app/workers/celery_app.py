@@ -15,8 +15,17 @@ celery_app = Celery(
     "facility_mgmt",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.workers.call_tasks"],
+    include=["app.workers.call_tasks","app.workers.score_task"],
 )
+
+# ADD THESE LINES
+# celery_app.conf.broker_use_ssl = {
+#     "ssl_cert_reqs": "none"
+# }
+
+# celery_app.conf.redis_backend_use_ssl = {
+#     "ssl_cert_reqs": "none"
+# }
 
 celery_app.conf.update(
     broker_transport_options={
@@ -25,6 +34,7 @@ celery_app.conf.update(
         'socket_connect_timeout': 30,
         'retry_on_timeout': True,
     },
+    
     broker_connection_retry_on_startup=True,
     broker_connection_retry=True,
     broker_connection_max_retries=10,
@@ -35,5 +45,15 @@ celery_app.conf.update(
     enable_utc=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    task_routes={"call_tasks.*": {"queue": "calls"}},
+    task_routes={
+        "call_tasks.*": {"queue": "calls"},
+        "score_tasks.*": {"queue": "scores"},
+    },
+    
+    beat_schedule={
+        "refresh-all-scores-15min": {
+            "task": "score_tasks.refresh_all_scores",
+            "schedule": 15 * 60,  # every 15 minutes
+        },
+    },
 )

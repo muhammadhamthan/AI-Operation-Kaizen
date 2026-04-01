@@ -181,7 +181,7 @@ export const fetchIssues = async (filters = {}) => {
     if (filters.site_id) params.append('site_id', filters.site_id);
 
     const response = await withRetry(
-      () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
+      () => api.get(`/api/v1/issues?${params.toString()}/feed`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
       { maxRetries: 2 }
     );
     console.log(response)
@@ -361,7 +361,7 @@ export const fetchDashboardStats = async () => {
  */
 export const fetchComplaints = async () => {
   try {
-    const response = await api.get('/api/v1/complaints');
+    const response = await api.get('/api/v1/complaints/feed');
 
     // 📍 EXACT DATA: Pass the backend response directly without mutating it
     // Handle both { complaints: [...] } or direct array [...] responses
@@ -397,7 +397,7 @@ export const fetchComplaintById = async (id) => {
  */
 export const fetchSites = async () => {
   try {
-    const response = await api.get('/sites');
+    const response = await api.get('/api/v1/sites/analytics');
     return {
       success: true,
       sites: response.data,
@@ -412,6 +412,7 @@ export const fetchSites = async () => {
   }
 };
 
+//it have to be analytic with site id based
 export const fetchSitesAnalytics = async () => {
  try {
     const response = await api.get('/api/v1/sites/analytics');
@@ -432,6 +433,7 @@ export const fetchSitesAnalytics = async () => {
   }
 };
 
+// we have to add another function to fetch solvers performance based on solver id
 export const fetchSolversPerformanceAPI = async () => {
   try {
     const response = await api.get('/api/v1/solvers');

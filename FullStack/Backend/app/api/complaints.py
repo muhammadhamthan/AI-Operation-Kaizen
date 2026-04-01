@@ -12,6 +12,7 @@ ENDPOINTS:
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.api.deps import get_db, get_current_user
@@ -21,9 +22,41 @@ from app.schemas.complaint_schema import (
     ComplaintResponse,
     ComplaintListResponse,
 )
+from app.schemas.pagination_schema import CursorPage, CursorParams
 
 router = APIRouter()
 
+
+@router.get(
+    "/feed",
+    response_model=CursorPage[ComplaintResponse],
+    summary="Cursor-paginated complaint feed (fast, use for all UI pages)",
+)
+async def get_complaints_feed(
+    cursor: Optional[str] = None,
+    limit: int = 20,
+    issue_id: Optional[int] = None,
+    solver_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    HIGH-PERFORMANCE cursor-paginated complaint list.
+    Single JOIN query — no N+1, no separate COUNT.
+ 
+    Usage same as /issues/feed — store next_cursor, pass it back for next page.
+    """
+    limit = max(1, min(limit, 100))
+    params = CursorParams(cursor=cursor, limit=limit)
+ 
+    service = ComplaintService(db)
+    return await service.list_complaints_cursor(
+        current_user=current_user,
+        params=params,
+        issue_id=issue_id,
+        solver_id=solver_id,
+    )
+    
 
 @router.get(
     "",
