@@ -1,11 +1,15 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi , fetchIssueTimeline as fetchIssueTimelineApi } from '../../services/api';// Initial state
+import { fetchIssues as fetchIssuesApi, fetchIssueById as fetchIssueByIdApi , fetchIssueTimeline as fetchIssueTimelineApi } from '../../services/api';
 
+// Initial state
 const initialState = {
   issues: [],
   currentIssue: null,
   timeline: [], // New state for issue timeline
   loading: false,
+  loadingMore: false, // 📍 NEW: For cursor pagination loading indicator
+  nextCursor: null,   // 📍 NEW: Store the opaque cursor string
+  hasMore: true,      // 📍 NEW: Stop condition tracker
   error: null,
   filters: {
     search: '',
@@ -17,13 +21,37 @@ const initialState = {
 
 export const fetchIssues = createAsyncThunk(
   'issues/fetchAll',
-  async (user, { rejectWithValue }) => {
+  async (params = {}, { getState, rejectWithValue }) => {
     try {
-      const result = await fetchIssuesApi();
+      const state = getState().issues;
+      
+      // Determine if we are doing a fresh load or an infinite scroll append
+      const isReset = params?.reset !== false;
+      
+      // Stop condition: if scrolling and no more items, abort safely
+      if (!isReset && !state.hasMore) {
+        return rejectWithValue('No more items');
+      }
+
+      // Pass the cursor only if we are appending items
+      const apiParams = {
+        ...state.filters,
+        limit: 10,
+        cursor: isReset ? null : state.nextCursor, 
+      };
+
+      const result = await fetchIssuesApi(apiParams);
+      
       if (!result.success) {
         return rejectWithValue(result.error);
       }
-      return result.issues;
+      
+      return {
+        issues: result.issues,
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+        isReset: isReset
+      };
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to fetch issues');
     }
@@ -45,7 +73,7 @@ export const fetchIssueById = createAsyncThunk(
   }
 );
 
-export const fetchIssueTimeline = createAsyncThunk(//new thunk for fetching issue timeline
+export const fetchIssueTimeline = createAsyncThunk(
   'issues/fetchTimeline',
   async (issueId, { rejectWithValue }) => {
     try {
@@ -81,18 +109,43 @@ const issuesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchIssues.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchIssues.pending, (state, action) => {
+        // Trigger full screen loader vs bottom spinner based on the reset flag
+        const isReset = action.meta.arg?.reset !== false;
+        if (isReset) {
+          state.loading = true;
+        } else {
+          state.loadingMore = true;
+        }
         state.error = null;
       })
       .addCase(fetchIssues.fulfilled, (state, action) => {
         state.loading = false;
-        state.issues = action.payload;
+        state.loadingMore = false;
         state.error = null;
+        
+        if (action.payload.isReset) {
+          // Fresh load: overwrite existing issues
+          state.issues = action.payload.issues;
+        } else {
+          // Infinite Scroll: Safely append new issues, filtering duplicates
+          const existingIds = new Set(state.issues.map(i => i.id));
+          const newItems = action.payload.issues.filter(i => !existingIds.has(i.id));
+          state.issues = [...state.issues, ...newItems];
+        }
+
+        // 📍 Always update cursor and stop conditions after a successful fetch
+        state.nextCursor = action.payload.next_cursor;
+        state.hasMore = action.payload.has_more;
       })
       .addCase(fetchIssues.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.loadingMore = false;
+        
+        // Ignore the rejection if it was deliberately stopped by the stop condition
+        if (action.payload !== 'No more items') {
+          state.error = action.payload;
+        }
       })
       .addCase(fetchIssueById.pending, (state) => {
         state.loading = true;
@@ -109,7 +162,7 @@ const issuesSlice = createSlice({
       })
       // Timeline cases
       .addCase(fetchIssueTimeline.pending, (state) => {
-      state.loading = true;
+        state.loading = true;
       })
       .addCase(fetchIssueTimeline.fulfilled, (state, action) => {
         state.loading = false;
@@ -127,6 +180,8 @@ export const { setFilters, clearFilters, setCurrentIssue, clearCurrentIssue } = 
 export const selectAllIssues = (state) => state.issues.issues;
 export const selectCurrentIssue = (state) => state.issues.currentIssue;
 export const selectIssuesLoading = (state) => state.issues.loading;
+export const selectIssuesLoadingMore = (state) => state.issues.loadingMore; // 📍 NEW Selector
+export const selectHasMoreIssues = (state) => state.issues.hasMore; // 📍 NEW Selector
 export const selectIssuesError = (state) => state.issues.error;
 export const selectFilters = (state) => state.issues.filters;
 export const selectIssueById = (state, issueId) => 
@@ -175,10 +230,9 @@ export const selectAwaitingReviewIssues = (state) => {
   return state.issues.issues.filter(issue => issue.status === 'RESOLVED_PENDING_REVIEW');
 };
 
-
 export const selectEscalatedIssues = (state) => {
   return state.issues.issues.filter(issue => issue.status === 'ESCALATED');
 };
-export const selectIssueTimeline = (state) => state.issues.timeline;//new selector for issue timeline
+export const selectIssueTimeline = (state) => state.issues.timeline; //new selector for issue timeline
 
 export default issuesSlice.reducer;

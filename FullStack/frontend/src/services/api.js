@@ -30,7 +30,7 @@ import { withRetry } from '../utils/networkRetry';
 //   return 'http://localhost:8001/api';
 // };
 
-const backendUrl = 'http://localhost:8000';
+const backendUrl = 'http://127.0.0.1:8000';
 
 
 const API_BASE_URL = backendUrl;
@@ -173,33 +173,37 @@ export const getStoredUser = async () => {
 /**
  * Fetch all issues with optional filters
  */
+
+
+/**
+ * Fetch all issues using Cursor-Based Pagination
+ */
 export const fetchIssues = async (filters = {}) => {
   try {
-    const params = new URLSearchParams();
-    if (filters.status) params.append('status', filters.status);
-    if (filters.priority) params.append('priority', filters.priority);
-    if (filters.site_id) params.append('site_id', filters.site_id);
+    // 📍 Let Axios build the query string cleanly to avoid URL parsing errors
+    const queryParams = {};
+    if (filters.status) queryParams.status = filters.status;
+    if (filters.priority) queryParams.priority = filters.priority;
+    if (filters.site_id) queryParams.site_id = filters.site_id;
+    
+    // Add the boss's cursor and limit parameters
+    if (filters.cursor) queryParams.cursor = filters.cursor;
+    queryParams.limit = filters.limit || 10; // fallback to 20 if limit isn't passed
 
+    // Hit the exact URL that worked for you, passing params as an object
     const response = await withRetry(
-      () => api.get(`/api/v1/issues?${params.toString()}/feed`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
+      () => api.get('/api/v1/issues/feed', { params: queryParams }),
       { maxRetries: 2 }
     );
-    console.log(response)
+    
+    const data = response.data;
+    console.log(data)
+    
+    // Fallback to empty array if items is missing
+    const rawItems = data.items || [];
 
-    // Transform response to match frontend expectations
-    // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }
-    //   ...issue,
-    //   site: issue.site ? {
-    //     ...issue.site,
-    //     name: issue.site.name,
-    //   } : null,
-    //   raised_by: issue.raised_by ? {
-    //     ...issue.raised_by,
-    //     avatar: issue.raised_by.avatar_url,
-    //   } : null,
-    // }));
-
-    const issues = response.data.issues.map(issue => ({ // Map backend fields to frontend format
+    // Map backend fields to frontend format
+    const issues = rawItems.map(issue => ({ 
       ...issue,
       site: {
         name: issue.site_name,
@@ -212,6 +216,8 @@ export const fetchIssues = async (filters = {}) => {
     return {
       success: true,
       issues,
+      next_cursor: data.next_cursor || null,
+      has_more: data.has_more ?? false,
     };
   } catch (error) {
     console.error('Fetch issues error:', error.response?.data || error.message);
@@ -219,9 +225,12 @@ export const fetchIssues = async (filters = {}) => {
       success: false,
       error: error.response?.data?.detail || 'Failed to fetch issues',
       issues: [],
+      next_cursor: null,
+      has_more: false,
     };
   }
 };
+
 
 /**
  * Fetch single issue by ID

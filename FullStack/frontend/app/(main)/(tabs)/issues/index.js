@@ -9,6 +9,7 @@ import {
   ScrollView,
   RefreshControl,
   Platform,
+  ActivityIndicator, // 📍 Added for the infinite scroll loading spinner
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,7 +17,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { fetchIssues, selectAllIssues, selectIssuesLoading } from '../../../../src/store/slices/issuesSlice';
+import { 
+  fetchIssues, 
+  selectAllIssues, 
+  selectIssuesLoading,
+  selectIssuesLoadingMore, // 📍 Added
+  selectHasMoreIssues      // 📍 Added
+} from '../../../../src/store/slices/issuesSlice';
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import IssueCard from '../../../../src/components/issue/IssueCard';
 import Loader from '../../../../src/components/common/Loader';
@@ -50,6 +57,11 @@ export default function IssuesTabScreen() {
   const user = useSelector(selectCurrentUser);
   const allIssues = useSelector(selectAllIssues);
   const loading = useSelector(selectIssuesLoading);
+  
+  // 📍 NEW: Track cursor pagination state
+  const loadingMore = useSelector(selectIssuesLoadingMore);
+  const hasMore = useSelector(selectHasMoreIssues);
+  
   const isOnline = useSelector(selectIsOnline);
 
   const [searchText, setSearchText] = useState('');
@@ -68,8 +80,9 @@ export default function IssuesTabScreen() {
 
   const debouncedSearch = useDebounce(searchText, 300);
 
+  // 📍 UPDATED: Initial load explicitly asks for a reset (sends null cursor)
   useEffect(() => {
-    if (user) dispatch(fetchIssues(user));
+    if (user) dispatch(fetchIssues({ reset: true }));
   }, [user, dispatch]);
 
   const realSites = useMemo(() => {
@@ -168,6 +181,7 @@ export default function IssuesTabScreen() {
     });
   }, [allIssues, debouncedSearch, appliedFilters]);
 
+  // 📍 UPDATED: Pull-to-refresh forces a cursor reset
   const onRefresh = useCallback(async () => {
     if (!isOnline) {
       setToastMessage("Can't refresh while offline");
@@ -185,7 +199,7 @@ export default function IssuesTabScreen() {
     if (user) {
       try {
         await Promise.allSettled([
-          dispatch(fetchIssues(user))
+          dispatch(fetchIssues({ reset: true }))
         ]);
       } finally {
         setLastRefresh(Date.now());
@@ -195,6 +209,13 @@ export default function IssuesTabScreen() {
       setRefreshing(false);
     }
   }, [user, isOnline, lastRefresh, dispatch]);
+
+  // 📍 NEW: Trigger infinite scroll load
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore && isOnline) {
+      dispatch(fetchIssues({ reset: false })); // Tells thunk to use stored cursor
+    }
+  };
 
   const handleIssuePress = (issue) => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } });
   const handleApplyFilters = (filters) => setAppliedFilters(filters);
@@ -324,6 +345,17 @@ export default function IssuesTabScreen() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => <IssueCard issue={item} onPress={() => handleIssuePress(item)} />}
         contentContainerStyle={styles.listContent}
+        
+        // 📍 NEW: Infinite Scroll Props Hooked Up
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5} 
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.loadingFooter}>
+              <ActivityIndicator size="small" color={theme.primary} />
+            </View>
+          ) : null
+        }
 
         ListHeaderComponent={
           <View style={styles.headerComponentWrapper}>
@@ -384,8 +416,9 @@ export default function IssuesTabScreen() {
 
             {/* ── RESULTS COUNT ── */}
             <View style={styles.resultsHeader}>
+              {/* 📍 UPDATED: Changed to show exactly how many issues are loaded into the app */}
               <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
-                {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
+                {filteredIssues.length} loaded issue{filteredIssues.length !== 1 ? 's' : ''}
               </Text>
             </View>
           </View>
@@ -504,4 +537,11 @@ const styles = StyleSheet.create({
   resultsCount: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
 
   listContent: { paddingBottom: 24 },
+  
+  // 📍 NEW: Style for the bottom spinner
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center'
+  }
 });

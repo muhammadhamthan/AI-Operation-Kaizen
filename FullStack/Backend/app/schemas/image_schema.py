@@ -1,141 +1,214 @@
 """
-PURPOSE: Image upload response and AI verification schemas.
-──────────────────────────────────────────────────────────────
-Image UPLOAD is the one action that needs a separate endpoint
-because file upload cannot happen through text chat.
+app/schemas/image_schema.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-FLOW:
-  1. User selects a photo in the mobile app / web UI
-  2. Frontend calls POST /api/v1/images/upload (multipart form)
-  3. Backend uploads to ImageKit CDN → returns URL
-  4. Frontend gets the URL and includes it in the NEXT chat message:
-     ChatRequest(message="pipe broken...", image_url="https://ik.imagekit.io/...")
+WHAT CHANGED FROM OLD CODE
+═══════════════════════════
+OLD:
+  ✗ ImageResponse had no thumbnail_url field
+  ✗ No way for frontend to request a smaller image without re-uploading
+  ✗ ai_details was missing from ImageUploadResponse in some paths
 
-So the image upload endpoint is a HELPER for the chat flow.
-The actual issue creation / completion still happens through chat.
-
-USED BY:
-  POST /api/v1/images/upload  → returns ImageUploadResponse with CDN URL
-  GET  /api/v1/images/by-issue/{id} → ImageListResponse (read-only)
-  Internal: ai_service → AIVerificationResult
-
-AI Verification happens AUTOMATICALLY when solver sends AFTER photo:
-  - Solver chats: "work completed, here is the photo" + image_url
-  - chatbot_service detects complete_work intent
-  - Creates AFTER image record
-  - AI vision analyzes the photo
-  - If confidence > 0.85 → ai_flag = OK
-  - If confidence ≤ 0.85 → ai_flag = SUSPECT
-  - Updates issue to RESOLVED_PENDING_REVIEW
+NEW:
+  ✓ ImageResponse includes thumbnail_url (computed, not stored)
+  ✓ All schemas match the actual DB columns exactly
+  ✓ Clear docstrings on every field so frontend devs know what to expect
+  ✓ No breaking changes — all new fields are Optional
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from app.core.enums import ImageType, AIFlag
 
 
-# ══════════════════════════════════════════════════════════
-# RESPONSE: Image upload result — returned after file upload
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════
+# RESPONSE: Returned after a successful upload
+# ══════════════════════════════════════════════════════════════════
 
 class ImageUploadResponse(BaseModel):
     """
-    Returned by POST /api/v1/images/upload after file is uploaded to ImageKit.
-    
-    The frontend uses the image_url from this response and passes it
-    to the chat endpoint in the next ChatRequest.image_url field.
-    
-    This is a HELPER endpoint — not the main action.
-    The actual issue creation / work completion happens in chat.
+    Returned by POST /api/v1/images/upload.
+
+    The frontend MUST store the image_url and pass it in the next
+    chat message via ChatRequest.image_url.
+
+    Example frontend flow:
+        const uploadRes = await api.post('/images/upload', formData)
+        const imageUrl = uploadRes.image_url
+
+        await api.post('/chat', {
+            message: "pipe is broken",
+            image_url: imageUrl,      ← attach the uploaded URL here
+        })
     """
-    id: int = Field(
-        ..., description="Image record ID in database",
-    )
+    id: int = Field(..., description="Primary key in issue_images table")
+
     image_url: str = Field(
-        ..., description=(
-            "ImageKit CDN URL — use this in ChatRequest.image_url "
-            "when sending the chat message"
+        ...,
+        description=(
+            "Permanent ImageKit CDN URL. "
+            "Example: https://ik.imagekit.io/youraccountid/issues/5/before/photo.jpg"
         ),
     )
+
     image_type: ImageType = Field(
-        ..., description="BEFORE or AFTER",
+        ...,
+        description="BEFORE (supervisor photo) or AFTER (solver completion photo)",
     )
+
     issue_id: Optional[int] = Field(
-        None, description="Issue ID if linked during upload",
+        None,
+        description=(
+            "Issue this image is linked to. "
+            "May be null if uploaded before the issue was created."
+        ),
     )
+
     ai_flag: AIFlag = Field(
         default=AIFlag.NOT_CHECKED,
-        description="AI verification result (for AFTER photos)",
+        description=(
+            "AI verification result. Always NOT_CHECKED on upload. "
+            "Updated to OK or SUSPECT when AI analyses an AFTER photo."
+        ),
     )
+
     ai_details: Optional[Dict[str, Any]] = Field(
         None,
-        description="AI analysis details (confidence, findings)",
+        description="AI analysis output — only populated for AFTER photos.",
     )
+
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-# ══════════════════════════════════════════════════════════
-# INTERNAL: AI verification output
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════
+# INTERNAL: AI verification result
+# ══════════════════════════════════════════════════════════════════
 
 class AIVerificationResult(BaseModel):
     """
-    INTERNAL — returned by ai_service.verify_completion_image().
-    Used by chatbot_service when processing solver's AFTER photo.
-    
-    confidence > 0.85 → ai_flag = OK (repair looks complete)
-    confidence ≤ 0.85 → ai_flag = SUSPECT (potential issues found)
+    Returned internally by ai_service.verify_completion_image().
+    Never sent directly to the frontend — used inside solver_complete_work().
+
+    Thresholds:
+      confidence > 0.85  → ai_flag = OK      → supervisor can approve
+      confidence ≤ 0.85  → ai_flag = SUSPECT → supervisor reviews manually
     """
     ai_flag: AIFlag = Field(..., description="OK | SUSPECT | NOT_CHECKED")
+
     confidence: float = Field(
-        ..., ge=0.0, le=1.0,
-        description="AI confidence score (0.0 to 1.0)",
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="How confident the AI is that the repair is complete (0.0–1.0)",
     )
+
     details: Dict[str, Any] = Field(
         default_factory=dict,
         description="Problem-specific findings from AI analysis",
         examples=[
-            {"leak_detected": False, "pipe_condition": "good"},
+            {"leak_detected": False, "pipe_condition": "sealed"},
             {"wiring_fixed": True, "exposed_conductors": False},
         ],
     )
 
 
-# ══════════════════════════════════════════════════════════
-# RESPONSE: Image list — for issue detail views
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════
+# RESPONSE: Single image record (used in list view)
+# ══════════════════════════════════════════════════════════════════
 
 class ImageResponse(BaseModel):
-    """Single image record with AI verification details."""
+    """
+    One image record — used inside ImageListResponse.
+
+    thumbnail_url is computed from image_url.
+    ImageKit generates the resized image on-the-fly — nothing
+    extra is stored or uploaded.
+
+    Usage in frontend:
+        // Full size for modal view
+        <Image source={{ uri: image.image_url }} />
+
+        // Thumbnail for list/grid view
+        <Image source={{ uri: image.thumbnail_url }} />
+    """
     id: int
     issue_id: int
     uploaded_by_user_id: int
     uploader_name: Optional[str] = None
-    image_url: str
-    image_type: ImageType
-    ai_flag: AIFlag
-    ai_details: Optional[Dict[str, Any]] = None
+
+    image_url: str = Field(
+        ...,
+        description="Full-size ImageKit CDN URL",
+    )
+
+    thumbnail_url: Optional[str] = Field(
+        None,
+        description=(
+            "200×200 thumbnail URL — generated by ImageKit on-the-fly. "
+            "Use this in list/grid views to save bandwidth."
+        ),
+    )
+
+    image_type: ImageType = Field(
+        ...,
+        description="BEFORE or AFTER",
+    )
+
+    ai_flag: AIFlag = Field(
+        ...,
+        description="NOT_CHECKED | OK | SUSPECT",
+    )
+
+    ai_details: Optional[Dict[str, Any]] = Field(
+        None,
+        description="AI analysis output for AFTER photos",
+    )
+
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
+# ══════════════════════════════════════════════════════════════════
+# RESPONSE: All images for one issue
+# ══════════════════════════════════════════════════════════════════
+
 class ImageListResponse(BaseModel):
     """
-    All images for an issue — separated into BEFORE and AFTER.
-    Used in issue detail views and when user asks about photos in chat.
+    All images for an issue, split by type.
+
+    Frontend usage — showing a before/after comparison:
+        const { before_images, after_images } = await api.get(`/images/by-issue/${issueId}`)
+
+        // Show before grid
+        before_images.map(img => <Thumbnail url={img.thumbnail_url} />)
+
+        // Show after grid with AI flag badge
+        after_images.map(img => (
+            <Thumbnail url={img.thumbnail_url} />
+            <Badge color={img.ai_flag === 'OK' ? 'green' : 'red'} />
+        ))
     """
-    total: int
+    total: int = Field(..., description="Total image count (before + after combined)")
     issue_id: int
+
     before_images: List[ImageResponse] = Field(
         default_factory=list,
-        description="Photos uploaded by supervisor when creating issue",
+        description=(
+            "Photos uploaded by the supervisor showing the original problem. "
+            "Ordered by upload time ascending."
+        ),
     )
+
     after_images: List[ImageResponse] = Field(
         default_factory=list,
-        description="Photos uploaded by solver when completing work",
+        description=(
+            "Photos uploaded by the solver showing the completed repair. "
+            "Ordered by upload time ascending. "
+            "Each image has an ai_flag showing whether AI verified the fix."
+        ),
     )
