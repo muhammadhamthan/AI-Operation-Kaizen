@@ -498,7 +498,7 @@ def create_issue_from_data(data):
 
     skill = data.get("skill_name")
     location = data.get("site_location")
-    days = data.get("days_to_fix")
+    days = data.get("days_to_fix",2)
     
     if not days:
             return "❌ Deadline (days_to_fix) is required but was not provided."
@@ -1615,26 +1615,6 @@ async def run_general_llm(session_id: str, user_input: str):
     save_memory(session_id, memory)
 
     return final_answer
-# ==================================================
-# CLI
-# ==================================================
-
-if __name__ == "__main__":
-
-    print("🔥 MASTER AI SYSTEM READY")
-
-    while True:
-
-        msg = input("\nYou: ")
-
-        if msg.lower() in ["exit","quit"]:
-            break
-
-        result = master_agent(msg)
-
-        print("\n==============================")
-        print(result)
-        print("==============================")
 
 
 
