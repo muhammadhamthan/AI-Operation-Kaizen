@@ -368,27 +368,33 @@ export const fetchDashboardStats = async () => {
 /**
  * Fetch all complaints
  */
-export const fetchComplaints = async () => {
+
+export const fetchComplaints = async ({ cursor = null, limit = 20 } = {}) => {
   try {
-    const response = await api.get('/api/v1/complaints/feed');
+    const queryParams = { limit };
+    if (cursor) queryParams.cursor = cursor;
 
-    // 📍 EXACT DATA: Pass the backend response directly without mutating it
-    // Handle both { complaints: [...] } or direct array [...] responses
-    const complaints = response.data.complaints || response.data || [];
+    // 📍 CHANGED: 'feed' to 'Complaintfeed' to match Python router
+    const response = await api.get('/api/v1/complaints/Complaintfeed', { params: queryParams });
 
+    // Return the whole object exactly as backend sent it
+    const complaintsData = response.data || {};
+    console.log(complaintsData)
+    
     return {
       success: true,
-      complaints,
+      complaints: complaintsData, // Passes { items, next_cursor, has_more } to Redux
     };
 
   } catch (error) {
     console.error("Fetch complaints error:", error);
     return {
       success: false,
-      complaints: [],
+      complaints: { items: [], next_cursor: null, has_more: false },
     };
   }
 };
+
 export const fetchComplaintById = async (id) => {
   try {
     const response = await api.get(`/api/v1/complaints/${id}`);
@@ -488,6 +494,7 @@ export const sendChatMessage = async (
     };
 
     const response = await api.post('/api/v1/chat/', requestBody);
+    console.log(response)
 
     return {
       success: true,

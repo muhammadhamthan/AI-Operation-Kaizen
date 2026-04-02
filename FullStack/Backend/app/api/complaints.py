@@ -21,6 +21,7 @@ from app.services.complaint_service import ComplaintService
 from app.schemas.complaint_schema import (
     ComplaintResponse,
     ComplaintListResponse,
+    ComplaintFeedItem,
 )
 from app.schemas.pagination_schema import CursorPage, CursorParams
 
@@ -28,8 +29,8 @@ router = APIRouter()
 
 
 @router.get(
-    "/feed",
-    response_model=CursorPage[ComplaintResponse],
+    "/Complaintfeed",
+    response_model=CursorPage[ComplaintFeedItem],
     summary="Cursor-paginated complaint feed (fast, use for all UI pages)",
 )
 async def get_complaints_feed(

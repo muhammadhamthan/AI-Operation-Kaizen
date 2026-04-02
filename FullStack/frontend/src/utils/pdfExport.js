@@ -38,7 +38,7 @@ export const exportChartToPDF = async (chartUri, chartType) => {
         </head>
         <body>
           <div class="header">
-            <h1 class="title">MaintenanceFlow AI</h1>
+            <h1 class="title">Kairox Ai Opex AI</h1>
             <p class="subtitle">${chartType} Report • Generated ${new Date().toLocaleDateString()}</p>
           </div>
 

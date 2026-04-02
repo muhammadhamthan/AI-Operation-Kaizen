@@ -219,7 +219,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.titleButton} activeOpacity={0.7}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>MaintenanceFlow</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Kairox Ai Opex</Text>
           <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
         </TouchableOpacity>
 

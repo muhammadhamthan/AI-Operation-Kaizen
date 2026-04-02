@@ -1591,6 +1591,33 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
+    
+
+async def run_general_llm(session_id: str, user_input: str):
+        memory = load_memory(session_id)
+
+        history_messages = memory.chat_memory.messages[-10:]
+        history_text = ""
+        for msg in history_messages:
+            role = "User" if msg.type == "human" else "AI"
+            history_text += f"{role}: {msg.content}\n"
+
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "You are a helpful AI assistant."},
+                {"role": "user", "content": f"{history_text}\nUser: {user_input}"}
+            ],
+            temperature=0.3
+        )
+
+        final_answer = response.choices[0].message.content
+
+        memory.chat_memory.add_user_message(user_input)
+        memory.chat_memory.add_ai_message(final_answer)
+        save_memory(session_id, memory)
+
+        return final_answer
 # ==================================================
 # CLI
 # ==================================================

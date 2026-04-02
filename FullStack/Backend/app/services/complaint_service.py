@@ -176,7 +176,7 @@ class ComplaintService:
         params: CursorParams,
         issue_id: Optional[int] = None,
         solver_id: Optional[int] = None,
-    ) -> CursorPage[ComplaintResponse]:
+    ) -> CursorPage[ComplaintFeedItem]:
         """
         Single JOIN query — no selectinload, no N+1, no separate COUNT.
  
