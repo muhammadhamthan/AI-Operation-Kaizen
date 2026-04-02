@@ -176,7 +176,7 @@ class ComplaintService:
         params: CursorParams,
         issue_id: Optional[int] = None,
         solver_id: Optional[int] = None,
-    ) -> CursorPage[ComplaintResponse]:
+    ) -> CursorPage[ComplaintFeedItem]:
         """
         Single JOIN query — no selectinload, no N+1, no separate COUNT.
  
@@ -357,18 +357,18 @@ class ComplaintService:
     @staticmethod
     def _to_response(complaint: Complaint) -> ComplaintResponse:
         return ComplaintResponse(
-            id=complaint["id"],
-            issue_id=complaint["issue_id"],
-            issue_title=complaint.get("issue_title"),
-            assignment_id=complaint["assignment_id"],
-            raised_by_supervisor_id=complaint["raised_by_supervisor_id"],
-            supervisor_name=complaint.get("supervisor_name"),
-            target_solver_id=complaint["target_solver_id"],
-            solver_name=complaint.get("solver_name"),
-            complaint_details=complaint["complaint_details"],
-            complaint_image_url=complaint["complaint_image_url"],
-            created_at=complaint["created_at"],
-            updated_at=complaint["updated_at"],
+            id=complaint.id,
+            issue_id=complaint.issue_id,
+            issue_title=complaint.issue.title if complaint.issue else None,
+            assignment_id=complaint.assignment_id,
+            raised_by_supervisor_id=complaint.raised_by_supervisor_id,
+            supervisor_name=complaint.raised_by_supervisor.name if complaint.raised_by_supervisor else None,
+            target_solver_id=complaint.target_solver_id,
+            solver_name=complaint.target_solver.name if complaint.target_solver else None,
+            complaint_details=complaint.complaint_details,
+            complaint_image_url=complaint.complaint_image_url,
+            created_at=complaint.created_at,
+            updated_at=complaint.updated_at,
         )
         
     @staticmethod

@@ -25,7 +25,7 @@ from langchain_community.agent_toolkits.sql.base import create_sql_agent
 from sqlalchemy import text
 from twilio.rest import Client
 
-from app.db.session import SessionLocal
+from app.db.session import AsyncSessionLocal, SessionLocal
 from app.core.config import settings
 
 load_dotenv()
@@ -382,14 +382,12 @@ def safe_json_parse(text):
 # ==================================================
 
 async def extract_issue(message: str, available_sites=None):
-
-    # ── Fetch valid skills from DB ──
-    conn = connect_db()
-    try:
-        rows = conn.execute(text("SELECT DISTINCT skill_type FROM problem_solver_skills")).fetchall()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text("SELECT DISTINCT skill_type FROM problem_solver_skills")
+        )
+        rows = result.fetchall()
         valid_skills = [row[0].lower() for row in rows]
-    finally:
-        conn.close()
 
     # ── Format sites ──
     if available_sites:
@@ -1591,6 +1589,32 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
+    
+async def run_general_llm(session_id: str, user_input: str):
+    memory = load_memory(session_id)
+
+    history_messages = memory.chat_memory.messages[-10:]
+    history_text = ""
+    for msg in history_messages:
+        role = "User" if msg.type == "human" else "AI"
+        history_text += f"{role}: {msg.content}\n"
+
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": f"{history_text}\nUser: {user_input}"}
+        ],
+        temperature=0.3
+    )
+
+    final_answer = response.choices[0].message.content
+
+    memory.chat_memory.add_user_message(user_input)
+    memory.chat_memory.add_ai_message(final_answer)
+    save_memory(session_id, memory)
+
+    return final_answer
 # ==================================================
 # CLI
 # ==================================================
