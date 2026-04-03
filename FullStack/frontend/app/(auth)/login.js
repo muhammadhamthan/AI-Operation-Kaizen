@@ -21,7 +21,7 @@ import Input from '../../src/components/common/Input';
 import Button from '../../src/components/common/Button';
 
 // Pre-require images for performance, adjust paths if needed
-const logoDark = require('../../assets/images/kaizen_logo_dark.jpeg');
+const logoDark = require('../../assets/images/kaizen_logo_dark.png');
 const logoWhite = require('../../assets/images/kaizen_logo_white.jpeg');
 
 export default function LoginScreen() {
@@ -129,7 +129,7 @@ export default function LoginScreen() {
             ]}
           >
             {/* 📍 Pure Image - No shadows, no borders, no boxes */}
-            <Animated.View style={{ transform: [{ scale: logoScale }], marginBottom: 24 }}>
+            <Animated.View style={{ transform: [{ scale: logoScale }], marginBottom: 32 }}>
               <Image
                 source={isDark ? logoDark : logoWhite}
                 style={styles.logoImage}
@@ -138,7 +138,7 @@ export default function LoginScreen() {
             </Animated.View>
 
             <Text style={[styles.title, { color: textColor }]}>
-              MaintenanceFlow
+              Kairox Ai Opex
             </Text>
             <Text style={[styles.subtitle, { color: mutedColor }]}>
               Industrial Issue Tracking
@@ -221,8 +221,8 @@ const styles = StyleSheet.create({
     marginBottom: 56, 
   },
   logoImage: {
-    width: 200, 
-    height: 100, 
+    width: 380, // 📍 Cranked up from 200
+    height: 240, // 📍 Cranked up from 100
   },
   title: {
     fontSize: 34,

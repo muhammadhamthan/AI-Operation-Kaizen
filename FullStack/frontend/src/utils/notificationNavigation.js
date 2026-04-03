@@ -136,8 +136,8 @@ export const getNavigationPreview = (notification) => {
  */
 export const parseDeepLink = (url) => {
   try {
-    // Expected format: maintenanceflow://issue/123 or maintenanceflow://complaint/456
-    const match = url.match(/maintenanceflow:\/\/(\w+)\/(\d+)/);
+    // Expected format: kairox ai opex://issue/123 or kairox ai opex://complaint/456
+    const match = url.match(/kairox ai opex:\/\/(\w+)\/(\d+)/);
     
     if (match) {
       const [, type, id] = match;

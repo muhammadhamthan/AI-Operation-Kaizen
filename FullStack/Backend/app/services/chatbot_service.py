@@ -152,7 +152,6 @@ class ChatbotService:
                             user=user,
                             message=args["message"],
                             image_url=image_url,
-                            ai_service=None,
                         )
 
                     elif func == "approve_completion":

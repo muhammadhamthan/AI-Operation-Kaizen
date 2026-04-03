@@ -433,7 +433,7 @@ STRICT RULE: NEVER invent a site. ONLY return a value from the list above or nul
 OUTPUT RULES:
 - Return ONLY valid JSON — no explanation, no markdown, no extra text.
 - skill_name  → must be from {valid_skills} or null
-- site_location → must be from {sites_list} or null
+- site_location → must be from {sites_list}
 - days_to_fix → integer or null
 - priority    → "LOW", "MEDIUM", or "HIGH" based on urgency of the message
 """
@@ -499,7 +499,7 @@ def create_issue_from_data(data):
     skill = data.get("skill_name")
     location = data.get("site_location")
     days = data.get("days_to_fix",2)
-    
+   
     if not days:
             return "❌ Deadline (days_to_fix) is required but was not provided."
 
@@ -697,7 +697,7 @@ def get_database():
 
 
 def sql_agent_executor(session_id: str):
-    
+   
     db = get_database()
 
     llm = ChatGroq(
@@ -755,7 +755,7 @@ Instructions:
         })
 
         result = response.get("output", str(response))
-        
+       
         explanation = groq_client.chat.completions.create(
     model="llama-3.3-70b-versatile",
     messages=[
@@ -900,7 +900,7 @@ If this is a follow-up or elaboration request, give full detail based on history
 )
 
         final_answer = explanation.choices[0].message.content
-        
+       
         print("SQL Agent Result:", result)
         print("SQL Agent Explanation:", final_answer)
 
@@ -1119,7 +1119,7 @@ Use the conversation history above to:
 
 Add these lines right after the bullet points:
 ```
-→ If the last AI message starts with [PENDING:function_name], the user's current 
+→ If the last AI message starts with [PENDING:function_name], the user's current
   reply is the answer to the missing arg for that function.
   Extract the value, combine with all prior args, and call that function immediately.
 → Example: AI: "[PENDING:approve_completion] I need the Issue ID."
@@ -1351,7 +1351,7 @@ RULE 2 — COLLECT MISSING ARGS:
 → Use conversation history (Redis) to recover args from prior turns.
 
 RULE 3 — MESSAGE CONTRADICTS SELECTION:
-→ If the user's message clearly describes a DIFFERENT action (e.g. they selected 
+→ If the user's message clearly describes a DIFFERENT action (e.g. they selected
   "approve" but typed "extend deadline for issue 5"), do NOT silently call the wrong function.
 → Instead respond:
   "You selected [{indent}] from the menu, but your message looks like a different action.
@@ -1420,7 +1420,7 @@ async def master_agent(session_id: str, user_input: str, indent: str):
     None
 )
     if last_ai_msg and "[PENDING:create_issue|site_clarification|" in last_ai_msg:
-        
+       
         match = re.search(
         r"\[PENDING:create_issue\|site_clarification\|(.*?)\]",
         last_ai_msg
@@ -1428,11 +1428,11 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         if match:
             original_message = match.group(1)
             corrected_message = f"{original_message} (site: {user_input.strip()})"
-        
+       
             memory.chat_memory.add_user_message(user_input)
             memory.chat_memory.add_ai_message(f"Called: create_issue({{'message': '{corrected_message}'}})")
             save_memory(session_id, memory)
-        
+       
             return {
             "intent": "function_call",
             "calls": [{"function": "create_issue", "args": {"message": corrected_message}}],
@@ -1589,7 +1589,7 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
-    
+   
 async def run_general_llm(session_id: str, user_input: str):
     memory = load_memory(session_id)
 

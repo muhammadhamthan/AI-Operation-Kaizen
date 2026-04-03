@@ -55,11 +55,6 @@ from app.schemas.call_log_schema import (
     CallLogListResponse,
     CallStatusCallback,
 )
-from app.schemas.image_schema import (
-    ImageUploadResponse,
-    ImageListResponse,
-    AIVerificationResult,
-)
 from app.schemas.complaint_schema import (
     ComplaintResponse,
     ComplaintListResponse,

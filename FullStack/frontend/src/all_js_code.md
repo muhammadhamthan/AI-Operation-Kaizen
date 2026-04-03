@@ -962,7 +962,7 @@ const ChatMessage = ({ message, image, isUser, timestamp, status = 'sent' }) => 
         
         {/* Label (ChatGPT removed these for a cleaner look, so we make it super subtle) */}
         {!isUser && (
-          <Text style={[styles.label, { color: theme.textSecondary }]}>MaintenanceFlow AI</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>Kairox Ai Opex AI</Text>
         )}
 
         {/* ── Message Bubble ── */}
@@ -10917,8 +10917,8 @@ export const getNavigationPreview = (notification) => {
  */
 export const parseDeepLink = (url) => {
   try {
-    // Expected format: maintenanceflow://issue/123 or maintenanceflow://complaint/456
-    const match = url.match(/maintenanceflow:\/\/(\w+)\/(\d+)/);
+    // Expected format: kairox ai opex://issue/123 or kairox ai opex://complaint/456
+    const match = url.match(/kairox ai opex:\/\/(\w+)\/(\d+)/);
     
     if (match) {
       const [, type, id] = match;
@@ -11070,7 +11070,7 @@ export const exportChartToPDF = async (chartUri, chartType) => {
         </head>
         <body>
           <div class="header">
-            <h1 class="title">MaintenanceFlow AI</h1>
+            <h1 class="title">Kairox Ai Opex AI</h1>
             <p class="subtitle">${chartType} Report • Generated ${new Date().toLocaleDateString()}</p>
           </div>
 

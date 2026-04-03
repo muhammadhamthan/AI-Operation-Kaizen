@@ -78,7 +78,6 @@ class IssueService:
         user: User,
         message: str,
         image_url: Optional[str],
-        ai_service,
     ) -> ChatResponse:
         
         actions = []
@@ -122,6 +121,30 @@ class IssueService:
         )
         
         print("--------------------------",extraction)
+        
+        deadline_info = extraction['days_to_fix']
+        if not deadline_info:
+            return ChatResponse(
+                message=(
+                    f"[PENDING:create_issue|deadline_clarification|{message}]\n"
+                    f"❌ Couldn't extract deadline information from the message. "
+                    f"Please specify how many days until the issue needs to be fixed (e.g., 'in 3 days')."
+                ),
+                intent="create_issue",
+                actions_taken=["Deadline extraction failed"],
+            )
+        
+        location_name = extraction['site_location']
+        if not location_name:
+            return ChatResponse(
+                message=(
+                    f"[PENDING:create_issue|site_clarification|{message}]\n"
+                    f"❌ Couldn't extract site location from the message. "
+                    f"Please specify the site name (e.g., 'at Main Street')."
+                ),
+                intent="create_issue",
+                actions_taken=["Site extraction failed"],
+            )
       
 
         # ── 3. Site matching ─────────────────────────────

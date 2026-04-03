@@ -142,7 +142,7 @@ export default function LoginScreen() {
             </Animated.View>
 
             <Text style={[styles.title, { color: textColor }]}>
-              MaintenanceFlow
+              Kairox Ai Opex
             </Text>
             <Text style={[styles.subtitle, { color: mutedColor }]}>
               Industrial Issue Tracking
@@ -8240,7 +8240,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.titleButton} activeOpacity={0.7}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>MaintenanceFlow</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Kairox Ai Opex</Text>
           <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
         </TouchableOpacity>
 
