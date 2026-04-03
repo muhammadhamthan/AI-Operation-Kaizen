@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.session import async_engine
 from app.db.base import Base
+from app.api.dashboard_cards import router as dashboard_cards_router
 
 # Import all models so metadata knows every table
 import app.models  # noqa
@@ -119,6 +120,7 @@ app.include_router(site_router, prefix="/api/v1/sites", tags=["Sites"])
 app.include_router(webhooks_router, prefix="/api/v1/webhooks", tags=["Webhooks"])
 # app.include_router(history_router, prefix="/api/v1/history", tags=["History"])
 
+app.include_router(dashboard_cards_router,prefix="/api/v1/dashboard-cards",tags=["Dashboard Cards"])
 
 # ──────────────────────────────────────────────────────────
 # Health Check

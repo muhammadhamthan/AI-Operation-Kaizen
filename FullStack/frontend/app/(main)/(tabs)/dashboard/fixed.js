@@ -7,7 +7,8 @@ import {
   TextInput, 
   TouchableOpacity, 
   RefreshControl,
-  Platform 
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,13 +16,22 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { fetchIssues, selectFixedIssues, selectIssuesLoading, setFilters } from '../../../../src/store/slices/issuesSlice';
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import IssueCard from '../../../../src/components/issue/IssueCard';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
+import { 
+  fetchResolvedIssues, 
+  selectFixedIssues, 
+  selectIssuesLoading, 
+  setFilters,
+  selectIsFetchingNextPage,
+  selectHasMoreIssues,
+  selectIssuesNextCursor
+} from '../../../../src/store/slices/issuesSlice';
 
 export default function FixedIssuesScreen() {
   const { theme, isDark } = useTheme(); 
@@ -33,13 +43,17 @@ export default function FixedIssuesScreen() {
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
   
+  const isFetchingNextPage = useSelector(selectIsFetchingNextPage);
+  const hasMore = useSelector(selectHasMoreIssues);
+  const nextCursor = useSelector(selectIssuesNextCursor);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
-    if (user) dispatch(fetchIssues(user));
+    if (user) dispatch(fetchResolvedIssues({}));
   }, [user]);
 
   useEffect(() => {
@@ -65,7 +79,7 @@ export default function FixedIssuesScreen() {
     if (user) {
       try {
         await Promise.allSettled([
-          dispatch(fetchIssues(user))
+          dispatch(fetchResolvedIssues({})) 
         ]);
       } finally {
         setLastRefresh(Date.now());
@@ -75,6 +89,13 @@ export default function FixedIssuesScreen() {
       setRefreshing(false);
     }
   }, [user, isOnline, lastRefresh, dispatch]);
+
+  // 📍 INFINITE SCROLL TRIGGER (FIXED)
+  const handleLoadMore = () => {
+    if (!isOnline || isFetchingNextPage || !hasMore || loading) return;
+    // 📍 Pass reset: false so the slice knows to APPEND the new array, not replace it
+    dispatch(fetchResolvedIssues({ cursor: nextCursor, reset: false }));
+  };
 
   const filteredIssues = issues.filter((issue) => {
     if (!searchText) return true;
@@ -171,6 +192,15 @@ export default function FixedIssuesScreen() {
             />
           )
         }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={successAccent} />
+            </View>
+          ) : null
+        }
       />
 
       <FullScreenSpinner visible={refreshing} message="Updating Resolved Issues..." color={successAccent} />
@@ -212,4 +242,6 @@ const styles = StyleSheet.create({
   resultsCount: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
 });

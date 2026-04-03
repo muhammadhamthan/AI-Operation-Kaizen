@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router'; // ✅ Added router hooks
-import { Provider, useDispatch, useSelector } from 'react-redux'; // ✅ Added useSelector
+import { Stack, useRouter, useSegments } from 'expo-router'; 
+import { Provider, useDispatch, useSelector } from 'react-redux'; 
 import { store } from '../src/store';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
-import { checkAuthStatus, selectIsInitialized, selectIsAuthenticated } from '../src/store/slices/authSlice'; // ✅ Import upgraded Redux actions/selectors
+import { checkAuthStatus, selectIsInitialized, selectIsAuthenticated } from '../src/store/slices/authSlice'; 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // 📍 IMPORTED THIS
 
 // ── IMPORT UPGRADED COMPONENTS ──
 import Loader from '../src/components/common/Loader';
@@ -16,43 +17,69 @@ import useNetworkStatus from '../src/hooks/useNetworkStatus';
 
 function AppContent() {
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+  const [isFirstLaunch, setIsFirstLaunch] = useState(null); // 📍 ADDED ONBOARDING STATE
+
   const dispatch = useDispatch();
   const router = useRouter();
   const segments = useSegments();
   
-  // ✅ Pull auth state from Redux
   const isInitialized = useSelector(selectIsInitialized);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   
-  // 🚀 ACTIVATE THE ENGINE: This hook now listens for network changes globally
   const { isConnected } = useNetworkStatus();
 
-  // 1. Kick off Redux Auth Check on mount
+  // 1. Kick off Redux Auth Check AND Onboarding Check on mount
   useEffect(() => {
-    dispatch(checkAuthStatus()).finally(() => {
+    const prepareApp = async () => {
+      try {
+        // 📍 Check if they've seen the onboarding screen before
+        const hasSeen = await AsyncStorage.getItem('has_seen_onboarding');
+        setIsFirstLaunch(hasSeen !== 'true');
+      } catch (error) {
+        setIsFirstLaunch(true); // Default to showing it if error
+      }
+
+      // Check Auth
+      await dispatch(checkAuthStatus());
+      
       // Keep your 500ms visual delay for a smooth entrance
       setTimeout(() => setIsSplashVisible(false), 500);
-    });
+    };
+
+    prepareApp();
   }, [dispatch]);
 
-  // 2. THE AUTH GUARD (Stops the refresh bug)
+// 2. THE ULTIMATE AUTH & ONBOARDING GUARD
   useEffect(() => {
-    // Don't attempt to route until storage is checked and splash is done
-    if (!isInitialized || isSplashVisible) return;
+    const runGuard = async () => {
+      // Don't attempt to route until initial checks and splash are done
+      if (!isInitialized || isFirstLaunch === null || isSplashVisible) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
+      // 📍 THE FIX: Dynamically re-read storage right before routing so it's NEVER stale!
+      const hasSeen = await AsyncStorage.getItem('has_seen_onboarding');
+      const reallyFirstLaunch = hasSeen !== 'true';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      // ❌ Not logged in? Protect the main screens and kick to login
-      router.replace('/(auth)/login');
-    } else if (isAuthenticated && inAuthGroup) {
-      // ✅ Logged in but stuck on the login screen? Send to chat
-      router.replace('/(main)/(tabs)/chat');
-    }
-  }, [isInitialized, isAuthenticated, segments, isSplashVisible]);
+      const inAuthGroup = segments[0] === '(auth)';
+      const inOnboarding = segments[0] === 'onboarding';
 
-  // Show Loader while initializing
-  if (!isInitialized || isSplashVisible) {
+      if (reallyFirstLaunch && !inOnboarding) {
+        // 🚀 1. Brand new user? Drag to onboarding
+        router.replace('/onboarding');
+      } else if (!reallyFirstLaunch && !isAuthenticated && !inAuthGroup && !inOnboarding) {
+        // 🔒 2. Finished onboarding but not logged in? Drag to login
+        router.replace('/(auth)/login');
+      } else if (isAuthenticated && (inAuthGroup || inOnboarding)) {
+        // ✅ 3. Logged in but stuck on login/onboarding screen? Send to main app
+        router.replace('/(main)/(tabs)/chat'); 
+      }
+    };
+
+    runGuard();
+  }, [isInitialized, isAuthenticated, segments, isSplashVisible, isFirstLaunch]);
+
+  
+  // Show Loader while initializing EVERYTHING
+  if (!isInitialized || isFirstLaunch === null || isSplashVisible) {
     return <Loader message="Making Your Work Easy..." fullScreen={true} />;
   }
 
@@ -61,6 +88,7 @@ function AppContent() {
       <StatusBar style="auto" />
       
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="onboarding" /> {/* 📍 ADDED ONBOARDING TO STACK */}
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(main)" />
         <Stack.Screen name="index" />

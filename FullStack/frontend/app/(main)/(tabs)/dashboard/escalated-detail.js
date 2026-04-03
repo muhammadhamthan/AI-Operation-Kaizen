@@ -23,7 +23,7 @@ import * as Location from 'expo-location';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { 
-  fetchIssueById, 
+  fetchDashboardIssueDetail, // 📍 SWAPPED IN NEW DYNAMIC THUNK
   fetchIssueTimeline,
   selectCurrentIssue, 
   selectIssuesLoading, 
@@ -84,7 +84,8 @@ export default function EscalatedDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      dispatch(fetchIssueById(parseInt(id)));
+      // 📍 PASSED EXACT CARD TYPE
+      dispatch(fetchDashboardIssueDetail({ cardType: 'escalated', issueId: parseInt(id) }));
       dispatch(fetchIssueTimeline(parseInt(id)));
     }
     return () => {
@@ -114,7 +115,8 @@ export default function EscalatedDetailScreen() {
     setRefreshing(true);
     try {
       await Promise.allSettled([
-        dispatch(fetchIssueById(parseInt(id))),
+        // 📍 PASSED EXACT CARD TYPE
+        dispatch(fetchDashboardIssueDetail({ cardType: 'escalated', issueId: parseInt(id) })),
         dispatch(fetchIssueTimeline(parseInt(id)))
       ]);
     } finally {

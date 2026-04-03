@@ -21,7 +21,7 @@ import * as Location from 'expo-location'; // 📍 IMPORTED LOCATION DIRECTLY
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { 
-  fetchIssueById, 
+  fetchDashboardIssueDetail, // 📍 SWAPPED IN NEW DYNAMIC THUNK
   fetchIssueTimeline,
   selectIssueById,
   selectCurrentIssue,
@@ -67,7 +67,8 @@ export default function NotFixedDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      dispatch(fetchIssueById(parseInt(id)));
+      // 📍 PASSED EXACT CARD TYPE
+      dispatch(fetchDashboardIssueDetail({ cardType: 'pending-issues', issueId: parseInt(id) }));
       dispatch(fetchIssueTimeline(parseInt(id)));
     }
     return () => { dispatch(clearCurrentIssue()); };
@@ -84,7 +85,8 @@ export default function NotFixedDetailScreen() {
     setRefreshing(true);
     try {
       await Promise.allSettled([
-        dispatch(fetchIssueById(parseInt(id))),
+        // 📍 PASSED EXACT CARD TYPE
+        dispatch(fetchDashboardIssueDetail({ cardType: 'pending-issues', issueId: parseInt(id) })),
         dispatch(fetchIssueTimeline(parseInt(id)))
       ]);
     } finally {

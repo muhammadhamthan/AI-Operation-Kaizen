@@ -7,7 +7,8 @@ import {
   TextInput, 
   TouchableOpacity, 
   RefreshControl,
-  Platform 
+  Platform,
+  ActivityIndicator // 📍 ADDED
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,7 +16,18 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { fetchIssues, selectAwaitingReviewIssues, selectIssuesLoading, setFilters } from '../../../../src/store/slices/issuesSlice';
+
+// 📍 IMPORT NEW SELECTORS AND THUNK
+import { 
+  fetchResolvedPendingIssues, 
+  selectAwaitingReviewIssues, 
+  selectIssuesLoading, 
+  setFilters,
+  selectIsFetchingNextPage,
+  selectHasMoreIssues,
+  selectIssuesNextCursor
+} from '../../../../src/store/slices/issuesSlice';
+
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import IssueCard from '../../../../src/components/issue/IssueCard';
 import Loader from '../../../../src/components/common/Loader';
@@ -33,19 +45,26 @@ export default function AwaitingReviewScreen() {
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
   
+  // 📍 NEW PAGINATION SELECTORS
+  const isFetchingNextPage = useSelector(selectIsFetchingNextPage);
+  const hasMore = useSelector(selectHasMoreIssues);
+  const nextCursor = useSelector(selectIssuesNextCursor);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
+  // 📍 INITIAL LOAD
   useEffect(() => {
-    if (user) dispatch(fetchIssues(user));
+    if (user) dispatch(fetchResolvedPendingIssues({}));
   }, [user, dispatch]);
 
   useEffect(() => {
     dispatch(setFilters({ search: searchText }));
   }, [searchText, dispatch]);
 
+  // 📍 PULL TO REFRESH
   const onRefresh = useCallback(async () => {
     if (!isOnline) {
       setToastMessage("Can't refresh while offline");
@@ -63,7 +82,7 @@ export default function AwaitingReviewScreen() {
     setRefreshing(true);
     if (user) {
       try {
-        await Promise.allSettled([dispatch(fetchIssues(user))]);
+        await Promise.allSettled([dispatch(fetchResolvedPendingIssues({}))]);
       } finally {
         setLastRefresh(Date.now());
         setRefreshing(false);
@@ -72,6 +91,12 @@ export default function AwaitingReviewScreen() {
       setRefreshing(false);
     }
   }, [user, isOnline, lastRefresh, dispatch]);
+
+  // 📍 INFINITE SCROLL TRIGGER
+  const handleLoadMore = () => {
+    if (!isOnline || isFetchingNextPage || !hasMore || loading) return;
+    dispatch(fetchResolvedPendingIssues({ cursor: nextCursor, reset: false }));
+  };
 
   const handleIssuePress = (issue) => {
     router.push({ pathname: '/(main)/(tabs)/dashboard/awaiting_review_detail', params: { id: issue.id } });
@@ -169,6 +194,16 @@ export default function AwaitingReviewScreen() {
             />
           )
         }
+        // 📍 NEW INFINITE SCROLL PROPS
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={reviewAccent} />
+            </View>
+          ) : null
+        }
       />
 
       <FullScreenSpinner visible={refreshing} message="Updating Queue..." color={reviewAccent} />
@@ -206,4 +241,7 @@ const styles = StyleSheet.create({
   resultsHeader: { paddingHorizontal: 20, paddingBottom: 12 },
   resultsCount: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  
+  // 📍 Spacer for the loading spinner
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
 });

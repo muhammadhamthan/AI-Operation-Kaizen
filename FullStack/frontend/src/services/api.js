@@ -561,6 +561,282 @@ export const checkHealth = async () => {
   }
 };
 
+
+
+
+
+/**
+ * Fetch Pending Issues Card
+ */
+export const fetchPendingIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n⏳ ─── FETCH PENDING ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/pending-issues');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/pending-issues',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH PENDING FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+};
+
+/**
+ * Fetch Resolved Issues Card
+ */
+/**
+ * Fetch Resolved Issues Card
+ */
+export const fetchResolvedIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n🔍 ─── FETCH RESOLVED ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/resolved');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/resolved/',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH RESOLVED FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+;
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+}
+/**
+ * Fetch Escalated Issues Card
+ */
+/**
+ * Fetch Escalated Issues Card
+ */
+export const fetchEscalatedIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n🔥 ─── FETCH ESCALATED ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/escalated');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/escalated',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH ESCALATED FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+};
+
+
+
+/**
+ * Fetch Resolved Pending Review Issues Card
+ */
+export const fetchResolvedPendingIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n👀 ─── FETCH RESOLVED PENDING REVIEW ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/resolved-pending-review');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/resolved-pending-review',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH RESOLVED PENDING REVIEW FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+};
+
+/**
+ * Fetch specific Dashboard Card Issue Detail
+ * Routes dynamically to the role-aware dashboard endpoints.
+ * @param {string} cardType - 'pending-issues', 'resolved', 'escalated', or 'resolved-pending-review'
+ * @param {number} issueId 
+ */
+export const fetchDashboardCardIssueDetail = async (cardType, issueId) => {
+  console.log(`\n📄 ─── FETCH DASHBOARD CARD DETAIL (${cardType.toUpperCase()}) ───`);
+  try {
+    console.log(`🌐 [Network] GET /api/v1/dashboard-cards/${cardType}/${issueId}`);
+    
+    const response = await api.get(`/api/v1/dashboard-cards/${cardType}/${issueId}`);
+
+    console.log('✅ [Success] Detail data received successfully');
+    
+    // Map backend fields to frontend format identically to fetchIssueById
+    const issue = {
+      ...response.data,
+      site: response.data.site ? {
+        ...response.data.site,
+        name: response.data.site.name,
+      } : null,
+      raised_by: response.data.raised_by ? {
+        ...response.data.raised_by,
+        avatar: response.data.raised_by.avatar_url,
+      } : null,
+    };
+
+    return {
+      success: true,
+      issue,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH CARD DETAIL FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+    
+    return {
+      success: false,
+      error: error.response?.data?.detail || 'Failed to fetch issue detail',
+    };
+  }
+};
+
+
+
+
 export default {
   // Auth
   loginUser,
@@ -587,4 +863,15 @@ export default {
   
   // Health
   checkHealth,
+
+
+  //pending issues, resolved issues, escalatedIssues
+
+  fetchPendingIssuesCard,
+  fetchResolvedIssuesCard,
+  fetchEscalatedIssuesCard,
+
+  
+  fetchResolvedPendingIssuesCard,
+  fetchDashboardCardIssueDetail
 };
