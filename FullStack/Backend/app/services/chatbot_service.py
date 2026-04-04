@@ -76,7 +76,7 @@ class ChatbotService:
         )
 
         # ── 3. Call AI agent ──────────────────────────────────
-        from app.services.ai_service import master_agent,run_sql_agent,run_general_llm
+        from app.services.ai_service import master_agent,run_sql_agent
         from app.services.issue_service import IssueService
         from app.schemas.chatbot_schema import ChatResponse
 
@@ -89,16 +89,7 @@ class ChatbotService:
                 intent="sql_query",
                 actions_taken=["sql_agent"]
             )
-
-        elif indent == "general_query":
-            result_text = await run_general_llm(str(user.id), message)
-            response = ChatResponse(
-                session_id=session.id,
-                message=result_text,
-                intent="general_query",
-                actions_taken=["llm_chat"]
-            )
-
+            
         else:
             # Issue / approval / workflow actions
             agent_response = await master_agent(user.id, message, indent)

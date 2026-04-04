@@ -15,6 +15,8 @@ import os
 import json
 import re
 from datetime import datetime, timedelta
+
+from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.services.redis_memory_service import load_memory, save_memory
 
 from dotenv import load_dotenv
@@ -382,16 +384,14 @@ def safe_json_parse(text):
 # ==================================================
 # ISSUE EXTRACTION
 # ==================================================
+# Hamthan : changed the sync extraction into an async function that takes db session as argument
+async def extract_issue(message: str,db: AsyncSession, available_sites=None):
+    result = await db.execute(
+        text("SELECT DISTINCT skill_type FROM problem_solver_skills")
+    )
 
-async def extract_issue(message: str, available_sites=None):
-
-    # ── Fetch valid skills from DB ──
-    conn = connect_db()
-    try:
-        rows = conn.execute(text("SELECT DISTINCT skill_type FROM problem_solver_skills")).fetchall()
-        valid_skills = [row[0].lower() for row in rows]
-    finally:
-        conn.close()
+    rows = result.fetchall()
+    valid_skills = [row[0].lower() for row in rows]
 
     # ── Format sites ──
     if available_sites:
@@ -1639,26 +1639,6 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
-# ==================================================
-# CLI
-# ==================================================
-
-if __name__ == "__main__":
-
-    print("🔥 MASTER AI SYSTEM READY")
-
-    while True:
-
-        msg = input("\nYou: ")
-
-        if msg.lower() in ["exit","quit"]:
-            break
-
-        result = master_agent(msg)
-
-        print("\n==============================")
-        print(result)
-        print("==============================")
 
 
 

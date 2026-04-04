@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
 import { 
-  fetchIssueById, 
+  fetchDashboardIssueDetail, // 📍 SWAPPED IN NEW DYNAMIC THUNK
   fetchIssueTimeline,
   selectIssueById,
   selectCurrentIssue,
@@ -55,7 +55,8 @@ export default function AwaitingReviewDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      dispatch(fetchIssueById(parseInt(id)));
+      // 📍 PASSED EXACT CARD TYPE
+      dispatch(fetchDashboardIssueDetail({ cardType: 'resolved-pending-review', issueId: parseInt(id) }));
       dispatch(fetchIssueTimeline(parseInt(id)));
     }
     return () => { dispatch(clearCurrentIssue()); };
@@ -72,7 +73,8 @@ export default function AwaitingReviewDetailScreen() {
     setRefreshing(true);
     try {
       await Promise.allSettled([
-        dispatch(fetchIssueById(parseInt(id))),
+        // 📍 PASSED EXACT CARD TYPE
+        dispatch(fetchDashboardIssueDetail({ cardType: 'resolved-pending-review', issueId: parseInt(id) })),
         dispatch(fetchIssueTimeline(parseInt(id)))
       ]);
     } finally {

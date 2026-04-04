@@ -117,6 +117,7 @@ class IssueService:
         from app.services.ai_service import extract_issue
         extraction = await extract_issue(
             message=message,
+            db=self.db,
             available_sites=site_names,
         )
         

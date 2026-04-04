@@ -80,6 +80,12 @@ from app.schemas.history_schema import (
     IssueHistoryListResponse,
 )
 
+from app.schemas.image_schema import (
+    ImageKitAuthResponse,
+    ImageUploadResponse,
+    ImageListResponse,
+)
+
 __all__ = [
     # User / Auth
     "UserCreate", "UserUpdate", "UserResponse", "UserListResponse",
