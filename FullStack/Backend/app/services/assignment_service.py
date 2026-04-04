@@ -272,6 +272,7 @@ class AssignmentService:
 
         # Enqueue call chain after commit (assignment.id now exists in DB)
         self._enqueue_call(new_assignment.id)
+        self._trigger_score_refresh_for_issue(issue_id)
 
         return ChatResponse(
             message=f"✅ Issue #{issue_id} reassigned to {solver.name}.\n📞 Calling solver now...",
@@ -329,6 +330,17 @@ class AssignmentService:
                 best_score, best = score, s.skill_type
 
         return best if best_score > 0.6 else None  # lowered from 0.75 for better recall
+    
+    def _trigger_score_refresh_for_issue(issue_id: int) -> None:
+        """
+        Fire-and-forget: enqueue Celery task to refresh site + solver scores
+        for this issue. Must be called AFTER db.commit().
+        """
+        try:
+            from app.workers.score_task import trigger_issue_score_refresh
+            trigger_issue_score_refresh.delay(issue_id)
+        except Exception:
+            logger.exception("Failed to enqueue score refresh for issue #%s", issue_id)
 
     # # ══════════════════════════════════════════════════════
     # # 3. DASHBOARD: Paginated assignment list  (API read)

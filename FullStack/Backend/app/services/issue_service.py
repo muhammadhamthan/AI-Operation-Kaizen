@@ -56,6 +56,7 @@ from app.schemas.issue_schema import (
 from app.schemas.history_schema import (
     IssueHistoryResponse, IssueHistoryListResponse,
 )
+from app.schemas.pagination_schema import CursorPage, CursorParams, encode_cursor, decode_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,6 @@ class IssueService:
         user: User,
         message: str,
         image_url: Optional[str],
-        ai_service,
     ) -> ChatResponse:
         
         actions = []
@@ -117,10 +117,48 @@ class IssueService:
         from app.services.ai_service import extract_issue
         extraction = await extract_issue(
             message=message,
+            db=self.db,
             available_sites=site_names,
         )
         
         print("--------------------------",extraction)
+        
+        solver_skill = extraction['skill_name']
+        if not solver_skill:
+            return ChatResponse(
+                message=(
+                    f"[PENDING:create_issue|skill_clarification|{message}]\n"
+                    f"❌ Couldn't extract the problem type from the message. "
+                    f"Please specify the type of problem (e.g., 'plumbing', 'electrical')."
+                ),
+                intent="create_issue",
+                actions_taken=["Problem type extraction failed"],
+            )
+        
+        deadline_info = extraction['days_to_fix']
+        if not deadline_info:
+            return ChatResponse(
+                message=(
+                    f"[PENDING:create_issue|deadline_clarification|{message}]\n"
+                    f"❌ Couldn't extract deadline information from the message. "
+                    f"Please specify how many days until the issue needs to be fixed (e.g., 'in 3 days')."
+                ),
+                intent="create_issue",
+                actions_taken=["Deadline extraction failed"],
+            )
+        
+        location_name = extraction['site_location']
+        if not location_name:
+            return ChatResponse(
+                message=(
+                    f"[PENDING:create_issue|site_clarification|{message}]\n"
+                    f"❌ Couldn't find site '{extraction['site_location']}'. "
+                    f"Available: {', '.join(site_names)}"
+                    f"Please reply with the correct site name."
+                ),
+                intent="create_issue",
+                actions_taken=["Site extraction failed"],
+            )
       
 
         # ── 3. Site matching ─────────────────────────────
@@ -218,6 +256,8 @@ class IssueService:
             lines += [f"👷 Assigned to: {solver.name}", "📞 Calling solver now..."]
         else:
             lines.append("⏳ Awaiting solver assignment...")
+            
+        self._trigger_score_refresh_for_issue(issue.id)
 
         return ChatResponse(
             message="\n".join(lines),
@@ -243,7 +283,7 @@ class IssueService:
     ) -> ChatResponse:
         if not issue_id:
             return ChatResponse(
-                message="Please specify: 'approve issue 8'",
+                message="Please specify: Issue ID",
                 intent="approve_completion", actions_taken=[],
             )
 
@@ -253,7 +293,7 @@ class IssueService:
                 message=f"Issue #{issue_id} not found.",
                 intent="approve_completion", actions_taken=[],
             )
-        if issue.status != IssueStatus.RESOLVED_PENDING_REVIEW and issue.status != IssueStatus.REOPENED:
+        if issue.status != IssueStatus.RESOLVED_PENDING_REVIEW:
             return ChatResponse(
                 message=f"Issue #{issue_id} is '{issue.status.value}', not awaiting review.",
                 intent="approve_completion", actions_taken=[],
@@ -278,6 +318,8 @@ class IssueService:
             ActionType.COMPLETE, f"Approved by {user.name}",
         )
         await self.db.commit()
+        
+        self._trigger_score_refresh_for_issue(issue_id)
 
         return ChatResponse(
             message=f"✅ Issue #{issue_id} marked as COMPLETED!",
@@ -299,14 +341,14 @@ class IssueService:
         """
         if not issue_id:
             return ChatResponse(
-                message="Specify: 'change priority of issue 3 to high'",
+                message="Please Specify: 'The issue ID to change the priority'",
                 intent="update_priority", actions_taken=[],
             )
 
         issue = await self._get_issue_or_none(issue_id)
         if not issue:
             return ChatResponse(
-                message=f"Issue #{issue_id} not found.",
+                message=f"Issue #{issue_id} not found , So please check the issue Id correctly",
                 intent="update_priority", actions_taken=[],
             )
 
@@ -326,6 +368,8 @@ class IssueService:
             ActionType.UPDATE, f"Priority: {old} → {priority.value} by {user.name}",
         )
         await self.db.commit()
+        
+        self._trigger_score_refresh_for_issue(issue_id)
 
         
         return ChatResponse(
@@ -340,22 +384,22 @@ class IssueService:
     # ══════════════════════════════════════════════════════
 
     async def extend_deadline(
-        self, user: User, issue_id: Optional[int], days: int = 3,
+        self, user: User, issue_id: Optional[int], days: int,
     ) -> ChatResponse:
         if not issue_id:
             return ChatResponse(
-                message="Specify: 'extend deadline of issue 2 by 3 days'",
+                message="Please Specify: 'The Issue ID to extend the deadline'",
                 intent="extend_deadline", actions_taken=[],
             )
 
         issue = await self._get_issue_or_none(issue_id)
         if not issue:
             return ChatResponse(
-                message=f"Issue #{issue_id} not found.",
+                message=f"Issue #{issue_id} not found , So please check the issue Id correctly",
                 intent="extend_deadline", actions_taken=[],
             )
 
-        base = issue.deadline_at or datetime.now(timezone.utc)
+        base = issue.deadline_at
         new_deadline = base + timedelta(days=days)
         issue.deadline_at = new_deadline
 
@@ -365,6 +409,8 @@ class IssueService:
             f"Deadline extended +{days}d → {new_deadline.strftime('%Y-%m-%d %H:%M')} by {user.name}",
         )
         await self.db.commit()
+        
+        self._trigger_score_refresh_for_issue(issue_id)
 
         return ChatResponse(
             message=(
@@ -380,13 +426,13 @@ class IssueService:
     # 5. SOLVER: Mark IN_PROGRESS
     # ══════════════════════════════════════════════════════
 
-    async def solver_update_status(
+    async def solver_update_status( #This funtion currently not in use
         self, solver: User, message: str, issue_id: Optional[int],
     ) -> ChatResponse:
         assignment = await self._get_active_assignment(solver.id, issue_id)
         if not assignment:
             return ChatResponse(
-                message="No active assignment found.",
+                message="No active assignment found for this issue id.",
                 intent="update_work_status", actions_taken=[],
             )
 
@@ -408,6 +454,8 @@ class IssueService:
             ActionType.UPDATE, f"Solver update: {message[:200]}",
         )
         await self.db.commit()
+        
+        self._trigger_score_refresh_for_issue(issue_id)
 
         return ChatResponse(
             message=f"✅ Issue #{issue.id} → {issue.status.value}. Keep it up!",
@@ -429,17 +477,23 @@ class IssueService:
         issue_id: Optional[int],
         ai_service,
     ) -> ChatResponse:
-        assignment = await self._get_active_assignment(solver.id, issue_id)
-        if not assignment:
+        
+        if not issue_id:
             return ChatResponse(
-                message="No active assignment found.",
+                message="Please provide a correct valid issue id",
+                intent="complete_work", actions_taken=[],
+            )
+        assignment = await self._get_active_assignment(solver.id, issue_id)
+        if not assignment: 
+            return ChatResponse(
+                message="No active assignment found",
                 intent="complete_work", actions_taken=[],
             )
 
         issue = await self._get_issue_or_none(assignment.issue_id)
         if not issue:
             return ChatResponse(
-                message="Assigned issue not found.",
+                message="Assigned issue not found. There might be the issue id you provide is not yet assigned / Invaild issue id",
                 intent="complete_work", actions_taken=[],
             )
 
@@ -484,6 +538,8 @@ class IssueService:
         )
         actions.append(f"Issue #{issue.id} → RESOLVED_PENDING_REVIEW")
         await self.db.commit()
+        
+        self._trigger_score_refresh_for_issue(issue_id)
 
         photo_note = "📸 Photo uploaded. " if image_url else ""
         return ChatResponse(
@@ -498,7 +554,7 @@ class IssueService:
     # 7. SOLVER: Report Blocker
     # ══════════════════════════════════════════════════════
 
-    async def solver_report_blocker(
+    async def solver_report_blocker( #Optional function
         self, solver: User, message: str, issue_id: Optional[int],
     ) -> ChatResponse:
         """
@@ -513,12 +569,124 @@ class IssueService:
             attachments=[],
         ))
         await self.db.commit()
+        
+        self._trigger_score_refresh_for_issue(issue_id)
 
         return ChatResponse(
             message="📝 Blocker noted. Supervisor has been notified.",
             intent="report_blocker",
             issue_id=issue_id,
             actions_taken=["Blocker logged", "Supervisor notified"],
+        )
+        
+        
+    # ══════════════════════════════════════════════════════════════════════
+    # CURSOR-PAGINATED LIST  —  replaces list_issues()
+    # ══════════════════════════════════════════════════════════════════════
+ 
+    async def list_issues_cursor(
+        self,
+        current_user: User,
+        params: CursorParams,
+        status_filter: Optional[IssueStatus] = None,
+        priority: Optional[Priority] = None,
+        site_id: Optional[int] = None,
+        search: Optional[str] = None,
+    ) -> CursorPage[IssueResponse]:
+        """
+        Cursor-paginated issue list.  No offset scan — pure index seek.
+ 
+        HOW IT WORKS:
+          Page 1:  WHERE (role_filter) AND id < ∞     ORDER BY id DESC LIMIT 21
+          Page 2:  WHERE (role_filter) AND id < cursor ORDER BY id DESC LIMIT 21
+ 
+        We fetch limit+1 rows. If we get limit+1 back, there IS a next page.
+        We return only `limit` rows and encode row[limit-1].id as next_cursor.
+ 
+        WHY id DESC + LIMIT is fast:
+          PostgreSQL walks the primary key B-tree backwards from `cursor`.
+          No matter how many total rows exist, this is always O(log n).
+          A table with 10 million issues responds just as fast as 1,000.
+ 
+        SINGLE QUERY — no separate COUNT query.
+        Total count is expensive (full table scan). We don't need it for
+        infinite-scroll / "load more" UX. has_more + next_cursor is enough.
+        """
+        last_id = params.get_last_id()
+        fetch_limit = params.limit + 1  # fetch one extra to detect has_more
+ 
+        # ── Build base statement ──────────────────────────────────────────
+        stmt = (
+            select(
+                Issue.id,
+                Issue.site_id,
+                Issue.raised_by_supervisor_id,
+                Issue.title,
+                Issue.description,
+                Issue.priority,
+                Issue.deadline_at,
+                Issue.status,
+                Issue.track_status,
+                Issue.latitude,
+                Issue.longitude,
+                Issue.created_at,
+                Issue.updated_at,
+                # Inline site name — avoids a separate selectinload query
+                Site.name.label("site_name"),
+                # Inline supervisor name
+                User.name.label("supervisor_name"),
+            )
+            .join(Site, Site.id == Issue.site_id, isouter=True)
+            .join(User, User.id == Issue.raised_by_supervisor_id, isouter=True)
+        )
+ 
+        # ── Role-based scope ──────────────────────────────────────────────
+        if current_user.role == UserRole.SUPERVISOR:
+            site_ids = await self._get_supervisor_site_ids(current_user.id)
+            if not site_ids:
+                return CursorPage(items=[], next_cursor=None, total_returned=0, has_more=False)
+            stmt = stmt.where(Issue.site_id.in_(site_ids))
+ 
+        elif current_user.role == UserRole.PROBLEMSOLVER:
+            sub = select(IssueAssignment.issue_id).where(
+                IssueAssignment.assigned_to_solver_id == current_user.id
+            )
+            result = await self.db.execute(sub)
+            assigned_ids = result.scalars().all()
+            if not assigned_ids:
+                return CursorPage(items=[], next_cursor=None, total_returned=0, has_more=False)
+            stmt = stmt.where(Issue.id.in_(assigned_ids))
+ 
+         # ── Optional filters ──────────────────────────────────────────────
+        if status_filter:
+            stmt = stmt.where(Issue.status == status_filter)
+        if priority:
+            stmt = stmt.where(Issue.priority == priority)
+        if site_id:
+            stmt = stmt.where(Issue.site_id == site_id)
+        if search:
+            stmt = stmt.where(Issue.title.ilike(f"%{search}%"))
+ 
+        # ── Cursor filter (THE key to fast pagination) ────────────────────
+        if last_id is not None:
+            stmt = stmt.where(Issue.id < last_id)
+ 
+        # ── Order + limit ─────────────────────────────────────────────────
+        stmt = stmt.order_by(Issue.id.desc()).limit(fetch_limit)
+ 
+        rows = (await self.db.execute(stmt)).mappings().all()
+ 
+        # ── Detect has_more ───────────────────────────────────────────────
+        has_more = len(rows) == fetch_limit
+        items = rows[:params.limit]  # trim the extra row
+ 
+        next_cursor = encode_cursor(items[-1]["id"]) if has_more and items else None
+ 
+        return CursorPage(
+            items=[self._row_to_response(r) for r in items],
+            next_cursor=next_cursor,
+            total_returned=len(items),
+            has_more=has_more,
         )
 
     # ══════════════════════════════════════════════════════
@@ -798,6 +966,28 @@ class IssueService:
             action_type=action_type,
             details=details,
         ))
+        
+        
+    @staticmethod
+    def _row_to_response(row) -> IssueResponse:
+        """Convert a raw mapping row (from JOIN query) to IssueResponse."""
+        return IssueResponse(
+            id=row["id"],
+            site_id=row["site_id"],
+            site_name=row["site_name"],
+            raised_by_supervisor_id=row["raised_by_supervisor_id"],
+            supervisor_name=row["supervisor_name"],
+            title=row["title"],
+            description=row["description"],
+            priority=row["priority"],
+            deadline_at=row["deadline_at"],
+            status=row["status"],
+            track_status=row["track_status"],
+            latitude=row["latitude"],
+            longitude=row["longitude"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
     @staticmethod
     def _enqueue_call(assignment_id: int, issue_id: int) -> None:
@@ -833,6 +1023,17 @@ class IssueService:
             latitude=issue.latitude, longitude=issue.longitude,
             created_at=issue.created_at, updated_at=issue.updated_at,
         )
+        
+    def _trigger_score_refresh_for_issue(self,issue_id: int) -> None:
+        """
+        Fire-and-forget: enqueue Celery task to refresh site + solver scores
+        for this issue. Must be called AFTER db.commit().
+        """
+        try:
+            from app.workers.score_task import trigger_issue_score_refresh
+            trigger_issue_score_refresh.delay(issue_id)
+        except Exception:
+            logger.exception("Failed to enqueue score refresh for issue #%s", issue_id)
         
         
         

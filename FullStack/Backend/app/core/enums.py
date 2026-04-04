@@ -7,9 +7,9 @@ import enum
 
 # ── users.role ───────────────────────────────────────────
 class UserRole(str, enum.Enum):
-    SUPERVISOR = "supervisor"
-    PROBLEMSOLVER = "problemsolver"
-    MANAGER = "manager"
+    SUPERVISOR = "SUPERVISOR"
+    PROBLEMSOLVER = "PROBLEMSOLVER"
+    MANAGER = "MANAGER"
 
 
 # ── issues.priority  /  escalation_rules.priority ────────

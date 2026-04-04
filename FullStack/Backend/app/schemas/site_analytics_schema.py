@@ -7,6 +7,17 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
+class SiteListItem(BaseModel):
+    id: int
+    name: str
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    score: int
+    health: str
+    created_at: datetime
+    updated_at: datetime
+
 
 class SiteSolverBrief(BaseModel):
     id: int
@@ -57,4 +68,4 @@ class SiteWithAnalytics(BaseModel):
 
 class SiteAnalyticsListResponse(BaseModel):
     total: int
-    sites: List[SiteWithAnalytics]
+    sites: List[SiteListItem]

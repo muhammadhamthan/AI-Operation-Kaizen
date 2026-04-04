@@ -173,33 +173,37 @@ export const getStoredUser = async () => {
 /**
  * Fetch all issues with optional filters
  */
+
+
+/**
+ * Fetch all issues using Cursor-Based Pagination
+ */
 export const fetchIssues = async (filters = {}) => {
   try {
-    const params = new URLSearchParams();
-    if (filters.status) params.append('status', filters.status);
-    if (filters.priority) params.append('priority', filters.priority);
-    if (filters.site_id) params.append('site_id', filters.site_id);
+    // 📍 Let Axios build the query string cleanly to avoid URL parsing errors
+    const queryParams = {};
+    if (filters.status) queryParams.status = filters.status;
+    if (filters.priority) queryParams.priority = filters.priority;
+    if (filters.site_id) queryParams.site_id = filters.site_id;
+    
+    // Add the boss's cursor and limit parameters
+    if (filters.cursor) queryParams.cursor = filters.cursor;
+    queryParams.limit = filters.limit || 10; // fallback to 20 if limit isn't passed
 
+    // Hit the exact URL that worked for you, passing params as an object
     const response = await withRetry(
-      () => api.get(`/api/v1/issues?${params.toString()}`),// URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/
+      () => api.get('/api/v1/issues/feed', { params: queryParams }),
       { maxRetries: 2 }
     );
-    console.log(response)
+    
+    const data = response.data;
+    console.log(data)
+    
+    // Fallback to empty array if items is missing
+    const rawItems = data.items || [];
 
-    // Transform response to match frontend expectations
-    // const issues = response.data.issues.map(issue => ({ // added .issues because backend response is { success: true, issues: [...] }
-    //   ...issue,
-    //   site: issue.site ? {
-    //     ...issue.site,
-    //     name: issue.site.name,
-    //   } : null,
-    //   raised_by: issue.raised_by ? {
-    //     ...issue.raised_by,
-    //     avatar: issue.raised_by.avatar_url,
-    //   } : null,
-    // }));
-
-    const issues = response.data.issues.map(issue => ({ // Map backend fields to frontend format
+    // Map backend fields to frontend format
+    const issues = rawItems.map(issue => ({ 
       ...issue,
       site: {
         name: issue.site_name,
@@ -212,6 +216,8 @@ export const fetchIssues = async (filters = {}) => {
     return {
       success: true,
       issues,
+      next_cursor: data.next_cursor || null,
+      has_more: data.has_more ?? false,
     };
   } catch (error) {
     console.error('Fetch issues error:', error.response?.data || error.message);
@@ -219,9 +225,12 @@ export const fetchIssues = async (filters = {}) => {
       success: false,
       error: error.response?.data?.detail || 'Failed to fetch issues',
       issues: [],
+      next_cursor: null,
+      has_more: false,
     };
   }
 };
+
 
 /**
  * Fetch single issue by ID
@@ -359,27 +368,33 @@ export const fetchDashboardStats = async () => {
 /**
  * Fetch all complaints
  */
-export const fetchComplaints = async () => {
+
+export const fetchComplaints = async ({ cursor = null, limit = 20 } = {}) => {
   try {
-    const response = await api.get('/api/v1/complaints');
+    const queryParams = { limit };
+    if (cursor) queryParams.cursor = cursor;
 
-    // 📍 EXACT DATA: Pass the backend response directly without mutating it
-    // Handle both { complaints: [...] } or direct array [...] responses
-    const complaints = response.data.complaints || response.data || [];
+    // 📍 CHANGED: 'feed' to 'Complaintfeed' to match Python router
+    const response = await api.get('/api/v1/complaints/Complaintfeed', { params: queryParams });
 
+    // Return the whole object exactly as backend sent it
+    const complaintsData = response.data || {};
+    console.log(complaintsData)
+    
     return {
       success: true,
-      complaints,
+      complaints: complaintsData, // Passes { items, next_cursor, has_more } to Redux
     };
 
   } catch (error) {
     console.error("Fetch complaints error:", error);
     return {
       success: false,
-      complaints: [],
+      complaints: { items: [], next_cursor: null, has_more: false },
     };
   }
 };
+
 export const fetchComplaintById = async (id) => {
   try {
     const response = await api.get(`/api/v1/complaints/${id}`);
@@ -397,7 +412,7 @@ export const fetchComplaintById = async (id) => {
  */
 export const fetchSites = async () => {
   try {
-    const response = await api.get('/sites');
+    const response = await api.get('/api/v1/sites/analytics');
     return {
       success: true,
       sites: response.data,
@@ -412,6 +427,7 @@ export const fetchSites = async () => {
   }
 };
 
+//it have to be analytic with site id based
 export const fetchSitesAnalytics = async () => {
  try {
     const response = await api.get('/api/v1/sites/analytics');
@@ -432,6 +448,7 @@ export const fetchSitesAnalytics = async () => {
   }
 };
 
+// we have to add another function to fetch solvers performance based on solver id
 export const fetchSolversPerformanceAPI = async () => {
   try {
     const response = await api.get('/api/v1/solvers');
@@ -477,6 +494,7 @@ export const sendChatMessage = async (
     };
 
     const response = await api.post('/api/v1/chat/', requestBody);
+    console.log(response)
 
     return {
       success: true,
@@ -543,6 +561,282 @@ export const checkHealth = async () => {
   }
 };
 
+
+
+
+
+/**
+ * Fetch Pending Issues Card
+ */
+export const fetchPendingIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n⏳ ─── FETCH PENDING ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/pending-issues');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/pending-issues',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH PENDING FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+};
+
+/**
+ * Fetch Resolved Issues Card
+ */
+/**
+ * Fetch Resolved Issues Card
+ */
+export const fetchResolvedIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n🔍 ─── FETCH RESOLVED ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/resolved');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/resolved/',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH RESOLVED FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+;
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+}
+/**
+ * Fetch Escalated Issues Card
+ */
+/**
+ * Fetch Escalated Issues Card
+ */
+export const fetchEscalatedIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n🔥 ─── FETCH ESCALATED ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/escalated');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/escalated',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH ESCALATED FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+};
+
+
+
+/**
+ * Fetch Resolved Pending Review Issues Card
+ */
+export const fetchResolvedPendingIssuesCard = async ({
+  cursor = null,
+  limit = 20,
+  site_id = null,
+  priority = null,
+  search = null,
+} = {}) => {
+  console.log('\n👀 ─── FETCH RESOLVED PENDING REVIEW ISSUES ───');
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (site_id) params.site_id = site_id;
+    if (priority) params.priority = priority;
+    if (search) params.search = search;
+
+    console.log('📤 [Request] Params:', params);
+    console.log('🌐 [Network] GET /api/v1/dashboard-cards/resolved-pending-review');
+
+    const response = await api.get(
+      '/api/v1/dashboard-cards/resolved-pending-review',
+      { params }
+    );
+
+    console.log('✅ [Success] Data received from backend:');
+    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
+    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
+    console.log(`🔄 Has More: ${response.data?.has_more}`);
+    console.log('────────────────────────────────\n');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH RESOLVED PENDING REVIEW FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network/Axios Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+
+    return {
+      success: false,
+      data: { items: [], next_cursor: null, has_more: false },
+    };
+  }
+};
+
+/**
+ * Fetch specific Dashboard Card Issue Detail
+ * Routes dynamically to the role-aware dashboard endpoints.
+ * @param {string} cardType - 'pending-issues', 'resolved', 'escalated', or 'resolved-pending-review'
+ * @param {number} issueId 
+ */
+export const fetchDashboardCardIssueDetail = async (cardType, issueId) => {
+  console.log(`\n📄 ─── FETCH DASHBOARD CARD DETAIL (${cardType.toUpperCase()}) ───`);
+  try {
+    console.log(`🌐 [Network] GET /api/v1/dashboard-cards/${cardType}/${issueId}`);
+    
+    const response = await api.get(`/api/v1/dashboard-cards/${cardType}/${issueId}`);
+
+    console.log('✅ [Success] Detail data received successfully');
+    
+    // Map backend fields to frontend format identically to fetchIssueById
+    const issue = {
+      ...response.data,
+      site: response.data.site ? {
+        ...response.data.site,
+        name: response.data.site.name,
+      } : null,
+      raised_by: response.data.raised_by ? {
+        ...response.data.raised_by,
+        avatar: response.data.raised_by.avatar_url,
+      } : null,
+    };
+
+    return {
+      success: true,
+      issue,
+    };
+  } catch (error) {
+    console.error('\n❌ ─── FETCH CARD DETAIL FAILED ───');
+    if (error.response) {
+      console.error('🚨 Status:', error.response.status);
+      console.error('🚨 Error Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('🚨 Network Error:', error.message);
+    }
+    console.error('────────────────────────────────\n');
+    
+    return {
+      success: false,
+      error: error.response?.data?.detail || 'Failed to fetch issue detail',
+    };
+  }
+};
+
+
+
+
 export default {
   // Auth
   loginUser,
@@ -569,4 +863,15 @@ export default {
   
   // Health
   checkHealth,
+
+
+  //pending issues, resolved issues, escalatedIssues
+
+  fetchPendingIssuesCard,
+  fetchResolvedIssuesCard,
+  fetchEscalatedIssuesCard,
+
+  
+  fetchResolvedPendingIssuesCard,
+  fetchDashboardCardIssueDetail
 };

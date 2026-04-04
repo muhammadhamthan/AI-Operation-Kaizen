@@ -50,7 +50,7 @@ const ChatMessage = ({ message, image, isUser, timestamp, status = 'sent' }) => 
         
         {/* Label (ChatGPT removed these for a cleaner look, so we make it super subtle) */}
         {!isUser && (
-          <Text style={[styles.label, { color: theme.textSecondary }]}>MaintenanceFlow AI</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>Kairox Ai Opex AI</Text>
         )}
 
         {/* ── Message Bubble ── */}

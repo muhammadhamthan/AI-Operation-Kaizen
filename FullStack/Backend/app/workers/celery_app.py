@@ -15,7 +15,7 @@ celery_app = Celery(
     "facility_mgmt",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.workers.call_tasks"],
+    include=["app.workers.call_tasks","app.workers.score_task"],
 )
 
 # ADD THESE LINES
@@ -45,5 +45,15 @@ celery_app.conf.update(
     enable_utc=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    task_routes={"call_tasks.*": {"queue": "calls"}},
+    task_routes={
+        "call_tasks.*": {"queue": "calls"},
+        "score_tasks.*": {"queue": "scores"},
+    },
+    
+    beat_schedule={
+        "refresh-all-scores-10min": {
+            "task": "score_tasks.refresh_all_scores",
+            "schedule": 10 * 60,  # every 10 minutes
+        },
+    },
 )

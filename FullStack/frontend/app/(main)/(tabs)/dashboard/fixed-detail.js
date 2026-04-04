@@ -6,7 +6,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { 
-  fetchIssueById, 
+  fetchDashboardIssueDetail, // 📍 SWAPPED IN NEW DYNAMIC THUNK
   fetchIssueTimeline,
   selectIssueById,
   selectCurrentIssue,
@@ -44,7 +44,8 @@ export default function FixedDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      dispatch(fetchIssueById(parseInt(id)));
+      // 📍 PASSED EXACT CARD TYPE
+      dispatch(fetchDashboardIssueDetail({ cardType: 'resolved', issueId: parseInt(id) }));
       dispatch(fetchIssueTimeline(parseInt(id)));
     }
     return () => { 
@@ -64,7 +65,8 @@ export default function FixedDetailScreen() {
     try {
       // 📍 FIX: Promise.allSettled guarantees the spinner spins until both APIs are done
       await Promise.allSettled([
-        dispatch(fetchIssueById(parseInt(id))),
+        // 📍 PASSED EXACT CARD TYPE
+        dispatch(fetchDashboardIssueDetail({ cardType: 'resolved', issueId: parseInt(id) })),
         dispatch(fetchIssueTimeline(parseInt(id)))
       ]);
     } finally {

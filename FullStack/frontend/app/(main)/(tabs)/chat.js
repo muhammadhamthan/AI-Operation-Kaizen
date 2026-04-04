@@ -70,23 +70,34 @@ export default function ChatScreen() {
   const [isLoading, setIsLoading] = useState(false); 
   const [refreshing, setRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  
+  // Ref to prevent double loading
+  const hasLoadedInitialDataRef = useRef(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const drawerAnimation = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
+  // FIXED: Consolidated initialization to prevent infinite API calls
   useEffect(() => {
-    if (user?.id) {
-      dispatch(loadChatHistory());
-      dispatch(startNewConversation()); 
-      setSelectedConversation(null);
-    }
+    if (!user?.id || hasLoadedInitialDataRef.current) return;
 
-    dispatch(setNotifications([
-      { id: 1, type: 'issue_assigned', title: 'New issue assigned', body: 'Issue #8 has been assigned to you', data: { issueId: 8 }, read: false },
-      { id: 2, type: 'issue_reopened', title: 'Issue reopened', body: 'Issue #15 was reopened by supervisor', data: { issueId: 15 }, read: false },
-      { id: 3, type: 'complaint_created', title: 'Complaint raised', body: 'A new complaint has been filed', data: { complaintId: 1 }, read: false },
-    ]));
+    // Mark as loaded IMMEDIATELY to block other re-renders from triggering this
+    hasLoadedInitialDataRef.current = true;
+
+    // Load Chat History
+    dispatch(loadChatHistory());
+    dispatch(startNewConversation());
+    setSelectedConversation(null);
+
+    // Initialize Notifications only if they aren't set
+    if (!notifications || notifications.length === 0) {
+      dispatch(setNotifications([
+        { id: 1, type: 'issue_assigned', title: 'New issue assigned', body: 'Issue #8 has been assigned to you', data: { issueId: 8 }, read: false },
+        { id: 2, type: 'issue_reopened', title: 'Issue reopened', body: 'Issue #15 was reopened by supervisor', data: { issueId: 15 }, read: false },
+        { id: 3, type: 'complaint_created', title: 'Complaint raised', body: 'A new complaint has been filed', data: { complaintId: 1 }, read: false },
+      ]));
+    }
   }, [user?.id, dispatch]);
 
   const toggleDrawer = useCallback(() => {
@@ -142,7 +153,7 @@ export default function ChatScreen() {
     }
   }, [isOnline, currentSessionId, dispatch]);
 
-  const handleSendMessage = async (text, imageUri = null,location = null,intent = null) => { //updatwd by hamthan,intent = null
+  const handleSendMessage = async (text, imageUri = null, location = null, intent = null) => {
     const userMessage = {
       id: Date.now(),
       message: text || '', 
@@ -155,7 +166,7 @@ export default function ChatScreen() {
     setIsLoading(true); 
 
     try {
-      const result = await sendChatMessage( // by hamthan , added intent as parameter
+      const result = await sendChatMessage(
         text || 'Uploaded an image',
         currentSessionId,
         null,
@@ -205,7 +216,6 @@ export default function ChatScreen() {
   };
 
   const showCamera = user?.role !== 'manager';
-
   const screenBg = isDark ? '#212121' : '#ffffff';
   const headerBg = screenBg;
   const logoBg = isDark ? '#ffffff' : '#000000';
@@ -219,7 +229,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.titleButton} activeOpacity={0.7}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>MaintenanceFlow</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Kairox Ai Opex</Text>
           <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
         </TouchableOpacity>
 
@@ -331,7 +341,6 @@ export default function ChatScreen() {
           )}
         </ScrollView>
 
-        {/* 📍 FIX: Passed userRole explicitly into ChatInput */}
         <ChatInput 
           onSend={handleSendMessage} 
           showCamera={showCamera} 
@@ -365,7 +374,6 @@ export default function ChatScreen() {
       </Animated.View>
 
       <FullScreenSpinner visible={refreshing} message="Syncing Chat..." color={theme.primary} />
-
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -392,28 +400,8 @@ const styles = StyleSheet.create({
   suggestionText: { fontSize: 14, fontWeight: '500', lineHeight: 20 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10 },
   drawer: { position: 'absolute', top: 0, left: 0, bottom: 0, width: DRAWER_WIDTH, zIndex: 20, paddingTop: Platform.OS === 'ios' ? 50 : 30 },
-  
-  loadingHistoryContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  loadingHistoryText: {
-    marginTop: 12,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-
-  loadingContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingVertical: 10,
-    gap: 8,
-  },
-  loadingText: { 
-    fontSize: 14, 
-    fontStyle: 'italic',
-  },
+  loadingHistoryContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  loadingHistoryText: { marginTop: 12, fontSize: 14, fontWeight: '500' },
+  loadingContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, gap: 8 },
+  loadingText: { fontSize: 14, fontStyle: 'italic' },
 });

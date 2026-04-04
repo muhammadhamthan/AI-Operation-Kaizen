@@ -37,7 +37,8 @@ from app.core.enums import (
     IssueStatus, AssignmentStatus, ActionType, ChatRole, UserRole,
 )
 from app.schemas.chatbot_schema import ChatResponse
-from app.schemas.complaint_schema import ComplaintListResponse, ComplaintResponse
+from app.schemas.complaint_schema import ComplaintListResponse, ComplaintResponse , ComplaintFeedItem
+from app.schemas.pagination_schema import CursorPage, CursorParams , encode_cursor , decode_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -67,37 +68,14 @@ class ComplaintService:
           6. Commit
           7. Enqueue Celery call chain (fire-and-forget)
         """
-        # ── 1. Resolve issue ─────────────────────────────
-        if not issue_id:
-            # Auto-pick the supervisor's most recently updated eligible issue
-            stmt = (
-                select(Issue)
-                .where(
-                    Issue.raised_by_supervisor_id == user.id,
-                    Issue.status.in_([
-                        IssueStatus.RESOLVED_PENDING_REVIEW,
-                        IssueStatus.COMPLETED,
-                        IssueStatus.IN_PROGRESS,
-                    ]),
-                )
-                .order_by(Issue.updated_at.desc())
-                .limit(1)
-            )
-            recent = (await self.db.execute(stmt)).scalar_one_or_none()
-            if not recent:
-                return ChatResponse(
-                    message="No eligible issue found. Specify: 'complaint about issue 5'",
-                    intent="raise_complaint", actions_taken=[],
-                )
-            issue_id = recent.id
-
+        # ── 1. Resolve issue ────────────────────────────
         issue = (await self.db.execute(
             select(Issue).where(Issue.id == issue_id)
         )).scalar_one_or_none()
 
-        if not issue:
+        if not issue_id:
             return ChatResponse(
-                message=f"Issue #{issue_id} not found.",
+                message="No eligible issue found. Specified issue id might be Invaild , So please provide a vaild issue id'",
                 intent="raise_complaint", actions_taken=[],
             )
 
@@ -153,7 +131,10 @@ class ComplaintService:
             user_id=None,
             issue_id=issue_id,
             role_in_chat=ChatRole.SYSTEM,
-            message=f"⚠️ Complaint filed by {user.name}. Assignment #{assignment.id} reopened.",
+            message=(
+                f"⚠️ Complaint #{complaint.id} filed for Issue #{issue_id}.\n"
+                f"Issue reopened. Calling solver again now."
+            ),
             attachments=[],
         ))
 
@@ -165,6 +146,7 @@ class ComplaintService:
         # Complaint triggers a full new call+retry cycle for the same assignment.
         # Solver will be called repeatedly until they answer or threshold hit.
         self._enqueue_call(assignment.id , issue.id)
+        self._trigger_score_refresh_for_issue(issue.id)
 
         return ChatResponse(
             message=(
@@ -181,6 +163,100 @@ class ComplaintService:
                 f"Assignment → REOPENED",
                 "Solver call queued",
             ],
+        )
+        
+        
+    # ══════════════════════════════════════════════════════════════════════
+    # CURSOR-PAGINATED LIST  —  replaces list_complaints()
+    # ══════════════════════════════════════════════════════════════════════
+ 
+    async def list_complaints_cursor(
+        self,
+        current_user: User,
+        params: CursorParams,
+        issue_id: Optional[int] = None,
+        solver_id: Optional[int] = None,
+    ) -> CursorPage[ComplaintFeedItem]:
+        """
+        Single JOIN query — no selectinload, no N+1, no separate COUNT.
+ 
+        OLD approach:
+          SELECT complaints               (1 query)
+          + selectinload issue            (1 query per batch)
+          + selectinload supervisor       (1 query per batch)
+          + selectinload solver           (1 query per batch)
+          = 4 queries minimum
+ 
+        NEW approach:
+          SELECT complaints
+            JOIN issues         (get title inline)
+            JOIN users AS sup   (get supervisor name inline)
+            JOIN users AS solv  (get solver name inline)
+          WHERE id < cursor
+          ORDER BY id DESC
+          LIMIT 21
+          = 1 query total, always
+        """
+        last_id = params.get_last_id()
+        fetch_limit = params.limit + 1
+ 
+        # Alias the users table so we can join it twice (supervisor + solver)
+        from sqlalchemy.orm import aliased
+        SupervisorUser = aliased(User, flat=True)
+        SolverUser = aliased(User, flat=True)
+ 
+        stmt = (
+            select(
+                Complaint.id,
+                Complaint.issue_id,
+                Complaint.assignment_id,
+                Complaint.raised_by_supervisor_id,
+                Complaint.target_solver_id,
+                Complaint.complaint_details,
+                Complaint.complaint_image_url,
+                Complaint.created_at,
+                Complaint.updated_at,
+                # Inline issue title
+                Issue.title.label("issue_title"),
+                # Inline supervisor name
+                SupervisorUser.name.label("supervisor_name"),
+                # Inline solver name
+                SolverUser.name.label("solver_name"),
+            )
+            .join(Issue, Issue.id == Complaint.issue_id, isouter=True)
+            .join(SupervisorUser, SupervisorUser.id == Complaint.raised_by_supervisor_id, isouter=True)
+            .join(SolverUser, SolverUser.id == Complaint.target_solver_id, isouter=True)
+        )
+ 
+        # ── Role scope ────────────────────────────────────────────────────
+        if current_user.role == UserRole.SUPERVISOR:
+            stmt = stmt.where(Complaint.raised_by_supervisor_id == current_user.id)
+        elif current_user.role == UserRole.PROBLEMSOLVER:
+            stmt = stmt.where(Complaint.target_solver_id == current_user.id)
+ 
+        # ── Optional filters ──────────────────────────────────────────────
+        if issue_id:
+            stmt = stmt.where(Complaint.issue_id == issue_id)
+        if solver_id:
+            stmt = stmt.where(Complaint.target_solver_id == solver_id)
+ 
+        # ── Cursor filter ─────────────────────────────────────────────────
+        if last_id is not None:
+            stmt = stmt.where(Complaint.id < last_id)
+ 
+        stmt = stmt.order_by(Complaint.id.desc()).limit(fetch_limit)
+ 
+        rows = (await self.db.execute(stmt)).mappings().all()
+ 
+        has_more = len(rows) == fetch_limit
+        items = rows[:params.limit]
+        next_cursor = encode_cursor(items[-1]["id"]) if has_more and items else None
+ 
+        return CursorPage(
+            items=[self._to_feed_response(r) for r in items],
+            next_cursor=next_cursor,
+            total_returned=len(items),
+            has_more=has_more,
         )
 
     # ══════════════════════════════════════════════════════
@@ -294,6 +370,28 @@ class ComplaintService:
             created_at=complaint.created_at,
             updated_at=complaint.updated_at,
         )
+        
+    @staticmethod
+    def _to_feed_response(complaint) -> ComplaintFeedItem:
+        return ComplaintFeedItem(
+            id=complaint["id"],
+            issue_id=complaint["issue_id"],
+            issue_title=complaint.get("issue_title"),
+            supervisor_name=complaint.get("supervisor_name"),
+            solver_name=complaint.get("solver_name"),
+            created_at=complaint["created_at"],
+        )
+        
+    def _trigger_score_refresh_for_issue(issue_id: int) -> None:
+        """
+        Fire-and-forget: enqueue Celery task to refresh site + solver scores
+        for this issue. Must be called AFTER db.commit().
+        """
+        try:
+            from app.workers.score_task import trigger_issue_score_refresh
+            trigger_issue_score_refresh.delay(issue_id)
+        except Exception:
+            logger.exception("Failed to enqueue score refresh for issue #%s", issue_id)
 
 
 

@@ -8,7 +8,8 @@ import {
   TouchableOpacity, 
   Image, 
   RefreshControl,
-  Platform 
+  Platform,
+  ActivityIndicator // ✅ ADDED
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,13 +17,23 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { fetchComplaints, selectFilteredComplaints, selectComplaintsLoading, setFilters } from '../../../../src/store/slices/complaintsSlice';
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Avatar from '../../../../src/components/common/Avatar';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
+// ✅ IMPORTED NEW PAGINATION SELECTORS
+import { 
+  fetchComplaints, 
+  selectFilteredComplaints, 
+  selectComplaintsLoading, 
+  setFilters,
+  selectIsFetchingNextPage,
+  selectHasMoreComplaints,
+  selectComplaintsNextCursor
+} from '../../../../src/store/slices/complaintsSlice';
 
 export default function ComplaintsScreen() {
   const { theme, isDark } = useTheme();
@@ -34,13 +45,19 @@ export default function ComplaintsScreen() {
   const loading = useSelector(selectComplaintsLoading);
   const isOnline = useSelector(selectIsOnline);
   
+  // ✅ GRAB PAGINATION STATE FROM REDUX
+  const isFetchingNextPage = useSelector(selectIsFetchingNextPage);
+  const hasMore = useSelector(selectHasMoreComplaints);
+  const nextCursor = useSelector(selectComplaintsNextCursor);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
-    if (user) dispatch(fetchComplaints(user));
+    // ✅ CHANGED: Wrapped user in an object to match the new thunk signature
+    if (user) dispatch(fetchComplaints({ user }));
   }, [user]);
 
   useEffect(() => {
@@ -65,7 +82,8 @@ export default function ComplaintsScreen() {
     if (user) {
       try {
         await Promise.allSettled([
-          dispatch(fetchComplaints(user))
+          // ✅ CHANGED: Wrapped user in an object
+          dispatch(fetchComplaints({ user }))
         ]);
       } finally {
         setLastRefresh(Date.now());
@@ -75,6 +93,12 @@ export default function ComplaintsScreen() {
       setRefreshing(false);
     }
   }, [user, isOnline, lastRefresh, dispatch]);
+
+  // ✅ ADDED: Function to trigger the next page fetch
+  const handleLoadMore = () => {
+    if (!isOnline || isFetchingNextPage || !hasMore || loading) return;
+    dispatch(fetchComplaints({ user, cursor: nextCursor }));
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -240,6 +264,16 @@ export default function ComplaintsScreen() {
             />
           )
         }
+        // ✅ ADDED: INFINITE SCROLL TRIGGERS
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={accentColor} />
+            </View>
+          ) : null
+        }
       />
 
       <FullScreenSpinner visible={refreshing} message="Updating Complaints..." color={accentColor} />
@@ -285,6 +319,9 @@ const styles = StyleSheet.create({
   resultsCount: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, opacity: 0.8 },
   
   listContent: { paddingHorizontal: 16, paddingBottom: 30 },
+  
+  // ✅ ADDED: Spacer for the loading spinner
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
   
   card: { 
     marginBottom: 14,

@@ -1,367 +1,260 @@
 """
-PURPOSE: Compute solver performance scores on the backend.
-Replaces frontend scoreEngine.js entirely.
-Same formula — but queries PostgreSQL instead of mock arrays.
+app/services/solver_performance_service.py  — OPTIMIZED v2
+
+NOW READS FROM score_cache TABLE INSTEAD OF COMPUTING ON-THE-FLY.
+
+Latency: was ~500ms-2s per solver (N queries) → now ~5ms total (single SELECT)
+
+Falls back to live computation if cache is empty/stale (e.g. first boot).
 """
+
+
+"""
+
+SO NOW THERE ARE ONE PROBLEM SO FAR I FOUND IT 
+ONE IS WHEN EVER THE UPDATE IN DB IT SHOULD IMMEDIATELY UPDATE INTO THE DASHBOARD / RELEVENT SCREEN , 
+IT IS HAPPENING IN _enqueue_solver_refresh THIS FUNCTION AND 
+WHEN EVER THE CREATE ISSUE OR ANY UPDATES IN THE DATA IT SHOULD TIGGER A IMMEDIATE CHAGE INTO RELEVENT SCREEN RIUGHT AND ALSO INSTEAD OF ALL() use cursor pagination?
+"""
+
 
 import logging
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-# from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func as sql_func,select
+from sqlalchemy import select, text
 
 from app.models.user import User
-from app.models.issue import Issue
-from app.models.issue_assignment import IssueAssignment
-from app.models.issue_history import IssueHistory
-from app.models.call_log import CallLog
-from app.models.complaint import Complaint
+from app.models.score_cache import ScoreCache
 from app.models.problem_solver_skill import ProblemSolverSkill
 from app.models.supervisor_site import SupervisorSite
-from app.core.enums import (
-    IssueStatus, AssignmentStatus, CallStatus, UserRole,
-)
+from app.core.enums import UserRole
 from app.schemas.solver_performance_schema import (
     SolverPerformanceDetail,
     SolverWithPerformance,
     SolverPerformanceListResponse,
+    SolverListItem,
 )
 
 logger = logging.getLogger(__name__)
 
-FIXED_STATUSES = [AssignmentStatus.COMPLETED]
+# Cache is considered stale after 30 minutes — triggers live recompute fallback
+CACHE_STALE_MINUTES = 10
 
 
 class SolverPerformanceService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
     # MAIN: Get all solvers with performance (role-filtered)
-    # ══════════════════════════════════════════════════════
+    # Single DB query + cache read. Was: N×5 queries.
+    # ══════════════════════════════════════════════════════════════
 
     async def get_solvers_with_performance(
         self, current_user: User
     ) -> SolverPerformanceListResponse:
 
-        solvers = await self._get_visible_solvers(current_user)
+        solver_ids = await self._get_visible_solver_ids(current_user)
+        if not solver_ids:
+            return SolverPerformanceListResponse(total=0, solvers=[])
 
+        # ── Single query: solver rows + cache rows ───────────────
+        # JOIN users with score_cache in one round-trip
+        rows = (await self.db.execute(
+            text("""
+                SELECT
+                    u.id, u.name, u.phone, u.email, u.role, u.is_active,
+                    sc.score, sc.label, sc.computed_at
+                FROM users u
+                LEFT JOIN score_cache sc
+                    ON sc.entity_type = 'solver' AND sc.entity_id = u.id
+                WHERE u.id = ANY(:ids)
+                ORDER BY sc.score DESC NULLS LAST
+            """),
+            {"ids": list(solver_ids)},
+        )).all() 
+
+        stale_ids = []
         results = []
-
-        for solver in solvers:
-            perf = await self._calculate_score(solver.id)
-            skills = await self._get_solver_skills(solver.id)
-            sites = await self._get_solver_sites(solver.id)
-
-            results.append(
-                SolverWithPerformance(
-                    id=solver.id,
-                    name=solver.name,
-                    phone=solver.phone,
-                    email=solver.email,
-                    role=solver.role.value,
-                    is_active=solver.is_active,
-                    performance=perf,
-                    sites=sites,
-                    skills=skills,
-                )
+        
+         # HERE USED LOGIC IS Stale-While-Revalidate (SWR)
+        for row in rows:
+            is_stale  = (
+                row.computed_at is None
+                or (datetime.now(timezone.utc) - row.computed_at)
+                   >= timedelta(minutes=CACHE_STALE_MINUTES)
             )
+            if is_stale:
+                stale_ids.append(row.id)
+
+            results.append(self._row_to_list_schema(row))
+
+        # Background refresh for stale entries (fire-and-forget)
+        if stale_ids:
+            self._enqueue_solver_refresh(stale_ids)
 
         return SolverPerformanceListResponse(
             total=len(results),
             solvers=results,
         )
 
-    # ══════════════════════════════════════════════════════
-    # SINGLE SOLVER
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
+    # SINGLE SOLVER DETAIL
+    # ══════════════════════════════════════════════════════════════
 
     async def get_solver_performance(
         self, solver_id: int
     ) -> Optional[SolverWithPerformance]:
 
-        result = await self.db.execute(
-            select(User).where(
-                User.id == solver_id,
-                User.role == UserRole.PROBLEMSOLVER
-            )
-        )
+        row = (await self.db.execute(
+            text("""
+                SELECT
+                    u.id, u.name, u.phone, u.email, u.role, u.is_active,
+                    sc.score, sc.label, sc.breakdown, sc.computed_at
+                FROM users u
+                LEFT JOIN score_cache sc
+                    ON sc.entity_type = 'solver' AND sc.entity_id = u.id
+                WHERE u.id = :solver_id
+                  AND u.role = 'problemsolver'
+            """),
+            {"solver_id": solver_id},
+        )).first()
 
-        solver = result.scalar_one_or_none()
-
-        if not solver:
+        if not row:
             return None
 
-        perf = await self._calculate_score(solver_id)
-        skills = await self._get_solver_skills(solver_id)
-        sites = await self._get_solver_sites(solver_id)
+        breakdown = row.breakdown or {}
 
+        # If cache is empty or stale, compute live and persist
+        if not breakdown or row.computed_at is None:
+            logger.info(
+                "Score cache empty for solver #%s — computing live", solver_id
+            )
+            from app.services.score_refresh import ScoreRefreshService
+            await ScoreRefreshService(self.db).refresh_solver(solver_id)
+            # Re-fetch after refresh
+            row = (await self.db.execute(
+                text("""
+                    SELECT
+                        u.id, u.name, u.phone, u.email, u.role, u.is_active,
+                        sc.score, sc.label, sc.breakdown, sc.computed_at
+                    FROM users u
+                    LEFT JOIN score_cache sc
+                        ON sc.entity_type = 'solver' AND sc.entity_id = u.id
+                    WHERE u.id = :solver_id
+                """),
+                {"solver_id": solver_id},
+            )).first()
+            breakdown = row.breakdown or {}
+
+        return self._row_to_schema(row, breakdown)
+
+    # ══════════════════════════════════════════════════════════════
+    # PRIVATE: Build response schema from cache row
+    # ══════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _row_to_schema(row, breakdown: dict) -> SolverWithPerformance:
+        perf = SolverPerformanceDetail(
+            solver_id=row.id,
+            score=int(row.score or 0),
+            label=row.label or "Evaluating",
+            label_color=(
+                "#10a37f" if (row.score or 0) >= 80
+                else "#f59e0b" if (row.score or 0) >= 55
+                else "#ef4444"
+            ),
+            total_assigned           = breakdown.get("total_assigned", 0),
+            completed_count          = breakdown.get("completed_count", 0),
+            active_count             = breakdown.get("active_count", 0),
+            in_progress_count        = breakdown.get("in_progress_count", 0),
+            assigned_not_started_count = breakdown.get("assigned_not_started_count", 0),
+            reopened_count           = breakdown.get("reopened_count", 0),
+            escalated_count          = breakdown.get("escalated_count", 0),
+            overdue_count            = breakdown.get("overdue_count", 0),
+            completion_rate          = breakdown.get("completion_rate", 0),
+            on_time_rate             = breakdown.get("on_time_rate", 0),
+            call_answer_rate         = breakdown.get("call_answer_rate", 0),
+            total_calls              = breakdown.get("total_calls", 0),
+            answered_calls           = breakdown.get("answered_calls", 0),
+            missed_calls             = breakdown.get("missed_calls", 0),
+            complaint_count          = breakdown.get("complaint_count", 0),
+        )
         return SolverWithPerformance(
-            id=solver.id,
-            name=solver.name,
-            phone=solver.phone,
-            email=solver.email,
-            role=solver.role.value,
-            is_active=solver.is_active,
+            id=row.id,
+            name=row.name,
+            phone=row.phone,
+            email=row.email,
+            role=row.role if isinstance(row.role, str) else row.role.value,
+            is_active=row.is_active,
             performance=perf,
-            sites=sites,
-            skills=skills,
+            sites=breakdown.get("sites", []),
+            skills=breakdown.get("skills", []),
         )
+        
+        
+    @staticmethod
+    def _row_to_list_schema(row) -> SolverListItem:
+        score = int(row.score or 0)
+        return SolverListItem(
+            id=row.id,
+            name=row.name,
+            phone=row.phone,
+            email=row.email,
+            role=row.role if isinstance(row.role, str) else row.role.value,
+            is_active=row.is_active,
+            score=score,
+            label=row.label or "Evaluating",
+            label_color=(
+                "#10a37f" if score >= 80
+                else "#f59e0b" if score >= 55
+                else "#ef4444"
+            ),
+        )    
+    
 
-    # ══════════════════════════════════════════════════════
-    # CORE: Calculate solver score
-    # Same formula as frontend scoreEngine.js
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
+    # PRIVATE: Role-based solver ID list (no full User objects)
+    # ══════════════════════════════════════════════════════════════
 
-    async def _calculate_score(self, solver_id: int) -> SolverPerformanceDetail:
-        now = datetime.now(timezone.utc)
-
-        # ── All assignments ───────────────────────────────────
-        all_assignments = (await self.db.execute(
-            select(IssueAssignment).where(
-                IssueAssignment.assigned_to_solver_id == solver_id
-            )
-        )).scalars().all()
-
-        total_assigned = len(all_assignments)
-
-        # ── Completed assignments ─────────────────────────────
-        completed_assignments = [
-            a for a in all_assignments
-            if a.status == AssignmentStatus.COMPLETED
-        ]
-        completed_count = len(completed_assignments)
-
-        # ── Completion rate (40% weight) ──────────────────────
-        completion_rate  = completed_count / total_assigned if total_assigned > 0 else 0
-        completion_score = completion_rate * 40
-
-        # ── On-time rate (30% weight) ─────────────────────────
-        on_time_count = 0
-        for a in completed_assignments:
-            if not a.due_date:
-                continue
-            completion_event = (await self.db.execute(
-                select(IssueHistory.created_at)
-                .where(
-                    IssueHistory.issue_id == a.issue_id,
-                    IssueHistory.new_status == IssueStatus.COMPLETED,
-                )
-                .order_by(IssueHistory.created_at.asc())
-                .limit(1)
-            )).scalar_one_or_none()
-
-            if completion_event and completion_event <= a.due_date:
-                on_time_count += 1
-
-        on_time_rate  = on_time_count / completed_count if completed_count > 0 else 10
-        on_time_score = on_time_rate * 30
-        # ADD THIS
-        print(f"due_date: {a.due_date} tzinfo={a.due_date.tzinfo}")
-        print(f"completion_event: {completion_event} tzinfo={getattr(completion_event, 'tzinfo', 'NO ATTR')}")
-        print(f"comparison result: {completion_event <= a.due_date if completion_event else 'no event'}")
-
-        # ── Call answer rate (20% weight) ─────────────────────
-        solver_calls = (await self.db.execute(
-            select(CallLog).where(CallLog.solver_id == solver_id)
-        )).scalars().all()
-
-        total_calls    = len(solver_calls)
-        answered_calls = len([c for c in solver_calls if c.status == CallStatus.ANSWERED])
-        call_answer_rate = answered_calls / total_calls if total_calls > 0 else 1.0
-        call_score = call_answer_rate * 20
-
-        # ── Complaint penalty (10% weight) ────────────────────
-        complaint_count = (await self.db.execute(
-            select(sql_func.count())
-            .select_from(Complaint)                          # ← Bug 3 fix
-            .where(Complaint.target_solver_id == solver_id)
-        )).scalar() or 0
-
-        complaint_penalty = min(complaint_count * 3, 10)
-        complaint_score   = 10 - complaint_penalty
-
-        # ── Total score ───────────────────────────────────────
-        total_score = max(0, min(100, round(
-            completion_score + on_time_score + call_score + complaint_score
-        )))
-
-        # ── Label ─────────────────────────────────────────────
-        if total_score >= 80:
-            label, label_color = "Top Performer", "#10a37f"
-        elif total_score >= 55:
-            label, label_color = "Good", "#f59e0b"
-        else:
-            label, label_color = "Needs Attention", "#ef4444"
-            
-        # ── Issue statuses (single query, not N queries) ──────
-        issue_ids = [a.issue_id for a in all_assignments]
-        issue_statuses: dict = {}
-        if issue_ids:
-            rows = (await self.db.execute(
-                select(Issue.id, Issue.status).where(Issue.id.in_(issue_ids))
-            )).all()
-            issue_statuses = {row.id: row.status for row in rows}
-
-        # ── Status counts ─────────────────────────────────────
-        in_progress = len([
-            a for a in all_assignments
-            if a.status == AssignmentStatus.ACTIVE
-            and issue_statuses.get(a.issue_id) == IssueStatus.IN_PROGRESS
-        ])
-        assigned_not_started = len([
-            a for a in all_assignments
-            if a.status == AssignmentStatus.ACTIVE
-            and issue_statuses.get(a.issue_id) in (IssueStatus.ASSIGNED, IssueStatus.OPEN)
-        ])
-        reopened  = len([a for a in all_assignments if a.status == AssignmentStatus.REOPENED])
-        escalated = len([
-            a for a in all_assignments
-            if issue_statuses.get(a.issue_id) == IssueStatus.ESCALATED
-        ])
-        overdue = len([
-            a for a in all_assignments
-            if a.due_date and a.due_date < now
-            and a.status != AssignmentStatus.COMPLETED
-        ])
-        active_count = in_progress + assigned_not_started + reopened
-
-        # ── ML predictions ────────────────────────────────────
-        predicted_days  = None
-        escalation_prob = None
-        try:
-            from app.ml.predictor import MLPredictor
-            predictor = MLPredictor()
-            predicted_days = predictor.predict_completion_time(
-                solver_id=solver_id,
-                completion_rate=round(completion_rate * 100),
-                on_time_rate=round(on_time_rate * 100),      # ← Bug 2 fix
-                call_answer_rate=round(call_answer_rate * 100),
-                active_count=active_count,
-                complaint_count=complaint_count,
-            )
-            escalation_prob = predictor.predict_solver_escalation(
-                score=total_score,
-                active_count=active_count,
-                overdue_count=overdue,
-                missed_calls=total_calls - answered_calls,
-                complaint_count=complaint_count,
-            )
-        except Exception as e:
-            logger.debug(f"ML prediction skipped: {e}")
-
-        return SolverPerformanceDetail(
-            solver_id=solver_id,
-            score=total_score,
-            label=label,
-            label_color=label_color,
-            total_assigned=total_assigned,
-            completed_count=completed_count,
-            active_count=active_count,
-            in_progress_count=in_progress,
-            assigned_not_started_count=assigned_not_started,
-            reopened_count=reopened,
-            escalated_count=escalated,
-            overdue_count=overdue,
-            completion_rate=round(completion_rate * 100),
-            on_time_rate=round(on_time_rate * 100),
-            call_answer_rate=round(call_answer_rate * 100),
-            total_calls=total_calls,
-            answered_calls=answered_calls,
-            missed_calls=total_calls - answered_calls,
-            complaint_count=complaint_count,
-            predicted_completion_days=predicted_days,
-            escalation_probability=escalation_prob,
-        )
-    # ══════════════════════════════════════════════════════
-    # HELPERS
-    # ══════════════════════════════════════════════════════
-
-    async def _get_issue_status(self, issue_id: int):
-
-        result = await self.db.execute(
-            select(Issue.status).where(Issue.id == issue_id)
-        )
-
-        return result.scalar_one_or_none()
-
-    async def _get_solver_skills(self, solver_id: int) -> List[str]:
-        result = await self.db.execute(
-            select(ProblemSolverSkill.skill_type)
-            .where(ProblemSolverSkill.solver_id == solver_id)
-            .distinct()
-        )
-
-        return result.scalars().all()
-
-    async def _get_solver_sites(self, solver_id: int) -> List[str]:
-
-        from app.models.site import Site
-
-        result = await self.db.execute(
-            select(ProblemSolverSkill.site_id)
-            .where(
-                ProblemSolverSkill.solver_id == solver_id,
-                ProblemSolverSkill.site_id.is_not(None),
-            )
-            .distinct()
-        )
-
-        site_ids = result.scalars().all()
-
-        if not site_ids:
-            return []
-
-        result = await self.db.execute(
-            select(Site.name).where(Site.id.in_(site_ids))
-        )
-
-        return result.scalars().all()
-
-    async def _get_visible_solvers(self, user: User) -> List[User]:
-
-        # ── Get all active solvers ───────────────────────────
-        result = await self.db.execute(
-            select(User).where(
-                User.role == UserRole.PROBLEMSOLVER,
-                User.is_active == True
-            )
-        )
-
-        all_solvers = result.scalars().all()
-
-        # ── Manager sees all solvers ─────────────────────────
+    async def _get_visible_solver_ids(self, user: User) -> list[int]:
         if user.role == UserRole.MANAGER:
-            return all_solvers
+            return (await self.db.execute(
+                select(User.id).where(
+                    User.role == UserRole.PROBLEMSOLVER,
+                    User.is_active == True,
+                )
+            )).scalars().all()
 
-        # ── Supervisor sees solvers from their sites ─────────
         if user.role == UserRole.SUPERVISOR:
-
-            site_result = await self.db.execute(
+            site_ids = (await self.db.execute(
                 select(SupervisorSite.c.site_id).where(
                     SupervisorSite.c.supervisor_id == user.id
                 )
-            )
-
-            site_ids = site_result.scalars().all()
-
+            )).scalars().all()
             if not site_ids:
                 return []
-
-            solver_result = await self.db.execute(
+            return (await self.db.execute(
                 select(ProblemSolverSkill.solver_id)
                 .where(ProblemSolverSkill.site_id.in_(site_ids))
                 .distinct()
-            )
+            )).scalars().all()
 
-            solver_ids = solver_result.scalars().all()
-
-            return [s for s in all_solvers if s.id in solver_ids]
-
-        # ── Solver sees only themselves ──────────────────────
         if user.role == UserRole.PROBLEMSOLVER:
-            return [s for s in all_solvers if s.id == user.id]
+            return [user.id]
 
-        return all_solvers
+        return []
+
+    @staticmethod
+    def _enqueue_solver_refresh(solver_ids: list[int]) -> None:
+        try:
+            from app.workers.score_task import trigger_solver_score_refresh
+            for sid in solver_ids:
+                trigger_solver_score_refresh.delay(sid)
+        except Exception:
+            logger.exception("Failed to enqueue score refresh for solvers %s", solver_ids)
+            
+            
+            

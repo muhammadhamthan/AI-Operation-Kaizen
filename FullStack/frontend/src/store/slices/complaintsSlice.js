@@ -13,17 +13,23 @@ const initialState = {
     search: '',
     status: null,
   },
+  // 📍 ADDED: Pagination State
+  nextCursor: null,
+  hasMore: false,
+  isFetchingNextPage: false,
 };
 
 export const fetchComplaints = createAsyncThunk(
   'complaints/fetchAll',
-  async (user, { rejectWithValue }) => {
+  // 📍 CHANGED: Accept an object so we can pass user and cursor
+  async ({ user, cursor = null } = {}, { rejectWithValue }) => {
     try {
-      const result = await fetchComplaintsApi(user);    // ✅ pass user
+      // 📍 Pass the cursor to your API
+      const result = await fetchComplaintsApi({ cursor });    // ✅ pass user/cursor
       if (!result.success) {
         return rejectWithValue(result.error);
       }
-      return result.complaints;
+      return result.complaints; // This now contains { items, next_cursor, has_more }
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to fetch complaints');
     }
@@ -61,17 +67,39 @@ const complaintsSlice = createSlice({
   extraReducers: (builder) => {
     builder
       // fetchAll
-      .addCase(fetchComplaints.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchComplaints.pending, (state, action) => {
+        // 📍 CHANGED: Distinguish between initial load and infinite scroll load
+        if (action.meta.arg?.cursor) {
+          state.isFetchingNextPage = true;
+        } else {
+          state.loading = true;
+        }
         state.error = null;
       })
       .addCase(fetchComplaints.fulfilled, (state, action) => {
         state.loading = false;
-        state.complaints = action.payload;
+        state.isFetchingNextPage = false;
+        
+        // 📍 CHANGED: Safely extract array from the new backend payload
+        const payloadData = action.payload || {};
+        const newItems = payloadData.items || [];
+
+        if (action.meta.arg?.cursor) {
+          // Append for infinite scroll
+          state.complaints = [...state.complaints, ...newItems];
+        } else {
+          // Replace for initial load / pull-to-refresh
+          state.complaints = newItems;
+        }
+
+        // Store cursors
+        state.nextCursor = payloadData.next_cursor || null;
+        state.hasMore = payloadData.has_more ?? false;
         state.error = null;
       })
       .addCase(fetchComplaints.rejected, (state, action) => {
         state.loading = false;
+        state.isFetchingNextPage = false;
         state.error = action.payload;
       })
       // ✅ ADD fetchById cases
@@ -99,8 +127,18 @@ export const selectCurrentComplaint = (state) => state.complaints.currentComplai
 export const selectComplaintsLoading = (state) => state.complaints.loading;
 export const selectComplaintsError = (state) => state.complaints.error;
 export const selectFilters = (state) => state.complaints.filters;
+
+// 📍 ADDED: Pagination Selectors
+export const selectIsFetchingNextPage = (state) => state.complaints.isFetchingNextPage;
+export const selectHasMoreComplaints = (state) => state.complaints.hasMore;
+export const selectComplaintsNextCursor = (state) => state.complaints.nextCursor;
+
 export const selectFilteredComplaints = (state) => {
   const { complaints, filters } = state.complaints;
+  
+  // 📍 CHANGED: Safety check to prevent "not iterable" crashes
+  if (!Array.isArray(complaints)) return [];
+
   let filtered = [...complaints];
   
   if (filters.search) {

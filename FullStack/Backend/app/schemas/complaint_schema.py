@@ -32,6 +32,15 @@ from typing import Optional, List
 from datetime import datetime
 
 
+class ComplaintFeedItem(BaseModel):
+    id: int
+    issue_id: int
+    issue_title: Optional[str] = None
+    supervisor_name: Optional[str] = None
+    solver_name: Optional[str] = None
+    created_at: datetime
+    
+
 class ComplaintResponse(BaseModel):
     """
     Complaint record — created via chat, read via API.

@@ -7,7 +7,8 @@ import {
   TextInput, 
   TouchableOpacity, 
   RefreshControl,
-  Platform 
+  Platform,
+  ActivityIndicator // 📍 ADDED
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,14 +16,23 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-// 📍 NOTE: Make sure you export `selectEscalatedIssues` in your issuesSlice!
-import { fetchIssues, selectEscalatedIssues, selectIssuesLoading, setFilters } from '../../../../src/store/slices/issuesSlice';
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import IssueCard from '../../../../src/components/issue/IssueCard';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
+// 📍 IMPORTED NEW ESCALATED THUNK AND PAGINATION SELECTORS
+import { 
+  fetchEscalatedIssues, 
+  selectEscalatedIssues, 
+  selectIssuesLoading, 
+  setFilters,
+  selectIsFetchingNextPage,
+  selectHasMoreIssues,
+  selectIssuesNextCursor
+} from '../../../../src/store/slices/issuesSlice';
 
 export default function EscalatedIssuesScreen() {
   const { theme, isDark } = useTheme(); 
@@ -34,19 +44,26 @@ export default function EscalatedIssuesScreen() {
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
   
+  // 📍 NEW PAGINATION SELECTORS
+  const isFetchingNextPage = useSelector(selectIsFetchingNextPage);
+  const hasMore = useSelector(selectHasMoreIssues);
+  const nextCursor = useSelector(selectIssuesNextCursor);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
+  // 📍 INITIAL LOAD
   useEffect(() => {
-    if (user) dispatch(fetchIssues(user));
+    if (user) dispatch(fetchEscalatedIssues({}));
   }, [user, dispatch]);
 
   useEffect(() => {
     dispatch(setFilters({ search: searchText }));
   }, [searchText, dispatch]);
 
+  // 📍 PULL TO REFRESH
   const onRefresh = useCallback(async () => {
     if (!isOnline) {
       setToastMessage("Can't refresh while offline");
@@ -64,7 +81,7 @@ export default function EscalatedIssuesScreen() {
     setRefreshing(true);
     if (user) {
       try {
-        await Promise.allSettled([dispatch(fetchIssues(user))]);
+        await Promise.allSettled([dispatch(fetchEscalatedIssues({}))]);
       } finally {
         setLastRefresh(Date.now());
         setRefreshing(false);
@@ -74,8 +91,13 @@ export default function EscalatedIssuesScreen() {
     }
   }, [user, isOnline, lastRefresh, dispatch]);
 
+  // 📍 INFINITE SCROLL TRIGGER
+  const handleLoadMore = () => {
+    if (!isOnline || isFetchingNextPage || !hasMore || loading) return;
+    dispatch(fetchEscalatedIssues({ cursor: nextCursor, reset: false }));
+  };
+
   const handleIssuePress = (issue) => {
-    // 📍 ROUTES TO THE NEW ESCALATED DETAIL SCREEN
     router.push({ pathname: '/(main)/(tabs)/dashboard/escalated-detail', params: { id: issue.id } });
   };
 
@@ -90,14 +112,14 @@ export default function EscalatedIssuesScreen() {
     );
   });
 
-  if (loading && issues.length === 0 && !refreshing) {
-    return <Loader message="Loading escalated issues..." />;
-  }
-
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
-  const escalatedAccent = '#dc2626'; // 📍 Critical Red for Escalated
+  const escalatedAccent = '#dc2626'; 
+
+  if (loading && issues.length === 0 && !refreshing) {
+    return <Loader message="Loading escalated issues..." />;
+  }
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -166,6 +188,16 @@ export default function EscalatedIssuesScreen() {
             />
           )
         }
+        // 📍 NEW INFINITE SCROLL PROPS
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={escalatedAccent} />
+            </View>
+          ) : null
+        }
       />
 
       <FullScreenSpinner visible={refreshing} message="Updating Queue..." color={escalatedAccent} />
@@ -203,4 +235,7 @@ const styles = StyleSheet.create({
   resultsHeader: { paddingHorizontal: 20, paddingBottom: 12 },
   resultsCount: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  
+  // 📍 Spacer for the loading spinner
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
 });

@@ -9,6 +9,7 @@ import {
   ScrollView,
   Animated,
   Easing,
+  Image, 
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -18,6 +19,10 @@ import { useTheme } from '../../src/theme/ThemeContext';
 import { loginUser, selectAuthLoading, selectAuthError, clearError } from '../../src/store/slices/authSlice';
 import Input from '../../src/components/common/Input';
 import Button from '../../src/components/common/Button';
+
+// Pre-require images for performance, adjust paths if needed
+const logoDark = require('../../assets/images/kaizen_logo_dark.png');
+const logoWhite = require('../../assets/images/kaizen_logo_white.jpeg');
 
 export default function LoginScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -33,7 +38,7 @@ export default function LoginScreen() {
   // ── Premium Entrance Animations ──
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
+  const logoScale = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -85,13 +90,7 @@ export default function LoginScreen() {
   const screenBg = isDark ? '#121212' : '#ffffff'; 
   const textColor = isDark ? '#ffffff' : '#000000';
   const mutedColor = isDark ? '#8e8ea0' : '#6e6e80';
-  const logoBg = isDark ? '#ffffff' : '#000000';
-  const logoIconColor = isDark ? '#000000' : '#ffffff';
   
-  // Frosted Glass / Soft Card effect for the Dev box
-  const devBoxBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
-  const devBoxBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
-
   return (
     <SafeAreaView edges={['top', 'bottom']} style={[styles.container, { backgroundColor: screenBg }]}>
       
@@ -117,7 +116,7 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          bounces={false} // Prevents over-scrolling for a more native app feel
+          bounces={false} 
         >
           {/* ── Animated Header ── */}
           <Animated.View 
@@ -129,23 +128,17 @@ export default function LoginScreen() {
               }
             ]}
           >
-            {/* Logo with Glow Effect */}
-            <View style={styles.logoOuterGlow}>
-              <Animated.View 
-                style={[
-                  styles.logoContainer, 
-                  { 
-                    backgroundColor: logoBg,
-                    transform: [{ scale: logoScale }] 
-                  }
-                ]}
-              >
-                <Ionicons name="construct" size={32} color={logoIconColor} style={{ marginLeft: 2 }} />
-              </Animated.View>
-            </View>
+            {/* 📍 Pure Image - No shadows, no borders, no boxes */}
+            <Animated.View style={{ transform: [{ scale: logoScale }], marginBottom: 32 }}>
+              <Image
+                source={isDark ? logoDark : logoWhite}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </Animated.View>
 
             <Text style={[styles.title, { color: textColor }]}>
-              MaintenanceFlow
+              Kairox Ai Opex
             </Text>
             <Text style={[styles.subtitle, { color: mutedColor }]}>
               Industrial Issue Tracking
@@ -201,7 +194,6 @@ export default function LoginScreen() {
               style={styles.loginButton}
             />
 
-           
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -228,20 +220,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 56, 
   },
-  logoOuterGlow: {
-    shadowColor: '#10a37f', // OpenAI signature green glow
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
-    marginBottom: 28,
-  },
-  logoContainer: {
-    width: 68,
-    height: 68,
-    borderRadius: 24, 
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 380, // 📍 Cranked up from 200
+    height: 240, // 📍 Cranked up from 100
   },
   title: {
     fontSize: 34,
@@ -287,34 +268,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingVertical: 16, 
     borderRadius: 16, 
-  },
-
-  // ── Test Credentials Card ──
-  testCredentials: {
-    marginTop: 48,
-    padding: 20,
-    borderRadius: 20,
-    borderWidth: 1, 
-  },
-  devCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginBottom: 16,
-  },
-  testTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2, 
-  },
-  testList: {
-    gap: 10, 
-    alignItems: 'center',
-  },
-  testText: {
-    fontSize: 14,
-    letterSpacing: 0.3,
   },
 
   // ── Theme Toggle ──

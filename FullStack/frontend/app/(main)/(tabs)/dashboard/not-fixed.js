@@ -7,7 +7,8 @@ import {
   TextInput, 
   TouchableOpacity, 
   RefreshControl,
-  Platform 
+  Platform,
+  ActivityIndicator // 📍 ADDED
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,15 +16,23 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { fetchIssues, selectNotFixedIssues, selectIssuesLoading, setFilters } from '../../../../src/store/slices/issuesSlice';
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import IssueCard from '../../../../src/components/issue/IssueCard';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
 import Toast from '../../../../src/components/common/Toast';
-
-// ── ADDED REUSABLE SPINNER ──
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
+
+// 📍 IMPORT NEW SELECTORS AND THUNK
+import { 
+  fetchPendingIssues, // <-- Using the specific Pending endpoint now
+  selectNotFixedIssues, 
+  selectIssuesLoading, 
+  setFilters,
+  selectIsFetchingNextPage,
+  selectHasMoreIssues,
+  selectIssuesNextCursor
+} from '../../../../src/store/slices/issuesSlice';
 
 export default function NotFixedIssuesScreen() {
   const { theme, isDark } = useTheme(); 
@@ -35,14 +44,20 @@ export default function NotFixedIssuesScreen() {
   const loading = useSelector(selectIssuesLoading);
   const isOnline = useSelector(selectIsOnline);
   
+  // 📍 NEW PAGINATION SELECTORS
+  const isFetchingNextPage = useSelector(selectIsFetchingNextPage);
+  const hasMore = useSelector(selectHasMoreIssues);
+  const nextCursor = useSelector(selectIssuesNextCursor);
+  
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
+  // 📍 INITIAL LOAD
   useEffect(() => {
     if (user) {
-      dispatch(fetchIssues(user));
+      dispatch(fetchPendingIssues({}));
     }
   }, [user]);
 
@@ -50,6 +65,7 @@ export default function NotFixedIssuesScreen() {
     dispatch(setFilters({ search: searchText }));
   }, [searchText]);
 
+  // 📍 PULL TO REFRESH
   const onRefresh = useCallback(async () => {
     if (!isOnline) {
       setToastMessage("Can't refresh while offline");
@@ -67,9 +83,8 @@ export default function NotFixedIssuesScreen() {
     setRefreshing(true);
     if (user) {
       try {
-        // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
         await Promise.allSettled([
-          dispatch(fetchIssues(user))
+          dispatch(fetchPendingIssues({})) 
         ]);
       } finally {
         setLastRefresh(Date.now());
@@ -80,11 +95,16 @@ export default function NotFixedIssuesScreen() {
     }
   }, [user, isOnline, lastRefresh, dispatch]);
 
+  // 📍 INFINITE SCROLL TRIGGER
+  const handleLoadMore = () => {
+    if (!isOnline || isFetchingNextPage || !hasMore || loading) return;
+    dispatch(fetchPendingIssues({ cursor: nextCursor, reset: false }));
+  };
+
   const handleIssuePress = (issue) => {
     router.push({ pathname: '/(main)/(tabs)/dashboard/not-fixed-detail', params: { id: issue.id } });
   };
 
-  // 📍 FIX: Added Local Filtering Logic
   const filteredIssues = issues.filter((issue) => {
     if (!searchText) return true;
     const lowerSearch = searchText.toLowerCase();
@@ -96,28 +116,24 @@ export default function NotFixedIssuesScreen() {
     );
   });
 
-  // 📍 FIX: Added `&& !refreshing` to prevent Loader hijacking
   if (loading && issues.length === 0 && !refreshing) {
     return <Loader message="Loading issues..." />;
   }
 
-  // ── PREMIUM MONOCHROME PALETTE ──
   const bgColor = isDark ? '#212121' : '#f9f9f9';
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
-  const pendingAccent = '#f59e0b'; // Premium Amber instead of harsh orange
+  const pendingAccent = '#f59e0b'; 
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       
-      {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Pending Issues</Text>
         
-        {/* 📍 FIX: Added Web-only Refresh Button to Header */}
         <View style={styles.headerRight}>
           {Platform.OS === 'web' ? (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
@@ -129,7 +145,6 @@ export default function NotFixedIssuesScreen() {
         </View>
       </View>
 
-      {/* ── SEARCH BAR ── */}
       <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
         <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
           <Ionicons name="search" size={18} color={theme.textSecondary} />
@@ -148,17 +163,14 @@ export default function NotFixedIssuesScreen() {
         </View>
       </View>
 
-      {/* ── RESULTS COUNT ── */}
       <View style={styles.resultsHeader}>
-        {/* 📍 FIX: Output length of filtered array, not raw array */}
         <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
           {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
         </Text>
       </View>
 
-      {/* ── LIST ── */}
       <FlatList
-        data={filteredIssues} // 📍 FIX: Replaced `issues` with `filteredIssues`
+        data={filteredIssues} 
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => <IssueCard issue={item} onPress={() => handleIssuePress(item)} />}
         contentContainerStyle={styles.listContent}
@@ -170,7 +182,6 @@ export default function NotFixedIssuesScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
-        // 📍 FIX: Disables double spinner on web
         refreshControl={
           Platform.OS === 'web' ? undefined : (
             <RefreshControl
@@ -181,9 +192,18 @@ export default function NotFixedIssuesScreen() {
             />
           )
         }
+        // 📍 NEW INFINITE SCROLL PROPS
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={pendingAccent} />
+            </View>
+          ) : null
+        }
       />
 
-      {/* ── NEW CLEAN IMPLEMENTATION ── */}
       <FullScreenSpinner visible={refreshing} message="Updating Pending Issues..." color={pendingAccent} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
@@ -212,7 +232,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     paddingHorizontal: 14, 
-    height: 44, // Matched globally with all other screens
+    height: 44, 
     borderRadius: 12, 
     borderWidth: 1,
     gap: 8 
@@ -223,4 +243,7 @@ const styles = StyleSheet.create({
   resultsCount: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
   
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  
+  // 📍 Spacer for the loading spinner
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
 });
