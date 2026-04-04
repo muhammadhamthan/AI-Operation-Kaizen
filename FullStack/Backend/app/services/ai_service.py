@@ -1,12 +1,14 @@
 """
 AI MASTER SERVICE
 Intent detection + SQL agent + Issue creation + Voice call + Final Answer Summarizer
+
 """
 
 """
 AI MASTER SERVICE
 Intent detection + SQL agent + Issue creation + Voice call
 READ ONLY SQL agent (SELECT queries only)
+
 """
 
 import os
@@ -25,7 +27,7 @@ from langchain_community.agent_toolkits.sql.base import create_sql_agent
 from sqlalchemy import text
 from twilio.rest import Client
 
-from app.db.session import AsyncSessionLocal, SessionLocal
+from app.db.session import SessionLocal
 from app.core.config import settings
 
 load_dotenv()
@@ -382,12 +384,14 @@ def safe_json_parse(text):
 # ==================================================
 
 async def extract_issue(message: str, available_sites=None):
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            text("SELECT DISTINCT skill_type FROM problem_solver_skills")
-        )
-        rows = result.fetchall()
+
+    # ── Fetch valid skills from DB ──
+    conn = connect_db()
+    try:
+        rows = conn.execute(text("SELECT DISTINCT skill_type FROM problem_solver_skills")).fetchall()
         valid_skills = [row[0].lower() for row in rows]
+    finally:
+        conn.close()
 
     # ── Format sites ──
     if available_sites:
@@ -433,7 +437,7 @@ STRICT RULE: NEVER invent a site. ONLY return a value from the list above or nul
 OUTPUT RULES:
 - Return ONLY valid JSON — no explanation, no markdown, no extra text.
 - skill_name  → must be from {valid_skills} or null
-- site_location → must be from {sites_list}
+- site_location → must be from user input or null
 - days_to_fix → integer or null
 - priority    → "LOW", "MEDIUM", or "HIGH" based on urgency of the message
 """
@@ -498,8 +502,8 @@ def create_issue_from_data(data):
 
     skill = data.get("skill_name")
     location = data.get("site_location")
-    days = data.get("days_to_fix",2)
-   
+    days = data.get("days_to_fix")
+    
     if not days:
             return "❌ Deadline (days_to_fix) is required but was not provided."
 
@@ -697,7 +701,7 @@ def get_database():
 
 
 def sql_agent_executor(session_id: str):
-   
+    
     db = get_database()
 
     llm = ChatGroq(
@@ -755,7 +759,7 @@ Instructions:
         })
 
         result = response.get("output", str(response))
-       
+        
         explanation = groq_client.chat.completions.create(
     model="llama-3.3-70b-versatile",
     messages=[
@@ -900,7 +904,7 @@ If this is a follow-up or elaboration request, give full detail based on history
 )
 
         final_answer = explanation.choices[0].message.content
-       
+        
         print("SQL Agent Result:", result)
         print("SQL Agent Explanation:", final_answer)
 
@@ -1087,10 +1091,10 @@ CONTRADICTION EXAMPLES:
 MISSING ARG EXAMPLES (dropdown already set, just collect args):
 → Selected: approve_completion | Message: "approve"
   Reply: "To approve the issue, I need the Issue ID. Could you share it?"
-  User: "5" → CALL approve_completion(issue_id=5)
+  User: "45" → CALL approve_completion(issue_id=45)
 
 → Selected: reassign_solver | Message: "reassign"
-  Reply: "To reassign, I need the Issue ID and the new solver's name. Which issue should be reassigned?"
+  Reply: "To reassign, I need the Issue ID. Which issue should be reassigned?"
   User: "7" → Reply: "Who should Issue #7 be reassigned to?"
   User: "Ravi" → CALL reassign_solver(issue_id=7, solver_name="Ravi")
 
@@ -1099,12 +1103,13 @@ MISSING ARG EXAMPLES (dropdown already set, just collect args):
   User: "no response for 3 days" → CALL raise_complaint(issue_id=4, message="no response for 3 days")
 
 → Selected: extend_deadlines | Message: "extend issue 6"
-  → CALL extend_deadlines(issue_id=6)   ← days is optional, call immediately
+  → CALL extend_deadlines(issue_id=6)
 
 → Selected: query_function | Message: "show all open issues"
-  → CALL query_function(query="show all open issues")   ← no clarification needed
+  → CALL query_function(query="show all open issues")
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ARGUMENT COLLECTION FROM CONVERSATION (Redis)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1112,18 +1117,73 @@ ARGUMENT COLLECTION FROM CONVERSATION (Redis)
 
 Use the conversation history above to:
 → Resolve references like "that issue", "the same one", "it", "him"
-→ Recover missing args from previous turns
-→ NEVER ask for an arg already provided in a prior turn
-→ Example: AI asked "Which Issue ID?" → User replied "5" → issue_id = 5 → call function
-```
-
-Add these lines right after the bullet points:
-```
+→ Recover missing args from previous turns FOR THE SAME ACTIVE FUNCTION ONLY
+→ NEVER ask for an arg already provided in a prior turn of the same function session
 → If the last AI message starts with [PENDING:function_name], the user's current
   reply is the answer to the missing arg for that function.
   Extract the value, combine with all prior args, and call that function immediately.
 → Example: AI: "[PENDING:approve_completion] I need the Issue ID."
-            User: "5" → CALL approve_completion(issue_id=5) immediately
+            User: "45" → CALL approve_completion(issue_id=45) immediately
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ARG ISOLATION RULE — NO CROSS-FUNCTION ID REUSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CORE RULE:
+→ Every function call is a FRESH, INDEPENDENT session.
+→ Args collected or used in Function A MUST NEVER carry over to Function B.
+→ When a new intent starts (new dropdown selection OR new action keyword detected):
+   → Reset ALL collected args to zero
+   → Start fresh arg collection for the new function
+   → ALWAYS ask for required args again — no assumptions, no reuse
+
+SESSION LIFECYCLE:
+→ Session OPENS  → when a new intent/function is detected
+→ Session ACTIVE → while collecting missing args for that function (follow-up turns allowed)
+→ Session CLOSED → immediately after the function is successfully called
+→ Once CLOSED    → ALL args from that session are DEAD and invisible to any future function
+
+WHAT IS FORBIDDEN — cross-function arg bleed:
+━━━━━━━━━━━━━━━━━━━
+  Turn 1 → User: "i want to approve"
+          → AI: "[PENDING:approve_completion] I need the Issue ID. Could you share it?"
+  Turn 2 → User: "45"
+          → CALL approve_completion(issue_id=45) ✅ — session CLOSED
+
+  Turn 3 → User: "i want to extend deadlines"
+          → WRONG: extend_deadlines(issue_id=45) ❌  ← reusing ID from closed session
+          → CORRECT: "[PENDING:extend_deadlines] Please provide the Issue ID to extend the deadline." ✅
+
+  Turn 4 → User: "67"
+          → CALL extend_deadlines(issue_id=67) ✅ — new session, new ID
+
+WHAT IS ALLOWED — same function, same active session:
+━━━━━━━━━━━━━━━━━━━
+  Turn 1 → AI: "[PENDING:reassign_solver] Which issue should be reassigned?"
+  Turn 2 → User: "12"
+          → AI: "[PENDING:reassign_solver] Who should Issue #12 be reassigned to?"
+  Turn 3 → User: "Ravi"
+          → CALL reassign_solver(issue_id=12, solver_name="Ravi") ✅
+  (Same function still open — reuse of issue_id=12 within this session is allowed)
+
+APPLIES TO ALL ARGS ACROSS ALL FUNCTIONS:
+━━━━━━━━━━━━━━━━━━━
+  issue_id    → NEVER reuse from a closed session
+  solver_name → NEVER reuse from a closed session
+  priority    → NEVER reuse from a closed session
+  days        → NEVER reuse from a closed session
+  message     → NEVER reuse from a closed session
+
+GOLDEN RULE:
+→ Once a function is successfully called → session is CLOSED → all its args are DEAD.
+→ Next function = new session = collect every required arg from scratch.
+→ The ONLY time an arg can be reused is within the SAME open session
+  where the AI explicitly asked for it and the user replied in the immediately
+  preceding turns — and the function has NOT yet been called.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1173,20 +1233,6 @@ When indent IS set     → LOCKED INTENT rules above take over entirely
 When indent is NOT set → query_function is the default for everything else
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AVAILABLE FUNCTIONS & REQUIRED ARGS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-create_issue         → required: [message]
-approve_completion   → required: [issue_id]
-update_priority      → required: [issue_id, priority]
-extend_deadlines     → required: [issue_id] | optional: [days]
-solver_complete_work → required: [issue_id] | optional: [message]
-solver_report_blocker→ required: [issue_id] | optional: [message]
-raise_complaint      → required: [issue_id, message]
-reassign_solver      → required: [issue_id, solver_name]
-query_function       → required: [query]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MULTI-FUNCTION RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 If the user's message contains TWO or more distinct actions:
@@ -1199,14 +1245,14 @@ If the user's message contains TWO or more distinct actions:
 ARGUMENT COLLECTION RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 → Identify target function (from indent if set, else from message)
-STEP 2 → Check ALL required args in current message + Redis history
+STEP 2 → Check ALL required args in current message + Redis history (same session only)
 STEP 3A → All args present → call immediately
 STEP 3B → Any arg missing → DO NOT call → ask for ONE missing arg only
 
 SEQUENTIAL COLLECTION:
 When AI asked for a missing arg and user replies:
 → Treat reply as answer to last asked question
-→ Combine with all previously collected args
+→ Combine with all previously collected args (same session only)
 → If all args now complete → call immediately
 → If still missing → ask for next missing arg only
 
@@ -1273,9 +1319,12 @@ STRICT RULES — NEVER BREAK THESE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 NEVER call a function if any required arg is missing.
 NEVER assume or fabricate argument values.
-ALWAYS check Redis history before asking for an arg.
+NEVER reuse any arg from a previously completed (closed) function session.
+ALWAYS check Redis history within the same active session only.
 ALWAYS ask for only ONE missing arg per response.
+ALWAYS prefix pending responses with [PENDING:function_name].
 issue_id MUST always be cast to INTEGER.
+Every new function intent = new session = collect all required args from scratch.
 When indent is set → LOCKED INTENT rules override ALL other routing.
 When indent is set → NEVER trigger Constraint 1.
 When indent is query_function → call query_function immediately, no questions.
@@ -1351,7 +1400,7 @@ RULE 2 — COLLECT MISSING ARGS:
 → Use conversation history (Redis) to recover args from prior turns.
 
 RULE 3 — MESSAGE CONTRADICTS SELECTION:
-→ If the user's message clearly describes a DIFFERENT action (e.g. they selected
+→ If the user's message clearly describes a DIFFERENT action (e.g. they selected 
   "approve" but typed "extend deadline for issue 5"), do NOT silently call the wrong function.
 → Instead respond:
   "You selected [{indent}] from the menu, but your message looks like a different action.
@@ -1420,7 +1469,7 @@ async def master_agent(session_id: str, user_input: str, indent: str):
     None
 )
     if last_ai_msg and "[PENDING:create_issue|site_clarification|" in last_ai_msg:
-       
+        
         match = re.search(
         r"\[PENDING:create_issue\|site_clarification\|(.*?)\]",
         last_ai_msg
@@ -1428,11 +1477,11 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         if match:
             original_message = match.group(1)
             corrected_message = f"{original_message} (site: {user_input.strip()})"
-       
+        
             memory.chat_memory.add_user_message(user_input)
             memory.chat_memory.add_ai_message(f"Called: create_issue({{'message': '{corrected_message}'}})")
             save_memory(session_id, memory)
-       
+        
             return {
             "intent": "function_call",
             "calls": [{"function": "create_issue", "args": {"message": corrected_message}}],
@@ -1579,6 +1628,7 @@ async def master_agent(session_id: str, user_input: str, indent: str):
 
         memory.chat_memory.add_user_message(user_input)
         memory.chat_memory.add_ai_message(tagged)
+        
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}  # user sees clean message
 
@@ -1589,32 +1639,26 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         memory.chat_memory.add_ai_message(clarification)
         save_memory(session_id, memory)
         return {"intent": "clarification", "message": clarification}
-   
-async def run_general_llm(session_id: str, user_input: str):
-    memory = load_memory(session_id)
+# ==================================================
+# CLI
+# ==================================================
 
-    history_messages = memory.chat_memory.messages[-10:]
-    history_text = ""
-    for msg in history_messages:
-        role = "User" if msg.type == "human" else "AI"
-        history_text += f"{role}: {msg.content}\n"
+if __name__ == "__main__":
 
-    response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": "You are a helpful AI assistant."},
-            {"role": "user", "content": f"{history_text}\nUser: {user_input}"}
-        ],
-        temperature=0.3
-    )
+    print("🔥 MASTER AI SYSTEM READY")
 
-    final_answer = response.choices[0].message.content
+    while True:
 
-    memory.chat_memory.add_user_message(user_input)
-    memory.chat_memory.add_ai_message(final_answer)
-    save_memory(session_id, memory)
+        msg = input("\nYou: ")
 
-    return final_answer
+        if msg.lower() in ["exit","quit"]:
+            break
+
+        result = master_agent(msg)
+
+        print("\n==============================")
+        print(result)
+        print("==============================")
 
 
 
