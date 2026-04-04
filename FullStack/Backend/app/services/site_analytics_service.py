@@ -29,7 +29,7 @@ from app.schemas.site_analytics_schema import (
 
 logger = logging.getLogger(__name__)
 
-CACHE_STALE_MINUTES = 15
+CACHE_STALE_MINUTES = 10
 
 
 class SiteAnalyticsService:
@@ -71,7 +71,7 @@ class SiteAnalyticsService:
             is_stale  = (
                 row.computed_at is None
                 or (datetime.now(timezone.utc) - row.computed_at)
-                   > timedelta(minutes=CACHE_STALE_MINUTES)
+                   > timedelta(minutes= CACHE_STALE_MINUTES)
             )
             if is_stale:
                 stale_ids.append(row.id)

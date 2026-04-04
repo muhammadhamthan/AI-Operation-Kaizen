@@ -360,7 +360,7 @@ class DashboardCardService:
 
         rows = (await self.db.execute(stmt)).mappings().all()
 
-        has_more = len(rows) == fetch_limit
+        has_more = len(rows) == fetch_limit #BOOLEAN
         items = rows[: params.limit]
         next_cursor = encode_cursor(items[-1]["id"]) if has_more and items else None
 

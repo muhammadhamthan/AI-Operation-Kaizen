@@ -122,6 +122,18 @@ class IssueService:
         
         print("--------------------------",extraction)
         
+        solver_skill = extraction['skill_name']
+        if not solver_skill:
+            return ChatResponse(
+                message=(
+                    f"[PENDING:create_issue|skill_clarification|{message}]\n"
+                    f"❌ Couldn't extract the problem type from the message. "
+                    f"Please specify the type of problem (e.g., 'plumbing', 'electrical')."
+                ),
+                intent="create_issue",
+                actions_taken=["Problem type extraction failed"],
+            )
+        
         deadline_info = extraction['days_to_fix']
         if not deadline_info:
             return ChatResponse(
@@ -139,8 +151,9 @@ class IssueService:
             return ChatResponse(
                 message=(
                     f"[PENDING:create_issue|site_clarification|{message}]\n"
-                    f"❌ Couldn't extract site location from the message. "
-                    f"Please specify the site name (e.g., 'at Main Street')."
+                    f"❌ Couldn't find site '{extraction['site_location']}'. "
+                    f"Available: {', '.join(site_names)}"
+                    f"Please reply with the correct site name."
                 ),
                 intent="create_issue",
                 actions_taken=["Site extraction failed"],

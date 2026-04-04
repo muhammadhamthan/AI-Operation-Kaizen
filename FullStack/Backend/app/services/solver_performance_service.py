@@ -40,7 +40,7 @@ from app.schemas.solver_performance_schema import (
 logger = logging.getLogger(__name__)
 
 # Cache is considered stale after 30 minutes — triggers live recompute fallback
-CACHE_STALE_MINUTES = 15
+CACHE_STALE_MINUTES = 10
 
 
 class SolverPerformanceService:

@@ -32,6 +32,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.core.enums import UserRole
 from app.core.config import settings
 from app.db.session import SessionLocal 
 
@@ -130,7 +131,7 @@ class ScoreRefreshServiceSync:
 
     def _get_db(self) -> Session:
         if self._db is None:
-            self._db = SessionLocal()
+            self._db = _make_sync_session()
         return self._db
 
     def _close(self) -> None:
@@ -240,8 +241,9 @@ class ScoreRefreshServiceSync:
             row[0] for row in db.execute(
                 text("""
                     SELECT id FROM users
-                    WHERE role = 'problemsolver' AND is_active = true
-                """)
+                    WHERE role = :role AND is_active = true
+                """),
+                {"role": UserRole.PROBLEMSOLVER.value},
             ).all()
         ]
         for sid in solver_ids:
@@ -396,7 +398,7 @@ class ScoreRefreshServiceSync:
                      health, breakdown, computed_at, updated_at)
                 VALUES
                     ('solver', :entity_id, :entity_name, :score, :label,
-                     NULL, :breakdown::jsonb, :computed_at, :computed_at)
+                     NULL, CAST(:breakdown AS jsonb), :computed_at, :computed_at)
                 ON CONFLICT (entity_type, entity_id) DO UPDATE SET
                     entity_name = EXCLUDED.entity_name,
                     score       = EXCLUDED.score,
@@ -522,7 +524,7 @@ class ScoreRefreshServiceSync:
                      health, breakdown, computed_at, updated_at)
                 VALUES
                     ('site', :entity_id, :entity_name, :score, NULL,
-                     :health, :breakdown::jsonb, :computed_at, :computed_at)
+                     :health, CAST(:breakdown AS jsonb), :computed_at, :computed_at)
                 ON CONFLICT (entity_type, entity_id) DO UPDATE SET
                     entity_name = EXCLUDED.entity_name,
                     score       = EXCLUDED.score,

@@ -51,9 +51,9 @@ celery_app.conf.update(
     },
     
     beat_schedule={
-        "refresh-all-scores-15min": {
+        "refresh-all-scores-10min": {
             "task": "score_tasks.refresh_all_scores",
-            "schedule": 15 * 60,  # every 15 minutes
+            "schedule": 10 * 60,  # every 10 minutes
         },
     },
 )
