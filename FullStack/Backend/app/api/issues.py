@@ -125,56 +125,6 @@ async def get_issues_feed(
         search=search,
     )
 
-
-@router.get(
-    "",
-    response_model=IssueListResponse,
-    summary="List issues (read-only, role-filtered)",
-)
-async def list_issues(
-    status_filter: Optional[str] = None,
-    priority: Optional[str] = None,
-    site_id: Optional[int] = None,
-    search: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 20,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Returns issues visible to the current user based on their role.
-    Supervisor → issues from their sites.
-    Solver → issues assigned to them.
-    Manager → all issues.
-    """
-    issue_service = IssueService(db)
-
-    # Parse optional enums
-    status_enum = None
-    if status_filter:
-        try:
-            status_enum = IssueStatus(status_filter)
-        except ValueError:
-            raise HTTPException(400, f"Invalid status: {status_filter}")
-
-    priority_enum = None
-    if priority:
-        try:
-            priority_enum = Priority(priority)
-        except ValueError:
-            raise HTTPException(400, f"Invalid priority: {priority}")
-
-    return await issue_service.list_issues(
-        current_user=current_user,
-        status_filter=status_enum,
-        priority=priority_enum,
-        site_id=site_id,
-        search=search,
-        skip=skip,
-        limit=limit,
-    )
-
-
 @router.get(
     "/{issue_id}",
     response_model=IssueDetailResponse,

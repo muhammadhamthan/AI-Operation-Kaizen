@@ -56,37 +56,7 @@ async def get_complaints_feed(
         params=params,
         issue_id=issue_id,
         solver_id=solver_id,
-    )
-    
-
-@router.get(
-    "",
-    response_model=ComplaintListResponse,
-    summary="List complaints (read-only, role-filtered)",
-)
-async def list_complaints(
-    issue_id: Optional[int] = None,
-    solver_id: Optional[int] = None,
-    skip: int = 0,
-    # limit: int = 20,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Supervisor → complaints they raised.
-    Solver → complaints against them.
-    Manager → all complaints.
-    """
-    service = ComplaintService(db)
-
-    return await service.list_complaints(
-        current_user=current_user,
-        issue_id=issue_id,
-        solver_id=solver_id,
-        skip=skip,
-        # limit=limit,
-    )
-
+    )    
 
 @router.get(
     "/{complaint_id}",
