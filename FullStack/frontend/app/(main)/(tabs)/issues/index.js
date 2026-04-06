@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -80,13 +80,9 @@ export default function IssuesTabScreen() {
 
   const debouncedSearch = useDebounce(searchText, 300);
 
-  const hasFetchedIssuesRef = useRef(false);
-
+  // 📍 UPDATED: Initial load explicitly asks for a reset (sends null cursor)
   useEffect(() => {
-    if (!user || hasFetchedIssuesRef.current) return;
-
-    dispatch(fetchIssues({ reset: true }));
-    hasFetchedIssuesRef.current = true;
+    if (user) dispatch(fetchIssues({ reset: true }));
   }, [user, dispatch]);
 
   const realSites = useMemo(() => {
