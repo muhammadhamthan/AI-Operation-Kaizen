@@ -1,15 +1,8 @@
-import React, { useEffect } from 'react';
-import { Redirect } from 'expo-router';
-import { useSelector } from 'react-redux';
-import { selectIsAuthenticated } from '../src/store/slices/authSlice';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import React from 'react';
+import { View } from 'react-native';
 
 export default function Index() {
-  const isAuthenticated = useSelector(selectIsAuthenticated);
-
-  if (isAuthenticated) {
-    return <Redirect href="/(main)/(tabs)/chat" />;
-  }
-
-  return <Redirect href="/(auth)/login" />;
+  // 📍 The global routing guard in _layout.js handles all redirects now.
+  // We just return an empty view here so they don't fight and cause infinite loops.
+  return <View style={{ flex: 1, backgroundColor: '#0b0b14' }} />;
 }
