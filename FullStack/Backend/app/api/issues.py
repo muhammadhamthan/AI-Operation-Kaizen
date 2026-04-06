@@ -39,7 +39,7 @@ router = APIRouter()
 # ══════════════════════════════════════════════════════════════════════════════
  
 @router.get(
-    "/feed",
+    "",
     response_model=CursorPage[IssueResponse],
     summary="Cursor-paginated issue feed (fast, use for all UI pages)",
 )

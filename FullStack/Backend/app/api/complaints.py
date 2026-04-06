@@ -29,7 +29,7 @@ router = APIRouter()
 
 
 @router.get(
-    "/Complaintfeed",
+    "",
     response_model=CursorPage[ComplaintFeedItem],
     summary="Cursor-paginated complaint feed (fast, use for all UI pages)",
 )

@@ -27,7 +27,7 @@ import { withRetry } from '../utils/networkRetry';
 //   }
   
 //   // Native apps need full URL
-//   return 'http://localhost:8001/api';
+//   return 'http://localhost:8001/api';//https://api.kairoxaitech.com
 // };
 
 const backendUrl = 'https://api.kairoxaitech.com';
@@ -192,7 +192,7 @@ export const fetchIssues = async (filters = {}) => {
 
     // Hit the exact URL that worked for you, passing params as an object
     const response = await withRetry(
-      () => api.get('/api/v1/issues/feed', { params: queryParams }),
+      () => api.get('/api/v1/issues', { params: queryParams }),
       { maxRetries: 2 }
     );
     
@@ -375,7 +375,7 @@ export const fetchComplaints = async ({ cursor = null, limit = 20 } = {}) => {
     if (cursor) queryParams.cursor = cursor;
 
     // 📍 CHANGED: 'feed' to 'Complaintfeed' to match Python router
-    const response = await api.get('/api/v1/complaints/Complaintfeed', { params: queryParams });
+    const response = await api.get('/api/v1/complaints', { params: queryParams });
 
     // Return the whole object exactly as backend sent it
     const complaintsData = response.data || {};
