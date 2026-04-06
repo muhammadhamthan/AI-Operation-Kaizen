@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Stack, useRouter, useSegments, usePathname } from 'expo-router'; // 📍 ADDED usePathname
+import { Stack, useRouter, useSegments, usePathname } from 'expo-router'; 
 import { Provider, useDispatch, useSelector } from 'react-redux'; 
 import { store } from '../src/store';
 import { ThemeProvider } from '../src/theme/ThemeContext';
@@ -17,12 +17,11 @@ import useNetworkStatus from '../src/hooks/useNetworkStatus';
 
 function AppContent() {
   const [isSplashVisible, setIsSplashVisible] = useState(true);
-  const [isFirstLaunch, setIsFirstLaunch] = useState(null); 
 
   const dispatch = useDispatch();
   const router = useRouter();
   const segments = useSegments();
-  const pathname = usePathname(); // 📍 ADDED PATHNAME TRACKING
+  const pathname = usePathname(); 
   
   const isInitialized = useSelector(selectIsInitialized);
   const isAuthenticated = useSelector(selectIsAuthenticated);
@@ -32,13 +31,6 @@ function AppContent() {
   // 1. Kick off Redux Auth Check AND Onboarding Check on mount
   useEffect(() => {
     const prepareApp = async () => {
-      try {
-        const hasSeen = await AsyncStorage.getItem('has_seen_onboarding');
-        setIsFirstLaunch(hasSeen !== 'true');
-      } catch (error) {
-        setIsFirstLaunch(true); 
-      }
-
       await dispatch(checkAuthStatus());
       setTimeout(() => setIsSplashVisible(false), 500);
     };
@@ -46,36 +38,29 @@ function AppContent() {
     prepareApp();
   }, [dispatch]);
 
-  // 2. THE ULTIMATE AUTH & ONBOARDING GUARD (Web-Proofed)
+  // 2. THE ULTIMATE AUTH GUARD (Onboarding Always First)
   useEffect(() => {
     const runGuard = async () => {
-      if (!isInitialized || isFirstLaunch === null || isSplashVisible) return;
+      if (!isInitialized || isSplashVisible) return;
 
-      const hasSeen = await AsyncStorage.getItem('has_seen_onboarding');
-      const reallyFirstLaunch = hasSeen !== 'true';
-
-      // 📍 THE FIX: Vercel strips route groups, so we MUST check pathname too!
       const inAuthGroup = segments[0] === '(auth)' || pathname.startsWith('/login');
       const inOnboarding = segments[0] === 'onboarding' || pathname.startsWith('/onboarding');
 
-      if (reallyFirstLaunch && !inOnboarding) {
-        // 🚀 1. Brand new user? Drag to onboarding
+      if (!isAuthenticated && !inAuthGroup && !inOnboarding) {
+        // 🚀 1. Logged out and anywhere else? Force to onboarding
         router.replace('/onboarding');
-      } else if (!reallyFirstLaunch && !isAuthenticated && !inAuthGroup && !inOnboarding) {
-        // 🔒 2. Finished onboarding but not logged in? Drag to login
-        router.replace('/(auth)/login');
       } else if (isAuthenticated && (inAuthGroup || inOnboarding || pathname === '/')) {
-        // ✅ 3. Logged in but on login/onboarding/root? Send to main app
+        // ✅ 2. Logged in but stuck on login/onboarding/root? Send to main app
         router.replace('/(main)/(tabs)/chat'); 
       }
     };
 
     runGuard();
-  }, [isInitialized, isAuthenticated, segments, pathname, isSplashVisible, isFirstLaunch]);
+  }, [isInitialized, isAuthenticated, segments, pathname, isSplashVisible]);
 
   
   // Show Loader while initializing EVERYTHING
-  if (!isInitialized || isFirstLaunch === null || isSplashVisible) {
+  if (!isInitialized || isSplashVisible) {
     return <Loader message="Making Your Work Easy..." fullScreen={true} />;
   }
 
@@ -108,3 +93,4 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
