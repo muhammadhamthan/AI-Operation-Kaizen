@@ -1,12 +1,8 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View } from 'react-native';
 
 export default function Index() {
-  // This file can be simplified — the _layout.js guard handles routing
-  // Just show a blank view; the guard will redirect
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator size="large" />
-    </View>
-  );
+  // 📍 The global routing guard in _layout.js handles all redirects now.
+  // We just return an empty view here so they don't fight and cause infinite loops.
+  return <View style={{ flex: 1, backgroundColor: '#0b0b14' }} />;
 }

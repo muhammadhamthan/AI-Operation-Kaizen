@@ -129,11 +129,19 @@ class SolverPerformanceService:
 
         # If cache is empty or stale, compute live and persist
         if not breakdown or row.computed_at is None:
-            logger.info(
-                "Score cache empty for solver #%s — computing live", solver_id
-            )
-            from app.services.score_refresh import ScoreRefreshService
-            await ScoreRefreshService(self.db).refresh_solver(solver_id)
+            # logger.info(
+            #     "Score cache empty for solver #%s — computing live", solver_id
+            # )
+            # from app.services.score_refresh import ScoreRefreshService
+            # await ScoreRefreshService(self.db).refresh_solver(solver_id)
+            
+            # Fire-and-forget refresh instead of blocking
+            try:
+                from app.workers.score_task import trigger_solver_score_refresh
+                trigger_solver_score_refresh.delay(solver_id)
+            except Exception:
+                pass
+                
             # Re-fetch after refresh
             row = (await self.db.execute(
                 text("""
