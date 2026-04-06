@@ -21,11 +21,7 @@ import Input from '../../src/components/common/Input';
 import Button from '../../src/components/common/Button';
 
 // Pre-require images for performance, adjust paths if needed
-<<<<<<< HEAD
-const logoDark = require('../../assets/images/kaizen_logo_dark.jpeg');
-=======
 const logoDark = require('../../assets/images/kaizen_logo_dark.png');
->>>>>>> f3fd7befb7601d5db29678c03f51960325e15de0
 const logoWhite = require('../../assets/images/kaizen_logo_white.jpeg');
 
 export default function LoginScreen() {
@@ -133,11 +129,7 @@ export default function LoginScreen() {
             ]}
           >
             {/* 📍 Pure Image - No shadows, no borders, no boxes */}
-<<<<<<< HEAD
-            <Animated.View style={{ transform: [{ scale: logoScale }], marginBottom: 24 }}>
-=======
             <Animated.View style={{ transform: [{ scale: logoScale }], marginBottom: 32 }}>
->>>>>>> f3fd7befb7601d5db29678c03f51960325e15de0
               <Image
                 source={isDark ? logoDark : logoWhite}
                 style={styles.logoImage}
@@ -229,13 +221,8 @@ const styles = StyleSheet.create({
     marginBottom: 56, 
   },
   logoImage: {
-<<<<<<< HEAD
-    width: 200, 
-    height: 100, 
-=======
     width: 380, // 📍 Cranked up from 200
     height: 240, // 📍 Cranked up from 100
->>>>>>> f3fd7befb7601d5db29678c03f51960325e15de0
   },
   title: {
     fontSize: 34,
