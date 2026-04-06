@@ -25,7 +25,7 @@ all data has been loaded.
 
 from __future__ import annotations
 from typing import Generic, List, Optional, TypeVar
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field , field_validator
 import base64
 import json
 
@@ -105,7 +105,14 @@ class CursorParams(BaseModel):
         le=100,
         description="Number of items per page (1–100, default 20)",
     )
-
+    
+    @field_validator('cursor', mode='before')
+    @classmethod
+    def empty_string_to_none(cls, v):
+        if v == '' or v == 'null' or v == 'undefined':
+            return None
+        return v
+    
     def get_last_id(self) -> Optional[int]:
         """Returns the decoded last ID, or None for first page."""
         if self.cursor is None:

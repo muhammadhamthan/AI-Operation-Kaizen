@@ -110,8 +110,11 @@ class SiteAnalyticsService:
 
         if not breakdown or row.computed_at is None:
             logger.info("Score cache empty for site #%s — computing live", site_id)
-            from app.services.score_refresh import ScoreRefreshService
-            await ScoreRefreshService(self.db).refresh_site(site_id)
+            try:
+                from app.workers.score_task import trigger_site_score_refresh
+                trigger_site_score_refresh.delay(site_id)
+            except Exception:
+                pass
             row = (await self.db.execute(
                 text("""
                     SELECT

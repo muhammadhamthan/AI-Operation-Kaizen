@@ -77,7 +77,7 @@ class ScoreRefreshService:
         row = (await self.db.execute(
             text("""
                 SELECT i.site_id,
-                       array_agg(DISTINCT ia.assigned_to_solver_id) AS solver_ids
+                        array_agg(DISTINCT ia.assigned_to_solver_id) AS solver_ids
                 FROM issues i
                 LEFT JOIN issue_assignments ia ON ia.issue_id = i.id
                 WHERE i.id = :issue_id
