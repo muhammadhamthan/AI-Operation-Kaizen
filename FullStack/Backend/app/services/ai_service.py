@@ -3,6 +3,7 @@ AI MASTER SERVICE
 Intent detection + SQL agent + Issue creation + Voice call + Final Answer Summarizer
 
 """
+from google.genai.live import AsyncSession
 
 """
 AI MASTER SERVICE
@@ -383,15 +384,14 @@ def safe_json_parse(text):
 # ISSUE EXTRACTION
 # ==================================================
 
-async def extract_issue(message: str, available_sites=None):
+# Hamthan : changed the sync extraction into an async function that takes db session as argument
+async def extract_issue(message: str,db: AsyncSession, available_sites=None):
+    result = await db.execute(
+        text("SELECT DISTINCT skill_type FROM problem_solver_skills")
+    )
 
-    # ── Fetch valid skills from DB ──
-    conn = connect_db()
-    try:
-        rows = conn.execute(text("SELECT DISTINCT skill_type FROM problem_solver_skills")).fetchall()
-        valid_skills = [row[0].lower() for row in rows]
-    finally:
-        conn.close()
+    rows = result.fetchall()
+    valid_skills = [row[0].lower() for row in rows]
 
     # ── Format sites ──
     if available_sites:
@@ -1028,6 +1028,113 @@ RULE 6 — FOLLOW-UP TURNS (Redis history):
 → NEVER re-ask for an arg that was already provided in a prior turn
 
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[SESSION RESET RULE] — ALWAYS ASK FRESH ARGS ON NEW FUNCTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CORE RULE:
+→ Every time a new function session opens, ALL required args must be
+  collected fresh from the user in that session only.
+→ NEVER carry any arg (issue_id, solver_name, priority, days, message)
+  from any previously CLOSED session into a new session.
+→ This applies even if the previous session's issue_id is still visible
+  in the conversation history.
+
+WHAT TRIGGERS A NEW SESSION:
+→ User mentions a new action keyword (approve, extend, reassign, etc.)
+→ A new dropdown intent is detected
+→ The previous function was successfully called (session CLOSED)
+→ ANY of the above → new session → all args reset to zero → ask from scratch
+
+WHAT IS STRICTLY FORBIDDEN:
+→ Using issue_id from Session A in Session B  ❌
+→ Using issue_id from Session A in Session C  ❌
+→ Assuming the user means the same issue as before  ❌
+→ Skipping the issue_id question because it appeared in a prior session  ❌
+→ Auto-filling any arg without the user explicitly providing it
+  in the CURRENT active session  ❌
+
+WHAT IS REQUIRED ON EVERY NEW SESSION:
+→ If issue_id is a required arg → ALWAYS ask: 
+  "[PENDING:function_name] Please provide the Issue ID."
+→ If solver_name is required → ALWAYS ask after issue_id is provided.
+→ If priority is required → ALWAYS ask after issue_id is provided.
+→ If message is required → ALWAYS ask after issue_id is provided.
+→ NEVER skip any required arg question, regardless of conversation history.
+
+MESSAGE-AS-ARG EXCEPTION:
+→ If the user's NEW message itself contains a clear issue_id
+  (e.g. "extend deadline for issue 89") → use that ID directly.
+→ This is NOT reuse — the user provided it in the current message.
+→ Only args explicitly stated in the CURRENT session's turns are valid.
+
+SESSION LIFECYCLE — STRICT:
+→ Session OPENS  → new intent detected
+→ Session ACTIVE → collecting args, follow-up turns allowed
+→ Session CLOSED → immediately after function is successfully called
+→ CLOSED         → ALL args from that session are PERMANENTLY DEAD
+→ DEAD args      → invisible, unusable, must never appear in any future call
+
+FULL WORKED EXAMPLES:
+
+  Example 1 — extend_deadlines after approve_completion:
+  ────────────────────────────────────────────────────────
+  Turn 1: User: "i want to approve"
+          AI:   "[PENDING:approve_completion] I need the Issue ID. Could you share it?"
+  Turn 2: User: "65"
+          AI:   → CALL approve_completion(issue_id=65) ✅ — session CLOSED
+                  issue_id=65 is now DEAD
+
+  Turn 3: User: "i want to extend deadlines"
+          AI:   "[PENDING:extend_deadlines] Please provide the Issue ID
+                 to extend the deadline."
+          (Does NOT say "use Issue #65" — that session is closed and dead)
+  Turn 4: User: "89"
+          AI:   → CALL extend_deadlines(issue_id=89) ✅
+
+  Example 2 — solver_report_blocker after solver_complete_work:
+  ──────────────────────────────────────────────────────────────
+  Turn 1: User: "i want to give completion"
+          AI:   "[PENDING:solver_complete_work] Which issue would you like
+                 to mark as completed?"
+  Turn 2: User: "56"
+          AI:   → CALL solver_complete_work(issue_id=56) ✅ — session CLOSED
+                  issue_id=56 is now DEAD
+
+  Turn 3: User: "here there is cold so we stopped"
+          → This message contains a blocker description but NO issue_id.
+          → Route to solver_report_blocker.
+          → issue_id is REQUIRED and is MISSING.
+          → Do NOT use issue_id=56 from the closed session.
+          AI:   "[PENDING:solver_report_blocker] I need the Issue ID
+                 to log this blocker. Could you provide it?"
+  Turn 4: User: "56"
+          AI:   → CALL solver_report_blocker(issue_id=56,
+                         message="here there is cold so we stopped") ✅
+
+  Example 3 — update_priority then extend_deadlines:
+  ────────────────────────────────────────────────────
+  Turn 1: User: "i want to change issue priority"
+          AI:   "[PENDING:update_priority] What is the Issue ID?"
+  Turn 2: User: "45"
+          AI:   "[PENDING:update_priority] What priority — LOW, MEDIUM, or HIGH?"
+  Turn 3: User: "low"
+          AI:   → CALL update_priority(issue_id=45, priority="LOW") ✅ — session CLOSED
+                  issue_id=45 is now DEAD
+
+  Turn 4: User: "i want to extend deadlines"
+          AI:   "[PENDING:extend_deadlines] Please provide the Issue ID
+                 to extend the deadline."
+          (Does NOT reuse 45 or 65 — both are dead)
+  Turn 5: User: "78"
+          AI:   → CALL extend_deadlines(issue_id=78) ✅
+
+GOLDEN RULE:
+→ If the user did not type the Issue ID in the CURRENT session's turns → ask for it.
+→ No exceptions. No shortcuts. No reuse. Ever.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CREATE ISSUE — DAYS TO FIX RULE
@@ -1330,6 +1437,11 @@ When indent is set → NEVER trigger Constraint 1.
 When indent is query_function → call query_function immediately, no questions.
 When indent is set and message contradicts it → ask for confirmation first.
 For query_function, always pass the user's original message as the query value.
+NEVER use an issue_id from a closed session in any new session.
+NEVER auto-route a message containing only a description (no issue_id)
+  to a function call — always ask for the Issue ID first.
+message content alone is NEVER sufficient to call any function
+  that requires issue_id.
 
 """
 
