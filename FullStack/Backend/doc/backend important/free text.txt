@@ -1,0 +1,45 @@
+| Table(s)                           | Free-Text Query                                   | Status                                         |
+| ---------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| users                              | Show details for user id 5                        | Working                                        |
+| users                              | List all supervisors                              | Working                                        |
+| users                              | Find users whose name contains 'John'             | Working                                        |
+| users                              | Get all active users                              | Working                                        |
+| users                              | Count users with role plumber                     | Working                                        |
+| sites                              | Give me details of site id 3                      | Working                                        |
+| sites                              | List all active sites                             | Working                                        |
+| sites                              | Which sites are assigned to supervisor id 2       | Working                                        |
+| supervisor_sites                   | Show all sites for supervisor id 4                | Working                                        |
+| supervisor_sites                   | Get supervisors managing site id 5                | Working                                        |
+| issues                             | Show issue id 7 details                           | Working                                        |
+| issues                             | List all issues raised today                      | Not Working (No specific output shown)         |
+| issues                             | Find unresolved issues                            | Working                                        |
+| issues                             | Get issues assigned to supervisor id 2            | Not Working (Not included in output)           |
+| issues                             | Count issues per site                             | Working                                        |
+| issue_assignments                  | Who is assigned to issue id 3                     | Not Working (Not included in output)           |
+| issue_assignments                  | List all assignments for solver id 5              | Not Working (Not included in output)           |
+| issue_assignments                  | Get assignments completed today                   | Working (SQL generated, final answer null)     |
+| complaints                         | Show complaints for issue id 4                    | Working                                        |
+| complaints                         | List all complaints raised by supervisor id 2     | Working                                        |
+| complaints                         | Get complaints for target solver id 7             | Not Working (Not included in output)           |
+| call_logs                          | Get call attempts for assignment id 3             | Working                                        |
+| call_logs                          | List all call logs for solver id 5                | Working                                        |
+| call_logs                          | Show calls made today                             | Working                                        |
+| issue_images                       | Show images uploaded for issue id 5               | Working (No images found)                      |
+| issue_images                       | List all images uploaded by user id 2             | Working (No images found)                      |
+| issue_history                      | Get history for issue id 7                        | Working (No history found)                     |
+| issue_history                      | Show changes made by user id 3                    | Working (No changes)                           |
+| problem_solver_skills              | List available plumbers at site id 2              | Working                                        |
+| problem_solver_skills              | Get solvers skilled in electrical work            | Working (No solvers found)                     |
+| problem_solver_skills              | Which solvers are free today                      | Working (No solvers free)                      |
+| issues + users                     | Who fixed issue id 4                              | Working                                        |
+| complaints + users                 | Show complaints and solver details for issue id 3 | Working                                        |
+| call_logs + issue_assignments      | List call attempts for supervisor id 2            | Working                                        |
+| issues + issue_assignments + users | Get issues, solvers, and site details for today   | Not Working (SQL generated, final answer null) |
+| issues + issue_history             | Show changes made to issues today                 | Not Working (Not included in output)           |
+| issues + complaints + users        | List issues with complaints and raised_by details | Not Working (Not included in output)           |
+| sites + supervisor_sites + users   | Which supervisor manages which site               | Working (supervisor id 5 and 4 cases)          |
+| issues                             | Count issues per status                           | Working                                        |
+| users                              | List users with no assignments                    | Not Working (Not included in output)           |
+| issues                             | Get high priority issues                          | Not Working (Not included in output)           |
+| problem_solver_skills + users      | Available electricians at site 5                  | Not Working (No solvers found)                 |
+| complaints                         | Count complaints per solver                       | Not Working (Not included in output)           |

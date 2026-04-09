@@ -30,7 +30,7 @@ import  { uploadImageToImageKit } from './imagekitService';
 //   return 'http://localhost:8001/api';//https://api.kairoxaitech.com
 // };
 
-const backendUrl = 'http://localhost:8000';
+const backendUrl = 'https://api.kairoxaitech.com';
 
 
 const API_BASE_URL = backendUrl;
@@ -536,33 +536,49 @@ export const fetchSolversPerformanceAPI = async () => {
  * Send message to chatbot
  */
 // chatService.js 
+
+// ==================== CHATBOT API ====================
+
+/**
+ * Send message to chatbot
+ */
 export const sendChatMessage = async (
   text,
   sessionId = null,
   currentIssueId = null,
-  intent = null // added by hamthan
+  imageUrl = null, 
+  intent = null 
 ) => {
+  console.log('\n💬 ─── 1. SENDING CHAT MESSAGE ───');
+
   try {
     const requestBody = {
       message: text,
       session_id: sessionId,
       issue_id: currentIssueId,
+      image_url: imageUrl, 
       metadata: {
         platform: Platform.OS,
         timestamp: new Date().toISOString(),
       },
-      intent: intent // added by hamthan
+      intent: intent
     };
 
+    console.log('🚨 PROOF: THIS IS THE EXACT PAYLOAD WE ARE SENDING TO /api/v1/chat/ 🚨');
+    console.log(JSON.stringify(requestBody, null, 2));
+
     const response = await api.post('/api/v1/chat/', requestBody);
-    console.log(response)
+    
+    console.log('\n✅ Chat Response Success!');
+    console.log('🚨 PROOF: THIS IS EXACTLY WHAT THE BACKEND RETURNED 🚨');
+    console.log(JSON.stringify(response.data, null, 2));
 
     return {
       success: true,
       data: response.data,
     };
   } catch (error) {
-    console.error("Chat send error:", error.response?.data || error.message);
+    console.error("\n❌ Chat send error:", error.response?.data || error.message);
     return {
       success: false,
       error: error.response?.data?.detail || "Failed to send message",
@@ -578,53 +594,76 @@ export const sendChatWithImage = async ({
   intent,
   currentIssueId = null
 }) => {
+  console.log('\n🚀 ─── START: SEND CHAT WITH IMAGE FLOW ───');
+
   try {
     // 🟢 STEP 1: Send chat
+    console.log('\n▶️ STEP 1: Sending text AND local imageUri to chat endpoint first...');
     const chatRes = await sendChatMessage(
       text,
       sessionId,
       currentIssueId,
+      imageUri, 
       intent
     );
 
-    if (!chatRes.success) return chatRes;
+    if (!chatRes.success) {
+      console.error('❌ Chat request failed. Aborting image upload.');
+      return chatRes;
+    }
 
-    const issueId = chatRes.data.issue_id || currentIssueId;
+    // 📍 CRITICAL CHECK: Extract the issue ID
+    const rawData = chatRes.data || {};
+    const issueId = rawData.issue_id || rawData.data?.issue_id || currentIssueId;
+    
+    console.log('\n▶️ STEP 1.5: Extracted Issue ID for Image Upload:', issueId);
 
     // 🟡 STEP 2: Handle image
     if (imageUri && issueId) {
-
       // 🔥 Decide image type
       let imageType = "BEFORE";
-
       if (intent === "complete_work") {
         imageType = "AFTER";
       }
 
-    console.log("🟢 imageType:", imageType);
-    console.log("🟡 Before upload:");
-    console.log("imageUri:", imageUri);
-    console.log("issueId:", issueId);
-    console.log("intent:", intent);
+      console.log(`\n▶️ STEP 2: Preparing to upload to ImageKit as [${imageType}] for Issue #${issueId}`);
 
       // 🟣 Upload to ImageKit
-      const imageUrl = await uploadImageToImageKit(imageUri,issueId,imageType);
-      console.log(`✅ Image uploaded to ImageKit: ${imageUrl}`);
+      let imageUrl;
+      try {
+        imageUrl = await uploadImageToImageKit(imageUri, issueId, imageType);
+        console.log(`✅ SUCCESS: ImageKit returned CDN URL: ${imageUrl}`);
+      } catch (ikError) {
+        console.error('❌ FAILED: ImageKit Upload Crashed:', ikError);
+        throw ikError; 
+      }
 
       // 🔵 Save to DB
-      await api.post('/api/v1/images/save', {
+      console.log('\n▶️ STEP 3: Telling Backend to save CDN URL to database...');
+      const dbPayload = {
         image_url: imageUrl,
         issue_id: issueId,
         image_type: imageType
-      });
+      };
 
-      console.log(`✅ ${imageType} image saved`);
+      try {
+        const dbRes = await api.post('/api/v1/images/save', dbPayload);
+        console.log(`✅ SUCCESS: Backend confirmed ${imageType} image saved! DB Response:`, dbRes.data);
+      } catch (dbError) {
+        console.error('❌ FAILED: Backend refused to save image to DB:', dbError.response?.data || dbError.message);
+      }
+      
+    } else if (imageUri && !issueId) {
+      console.warn('⚠️ WARNING: We sent the image, but the backend did not return an issue_id to upload it to!');
+    } else {
+      console.log('\nℹ️ No image attached. Skipping ImageKit steps.');
     }
 
+    console.log('\n🏁 ─── END: SEND CHAT WITH IMAGE FLOW ───\n');
     return chatRes;
 
   } catch (error) {
-    console.error("❌ Chat + Image error:", error);
+    console.error("\n❌ FAILED: Fatal error in sendChatWithImage:", error);
     return { success: false };
   }
 };

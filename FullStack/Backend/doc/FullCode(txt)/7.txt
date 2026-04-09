@@ -1,0 +1,2003 @@
+"""
+PURPOSE: Assignment response schemas — INTERNAL + READ ONLY.
+─────────────────────────────────────────────────────────────
+Assignments are NEVER created by user action directly.
+They are created AUTOMATICALLY by the backend when:
+  1. Chatbot creates an issue → auto-matching algorithm runs
+  2. Manager types "reassign issue 7 to Suresh" in chat → backend creates new assignment
+
+SolverMatchResult is used INTERNALLY by assignment_service
+to return the result of the smart matching algorithm.
+
+AssignmentResponse is used to:
+  - Show assignment info inside ChatResponse.data
+  - Display in solver's dashboard
+  - Nested inside IssueDetailResponse
+
+USED BY:
+  - assignment_service.py → SolverMatchResult (internal matching output)
+  - chatbot_service.py → AssignmentResponse (chat responses)
+  - dashboard_service.py → AssignmentResponse (dashboard data)
+  - GET /api/v1/assignments → AssignmentListResponse (read-only)
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+from app.core.enums import AssignmentStatus
+
+
+# ══════════════════════════════════════════════════════════
+# INTERNAL: Solver matching result — NOT exposed to users
+# ══════════════════════════════════════════════════════════
+
+class SolverMatchResult(BaseModel):
+    """
+    INTERNAL SCHEMA — returned by the smart matching algorithm (Stage 2).
+    
+    When chatbot_service creates an issue, it calls
+    assignment_service.auto_assign_solver() which:
+      1. Queries problem_solver_skills for matching skill_type
+      2. Filters by site_id OR NULL (works all sites)
+      3. Filters by is_available = TRUE
+      4. Sorts by exact site match → priority DESC
+      5. Picks solver with lowest current workload
+      6. Returns this result
+    
+    This is then used to create the IssueAssignment record
+    and format the chat response to the supervisor.
+    """
+    solver_id: int = Field(
+        ..., description="ID of the matched problem solver",
+    )
+    solver_name: str = Field(
+        ..., description="Name for the chat response message",
+    )
+    solver_phone: str = Field(
+        ..., description="Phone number for Twilio calling",
+    )
+    skill_type: str = Field(
+        ..., description="Matched skill (e.g., plumber)",
+    )
+    site_match: bool = Field(
+        ..., description="True if solver is assigned to exact site",
+    )
+    priority_score: int = Field(
+        ..., description="Solver priority score (1-10 from problem_solver_skills)",
+    )
+    current_workload: int = Field(
+        ..., description="Number of currently active assignments",
+    )
+    match_reason: str = Field(
+        ...,
+        description="Explanation of why this solver was selected",
+        examples=["Exact site match with highest priority and lowest workload"],
+    )
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: Assignment data — for chat and dashboard display
+# ══════════════════════════════════════════════════════════
+
+class AssignmentResponse(BaseModel):
+    """
+    Assignment details — shown in chat responses and dashboards.
+    
+    When solver asks "what is my current assignment?" in chat,
+    the chatbot returns this data inside ChatResponse.data
+    
+    When supervisor asks "who is assigned to issue 5?",
+    this data is included in the response.
+    """
+    id: int
+    issue_id: int
+    issue_title: Optional[str] = Field(
+        None, description="Issue title for display",
+    )
+    assigned_to_solver_id: int
+    solver_name: Optional[str] = None
+    solver_phone: Optional[str] = None
+    assigned_by_supervisor_id: int
+    supervisor_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    status: AssignmentStatus
+    call_attempts: Optional[int] = Field(
+        None, description="Total Twilio call attempts",
+    )
+    last_call_status: Optional[str] = Field(
+        None, description="Status of most recent call attempt",
+    )
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AssignmentListResponse(BaseModel):
+    """Paginated assignment list for dashboard and chat queries."""
+    total: int
+    assignments: List[AssignmentResponse]"""
+PURPOSE: Call log schemas — INTERNAL processing + Twilio webhook.
+──────────────────────────────────────────────────────────────────
+Call logs are NEVER created by user action.
+They are created AUTOMATICALLY by the backend when:
+  1. Assignment created → first call placed
+  2. Celery retries every 2 hours → new call attempts
+  3. Complaint reopens assignment → new call round
+
+CallStatusCallback handles Twilio's webhook POST when
+call status changes (ringing → answered → completed, or → missed).
+
+Users see call attempt info indirectly through:
+  - Chat responses: "Solver called 3 times, no answer. Escalated."
+  - Dashboard: call attempt counts per assignment
+  - IssueDetailResponse.assignments[].total_call_attempts
+
+USED BY:
+  - call_service.py → CallLogCreate, CallLogUpdate (internal)
+  - POST /api/v1/webhooks/twilio/status → CallStatusCallback
+  - assignment_service.py → CallLogResponse (read-only display)
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+from app.core.enums import CallStatus
+
+
+# ══════════════════════════════════════════════════════════
+# INTERNAL: Create and update call logs — NOT user-facing
+# ══════════════════════════════════════════════════════════
+
+class CallLogCreate(BaseModel):
+    """
+    INTERNAL — created by call_service after every Twilio calls.create().
+    Each retry gets a separate record with incrementing attempt_number.
+    """
+    assignment_id: int
+    solver_id: int
+    attempt_number: int = Field(default=1, ge=1)
+    initiated_at: datetime
+    status: CallStatus = Field(default=CallStatus.INITIATED)
+
+
+class CallLogUpdate(BaseModel):
+    """
+    INTERNAL — updated when Twilio webhook reports call outcome.
+    ANSWERED: set answered_at and ended_at
+    MISSED: status changes, answered_at stays NULL
+    """
+    status: CallStatus
+    answered_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+
+
+# ══════════════════════════════════════════════════════════
+# WEBHOOK: Twilio status callback
+# ══════════════════════════════════════════════════════════
+
+class CallStatusCallback(BaseModel):
+    """
+    Twilio sends this to POST /api/v1/webhooks/twilio/status
+    when call status changes.
+    
+    Field names match Twilio's webhook payload exactly.
+    The webhook endpoint parses Twilio's form-encoded POST
+    into this schema for processing.
+    
+    Twilio status values:
+      queued, ringing      → call in progress (no action needed)
+      in-progress          → solver answered → ANSWERED
+      completed            → call ended normally → ANSWERED
+      busy                 → solver busy → MISSED
+      failed               → call failed → MISSED
+      no-answer            → no pickup → MISSED
+      canceled             → call canceled → MISSED
+    """
+    CallSid: str = Field(..., description="Unique Twilio call identifier")
+    CallStatus: str = Field(..., description="Current Twilio call status")
+    To: Optional[str] = Field(None, description="Called phone number")
+    From: Optional[str] = Field(None, description="Twilio phone number used")
+    Duration: Optional[str] = Field(None, description="Call duration in seconds")
+    Timestamp: Optional[str] = Field(None, description="When status changed")
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: Call log data — for dashboard and internal display
+# ══════════════════════════════════════════════════════════
+
+class CallLogResponse(BaseModel):
+    """
+    Call attempt record — used in assignment detail views.
+    Shows when each call was placed, whether it was answered,
+    and how long it lasted.
+    """
+    id: int
+    assignment_id: int
+    solver_id: int
+    solver_name: Optional[str] = None
+    solver_phone: Optional[str] = None
+    attempt_number: int
+    initiated_at: datetime
+    answered_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    status: CallStatus
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CallLogListResponse(BaseModel):
+    """All call attempts for a specific assignment."""
+    total: int
+    assignment_id: int
+    call_logs: List[CallLogResponse]"""
+PURPOSE: THE PRIMARY SCHEMA — All user interaction flows through here.
+──────────────────────────────────────────────────────────────────────
+
+USED BY: POST /api/v1/chat  (the SINGLE universal endpoint)
+         GET  /api/v1/chat/history (read conversation history)
+
+ARCHITECTURE:
+  Users ONLY interact through free text chat.
+  They type natural language messages.
+  AI figures out what to do.
+  System performs actions automatically.
+  Response tells user what happened.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │ SUPERVISOR CHAT EXAMPLES:                                     │
+  │                                                               │
+  │ "pipe broken in vepery site need to fix in 5 days"           │
+  │   → intent: create_issue                                      │
+  │   → AI extracts: plumbing, Vepery, 5 days, high priority    │
+  │   → Backend: create issue → match solver → assign → call     │
+  │   → Response: "Issue #1 created! Solver Ramesh assigned."    │
+  │                                                               │
+  │ "what are my open issues?"                                    │
+  │   → intent: query_issues                                      │
+  │   → Backend: query issues for this supervisor's sites         │
+  │   → Response: "You have 3 issues: #1 Pipe Leak [high]..."   │
+  │                                                               │
+  │ "work not done properly, leak still visible"                 │
+  │   → intent: raise_complaint                                   │
+  │   → Backend: create complaint → reopen issue → re-call       │
+  │   → Response: "Complaint filed. Issue reopened. Calling..."  │
+  │                                                               │
+  │ "show me status of issue 5"                                  │
+  │   → intent: check_status                                      │
+  │   → Backend: fetch issue #5 with details                      │
+  │   → Response: "Issue #5: Water Pump [ASSIGNED] due Feb 12"  │
+  │                                                               │
+  │ "change priority of issue 3 to high"                         │
+  │   → intent: update_issue                                      │
+  │   → Backend: update issue #3 priority                         │
+  │   → Response: "Issue #3 priority changed to HIGH."           │
+  │                                                               │
+  │ "mark issue 8 as completed, work looks good"                 │
+  │   → intent: approve_completion                                │
+  │   → Backend: issue #8 → COMPLETED, assignment → COMPLETED   │
+  │   → Response: "Issue #8 marked as COMPLETED. Good job!"     │
+  │                                                               │
+  │ "extend deadline of issue 2 by 3 days"                       │
+  │   → intent: update_issue                                      │
+  │   → Backend: add 3 days to issue #2 deadline                  │
+  │   → Response: "Issue #2 deadline extended to Feb 16."        │
+  │                                                               │
+  │ "hello" / "thanks" / "help"                                  │
+  │   → intent: general_chat                                      │
+  │   → Response: conversational AI response                      │
+  ├──────────────────────────────────────────────────────────────┤
+  │ SOLVER CHAT EXAMPLES:                                         │
+  │                                                               │
+  │ "what is my current assignment?"                             │
+  │   → intent: check_assignment                                  │
+  │   → Backend: fetch active assignments for this solver         │
+  │   → Response: "You have Assignment #1: Pipe Leak at Vepery" │
+  │                                                               │
+  │ "I have started working on the pipe repair"                  │
+  │   → intent: update_work_status                                │
+  │   → Backend: issue → IN_PROGRESS                              │
+  │   → Response: "Great! Issue #1 marked as IN_PROGRESS."      │
+  │                                                               │
+  │ "work completed, here is the photo"  [+ image_url]           │
+  │   → intent: complete_work                                     │
+  │   → Backend: create AFTER image → issue RESOLVED_PENDING     │
+  │   → AI verifies photo → notifies supervisor                  │
+  │   → Response: "Photo uploaded. Supervisor notified for review"│
+  │                                                               │
+  │ "I cannot reach the site today"                              │
+  │   → intent: report_blocker                                    │
+  │   → Backend: log message → notify supervisor                  │
+  │   → Response: "Noted. Supervisor has been notified."         │
+  ├──────────────────────────────────────────────────────────────┤
+  │ MANAGER CHAT EXAMPLES:                                        │
+  │                                                               │
+  │ "show me all escalated issues"                               │
+  │   → intent: query_escalations                                 │
+  │   → Backend: fetch all unresolved escalations                 │
+  │   → Response: "3 escalated issues: #7 Generator [HIGH]..."  │
+  │                                                               │
+  │ "what is the performance of solver Ramesh?"                  │
+  │   → intent: query_solver_performance                          │
+  │   → Backend: aggregate solver stats                           │
+  │   → Response: "Ramesh: 5 completed, 1 reopened, 2 active"   │
+  │                                                               │
+  │ "show overdue issues"                                        │
+  │   → intent: query_overdue                                     │
+  │   → Backend: fetch issues past deadline                       │
+  │   → Response: "2 overdue: #3 AC Breakdown, #7 Generator"    │
+  │                                                               │
+  │ "reassign issue 7 to solver Suresh"                          │
+  │   → intent: reassign_solver                                   │
+  │   → Backend: create new assignment → call new solver          │
+  │   → Response: "Issue #7 reassigned to Suresh. Calling..."   │
+  └──────────────────────────────────────────────────────────────┘
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from app.core.enums import ChatRole
+
+
+# ══════════════════════════════════════════════════════════
+# REQUEST: User sends a free text message
+# ══════════════════════════════════════════════════════════
+
+class ChatRequest(BaseModel):
+    """
+    THE universal input schema. 
+    User types ANY free text message + optional image.
+    This is the ONLY way users interact with the system after login.
+    
+    The backend AI (Groq llama-3.3-70b) analyzes the message to:
+      1. Detect intent (what does the user want?)
+      2. Extract entities (issue numbers, site names, priorities)
+      3. Route to the correct internal service
+      4. Execute the action
+      5. Return natural language response
+    """
+    message: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description=(
+            "Free text message from user — any natural language. "
+            "Can be a problem report, a question, a complaint, "
+            "a status update, or general conversation."
+        ),
+        examples=[
+            "pipe broken in vepery site need to fix in 5 days",
+            "what are my open issues?",
+            "work not done properly, leak still visible",
+            "show me status of issue 5",
+            "I have started working on the AC repair",
+            "work completed, uploading photo",
+            "mark issue 8 as completed, work looks good",
+            "change priority of issue 3 to high",
+            "extend deadline of issue 2 by 3 days",
+            "show me all escalated issues",
+            "reassign issue 7 to solver Suresh",
+            "hello",
+            "thanks for the update",
+        ],
+    )
+    session_id: Optional[int] = Field(
+        None,
+        description=(
+            "Which conversation session this message belongs to. "
+            "If None → backend creates a new session automatically. "
+            "Frontend gets session_id from the response and sends it "
+            "in all subsequent messages in the same conversation."
+        ),
+    )
+    image_url: Optional[str] = Field(
+        None,
+        max_length=500,
+        description=(
+            "ImageKit CDN URL of uploaded photo. "
+            "Supervisor sends BEFORE photo when reporting an issue. "
+            "Solver sends AFTER photo when completing work. "
+            "Supervisor sends evidence photo when filing complaint. "
+            "The file is uploaded via POST /api/v1/images/upload first, "
+            "then the returned URL is passed here."
+        ),
+        examples=[
+            "https://ik.imagekit.io/abc/issues/pipe-leak-before.jpg",
+            "https://ik.imagekit.io/abc/issues/pipe-fixed-after.jpg",
+            None,
+        ],
+    )
+    issue_id: Optional[int] = Field(
+        None,
+        description=(
+            "Optional context: if user is replying about a specific issue. "
+            "The chat UI may pass this when user taps on an issue card. "
+            "If None, AI figures out the issue from message content. "
+            "Example: user taps issue #5 card then types 'change to high priority'"
+        ),
+        examples=[1, 5, None],
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description=(
+            "Extra context from frontend: GPS coordinates, "
+            "current screen, device type, etc. "
+            "Helps AI make better decisions."
+        ),
+        examples=[
+            {"gps_lat": 13.083, "gps_lng": 80.270, "screen": "home"},
+            {"screen": "issue_detail", "viewing_issue": 5},
+            {},
+        ],
+    )
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: System responds after processing
+# ══════════════════════════════════════════════════════════
+
+class ChatResponse(BaseModel):
+    """
+    The complete response after AI processes user's free text.
+    
+    Contains:
+      message      → Natural language response shown in chat bubble
+      intent       → What action was detected
+      actions_taken→ List of things the system did automatically
+      data         → Structured data for UI rendering (cards, lists)
+      IDs          → Referenced issue/assignment/complaint for navigation
+    """
+    message: str = Field(
+        ...,
+        description=(
+            "Natural language response displayed in the chat UI. "
+            "This is what the user reads. Written in a friendly, "
+            "professional tone with emoji for visual clarity."
+        ),
+        examples=[
+            (
+                "✅ Issue #1 created successfully!\n"
+                "📍 Site: Vepery Site\n"
+                "🔧 Type: plumbing\n"
+                "⚡ Priority: high\n"
+                "📅 Deadline: 2026-02-15 18:00\n"
+                "👷 Assigned to: Ramesh K\n"
+                "📞 Calling solver now..."
+            ),
+            "📋 You have 3 open issues:\n🔴 #1 Pipe Leak [high]\n🟡 #2 Power Outage [medium]",
+            "⚠️ Complaint filed for Issue #1. Assignment reopened. Calling solver again.",
+            "👋 Hello! I'm your facility management assistant. How can I help?",
+        ],
+    )
+    session_id: Optional[int] = Field(
+        None,
+        description=(
+            "The session this message belongs to. "
+            "Frontend MUST store this and send it back in the next ChatRequest.session_id"
+        ),
+    )
+    intent: str = Field(
+        ...,
+        description=(
+            "The detected intent — what the user wanted to do. "
+            "Used by frontend to optionally render different UI elements."
+        ),
+        examples=[
+            "create_issue",
+            "query_issues",
+            "check_status",
+            "raise_complaint",
+            "approve_completion",
+            "update_issue",
+            "update_work_status",
+            "complete_work",
+            "check_assignment",
+            "report_blocker",
+            "query_escalations",
+            "query_overdue",
+            "query_solver_performance",
+            "reassign_solver",
+            "general_chat",
+        ],
+    )
+    issue_id: Optional[int] = Field(
+        None,
+        description="Created or referenced issue ID — for UI navigation",
+    )
+    assignment_id: Optional[int] = Field(
+        None,
+        description="Created or referenced assignment ID",
+    )
+    complaint_id: Optional[int] = Field(
+        None,
+        description="Created complaint ID (when complaint is filed via chat)",
+    )
+    actions_taken: List[str] = Field(
+        default_factory=list,
+        description=(
+            "List of automated actions the system performed. "
+            "Shown as a summary or activity log in the UI."
+        ),
+        examples=[
+            [
+                "Issue #1 created: 'Pipe Leakage'",
+                "Solver Ramesh K matched and assigned (Assignment #1)",
+                "Twilio call initiated to 9876543210",
+                "BEFORE image saved",
+                "Chat history logged",
+            ],
+            [
+                "Complaint #3 created",
+                "Issue #1 status → REOPENED",
+                "Assignment #1 status → REOPENED",
+                "Re-calling solver via Twilio",
+            ],
+            [],
+        ],
+    )
+    data: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Structured data for UI rendering. "
+            "Can contain issue lists, issue details, solver stats, etc. "
+            "Frontend uses this to render cards, tables, charts."
+        ),
+        examples=[
+            {
+                "issue_id": 1,
+                "site": "Vepery Site",
+                "problem_type": "plumbing",
+                "priority": "high",
+                "solver_name": "Ramesh K",
+                "solver_phone": "9876543210",
+            },
+            {
+                "issues": [
+                    {"id": 1, "title": "Pipe Leak", "status": "ASSIGNED", "priority": "high"},
+                    {"id": 2, "title": "Power Outage", "status": "OPEN", "priority": "medium"},
+                ],
+                "total": 2,
+            },
+            None,
+        ],
+    )
+
+
+# ══════════════════════════════════════════════════════════
+# CHAT HISTORY: For retrieving past conversations
+# ══════════════════════════════════════════════════════════
+
+class ChatHistoryResponse(BaseModel):
+    """
+    Single chat message in the conversation history.
+    Used to render the chat UI with all past messages.
+    
+    role_in_chat:
+      USER   → Message typed by supervisor/solver/manager
+      AI     → Response from the AI system
+      SYSTEM → Automated notification (escalation, assignment, deadline)
+    """
+    id: int
+    user_id: Optional[int] = Field(
+        None,
+        description="NULL for AI and SYSTEM messages",
+    )
+    user_name: Optional[str] = Field(
+        None,
+        description="Name of the user who sent (NULL for AI/SYSTEM)",
+    )
+    issue_id: Optional[int] = Field(
+        None,
+        description="Issue this message relates to (NULL for general chat)",
+    )
+    role_in_chat: ChatRole = Field(
+        ...,
+        description="USER | AI | SYSTEM",
+    )
+    message: str = Field(
+        ...,
+        description="Message content",
+    )
+    attachments: List[str] = Field(
+        default_factory=list,
+        description="Array of image URLs attached to this message",
+    )
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChatHistoryListResponse(BaseModel):
+    """
+    Paginated list of chat messages.
+    Used by GET /api/v1/chat/history?issue_id=1
+    """
+    total: int = Field(..., description="Total messages matching query")
+    session_id: Optional[int] = None
+    issue_id: Optional[int] = Field(
+        None,
+        description="If filtered by issue, shows which issue",
+    )
+    messages: List[ChatHistoryResponse]"""
+PURPOSE: Chat session schemas — session list + session detail.
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+from app.core.enums import ChatRole
+
+
+# ══════════════════════════════════════════════════════════
+# SESSION LIST ITEM — shown in sidebar
+# ══════════════════════════════════════════════════════════
+
+class ChatSessionItem(BaseModel):
+    """
+    Single session in the sidebar list.
+    Like ChatGPT: shows title + last message preview + timestamp.
+    """
+    id: int
+    title: str = Field(..., description="Auto-generated from first message")
+    issue_id: Optional[int] = None
+    last_message_preview: Optional[str] = Field(
+        None,
+        description="First 80 chars of the last message in this session",
+    )
+    last_message_at: Optional[datetime] = Field(
+        None,
+        description="When the last message was sent",
+    )
+    message_count: int = Field(default=0)
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChatSessionListResponse(BaseModel):
+    """All sessions for the sidebar."""
+    total: int
+    sessions: List[ChatSessionItem]
+
+
+# ══════════════════════════════════════════════════════════
+# SESSION DETAIL — all messages in a session
+# ══════════════════════════════════════════════════════════
+
+class ChatMessageInSession(BaseModel):
+    """Single message inside a session."""
+    id: int
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    role_in_chat: ChatRole  # USER | AI | SYSTEM
+    message: str
+    attachments: List[str] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChatSessionDetailResponse(BaseModel):
+    """Full session with all messages — loaded when user clicks a session."""
+    id: int
+    title: str
+    issue_id: Optional[int] = None
+    messages: List[ChatMessageInSession]
+    total_messages: int
+    created_at: datetime
+    updated_at: datetime
+
+
+# ══════════════════════════════════════════════════════════
+# CREATE / UPDATE
+# ══════════════════════════════════════════════════════════
+
+class ChatSessionCreate(BaseModel):
+    """Create a new session — called when user clicks 'New Chat'."""
+    title: Optional[str] = Field(
+        default="New Chat",
+        max_length=200,
+    )
+    issue_id: Optional[int] = None
+
+
+class ChatSessionRename(BaseModel):
+    """Rename a session."""
+    title: str = Field(..., min_length=1, max_length=200)"""
+PURPOSE: Complaint response schemas — READ ONLY.
+──────────────────────────────────────────────────
+Complaints are NEVER created through a form or direct API call.
+They are ONLY created when the chatbot detects a complaint intent
+from the supervisor's free text message.
+
+Example chat flow:
+  Supervisor: "work not done properly, leak still visible"
+  → AI detects intent: raise_complaint
+  → chatbot_service finds the issue and active assignment
+  → Creates complaint record
+  → Updates issue → REOPENED
+  → Updates assignment → REOPENED
+  → Initiates new Twilio call to solver
+  → Logs SYSTEM message in chat_history
+  → Returns: "Complaint filed. Issue reopened. Calling solver."
+
+These response schemas are used to:
+  - Format complaint data in ChatResponse
+  - Display complaint history in dashboards
+  - Read-only retrieval
+
+USED BY:
+  - chatbot_service.py → ComplaintResponse (embedded in chat response)
+  - dashboard_service.py → ComplaintResponse (solver performance data)
+  - GET /api/v1/complaints → ComplaintListResponse (read-only, admin/manager)
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+
+class ComplaintResponse(BaseModel):
+    """
+    Complaint record — created via chat, read via API.
+    
+    Shown when:
+      - Supervisor asks "show complaints for issue 5" in chat
+      - Manager views solver performance dashboard
+      - Issue detail view shows complaint history
+    """
+    id: int
+    issue_id: int
+    issue_title: Optional[str] = Field(
+        None, description="Issue title for display",
+    )
+    assignment_id: int
+    raised_by_supervisor_id: int
+    supervisor_name: Optional[str] = None
+    target_solver_id: int
+    solver_name: Optional[str] = None
+    complaint_details: str = Field(
+        ..., description="Description extracted from supervisor's chat message",
+    )
+    complaint_image_url: Optional[str] = Field(
+        None,
+        description="Evidence photo URL if supervisor included one in chat",
+    )
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ComplaintListResponse(BaseModel):
+    """Paginated complaint list for dashboard and read-only views."""
+    total: int
+    complaints: List[ComplaintResponse]"""
+PURPOSE: Role-based dashboard data — READ ONLY aggregation.
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+
+# ══════════════════════════════════════════════════════════
+# SHARED
+# ══════════════════════════════════════════════════════════
+
+class DashboardSummary(BaseModel):
+    total_issues: int = Field(default=0)
+    open_issues: int = Field(default=0)
+    assigned_issues: int = Field(default=0)
+    in_progress_issues: int = Field(default=0)
+    resolved_pending_review: int = Field(default=0)
+    completed_issues: int = Field(default=0)
+    reopened_issues: int = Field(default=0)
+    escalated_issues: int = Field(default=0)
+
+
+# ══════════════════════════════════════════════════════════
+# SUPERVISOR DASHBOARD
+# ══════════════════════════════════════════════════════════
+
+class RecentIssue(BaseModel):
+    id: int
+    title: str
+    status: str
+    priority: str
+    site_name: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SupervisorDashboard(BaseModel):
+    summary: DashboardSummary
+    pending_reviews: int = Field(default=0)
+    my_sites: List[str] = Field(default_factory=list)
+    recent_issues: List[RecentIssue] = Field(default_factory=list)
+    active_escalations: int = Field(default=0)
+    issues_approaching_deadline: int = Field(default=0)
+
+
+# ══════════════════════════════════════════════════════════
+# MANAGER DASHBOARD
+# ══════════════════════════════════════════════════════════
+
+class SolverPerformance(BaseModel):
+    solver_id: int
+    solver_name: str
+    total_assignments: int = Field(default=0)
+    completed: int = Field(default=0)
+    reopened: int = Field(default=0)
+    avg_response_time_hours: Optional[float] = None
+    complaints_count: int = Field(default=0)
+
+
+class ManagerDashboard(BaseModel):
+    summary: DashboardSummary
+    active_escalations: int = Field(default=0)
+    unresolved_escalations: List[Dict[str, Any]] = Field(default_factory=list)
+    overdue_issues: int = Field(default=0)
+    solver_performance: List[SolverPerformance] = Field(default_factory=list)
+    issues_by_site: Dict[str, int] = Field(default_factory=dict)
+    issues_by_priority: Dict[str, int] = Field(default_factory=dict)
+
+
+# ══════════════════════════════════════════════════════════
+# SOLVER DASHBOARD — THIS WAS MISSING
+# ══════════════════════════════════════════════════════════
+
+class SolverAssignment(BaseModel):
+    assignment_id: int
+    issue_id: int
+    issue_title: str
+    site_name: Optional[str] = None
+    site_location: Optional[str] = None
+    priority: str
+    due_date: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class SolverDashboard(BaseModel):
+    """
+    Solver sees:
+      - Active assignments with details
+      - Completed count
+      - Complaints against them
+    """
+    active_assignments: List[SolverAssignment] = Field(default_factory=list)
+    total_active: int = Field(default=0)
+    total_completed: int = Field(default=0)
+    complaints_against: int = Field(default=0)"""
+PURPOSE: Escalation rule configuration + escalation event tracking.
+──────────────────────────────────────────────────────────────────
+Escalation RULES are configured by admin through a setup endpoint.
+Escalation EVENTS are created automatically by the system when:
+  1. Solver doesn't answer calls → NO_RESPONSE (Stage 4)
+  2. Issue approaches deadline → DEADLINE_APPROACHING (Stage 7)
+
+Users see escalation info through:
+  - Chat: "show me escalated issues" → queries escalation data
+  - Dashboard: active escalation count and details
+  - Email: automatic SMTP alerts sent to managers/supervisors
+
+USED BY:
+  - POST /api/v1/escalation-rules → EscalationRuleCreate (admin config)
+  - GET  /api/v1/escalation-rules → List[EscalationRuleResponse] (admin read)
+  - GET  /api/v1/escalations → EscalationListResponse (read-only)
+  - chatbot_service.py → query_escalations intent handler
+  - call_service.py → creates Escalation records internally
+  - workers/escalation.py → creates deadline Escalation records
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime, timedelta
+from app.core.enums import Priority
+
+
+# ══════════════════════════════════════════════════════════
+# REQUEST: Admin configures escalation rules
+# ══════════════════════════════════════════════════════════
+
+class EscalationRuleCreate(BaseModel):
+    """
+    Admin defines thresholds per priority level.
+    This is one of the FEW traditional form endpoints
+    because escalation rules are system configuration, not user interaction.
+    
+    Example rules:
+      high:   escalate to manager after 3 missed calls OR 2 minutes
+      medium: escalate to supervisor after 2 missed calls OR 1 hour
+      low:    escalate to manager after 5 missed calls OR 4 hours
+    """
+    priority: Priority = Field(
+        ...,
+        description="Which priority level this rule applies to",
+        examples=["high"],
+    )
+    max_call_attempts: int = Field(
+        ...,
+        ge=1, le=20,
+        description="Number of missed calls before escalation triggers",
+        examples=[3],
+    )
+    max_time_without_response_minutes: int = Field(
+        ...,
+        ge=1,
+        description="Minutes without solver response before escalation",
+        examples=[120],
+    )
+    escalate_to_role: str = Field(
+        ...,
+        description="Who to notify: manager | supervisor | admin",
+        examples=["manager"],
+    )
+
+    @property
+    def max_time_as_interval(self) -> timedelta:
+        """Convert minutes to timedelta for PostgreSQL INTERVAL storage."""
+        return timedelta(minutes=self.max_time_without_response_minutes)
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: Escalation rule configuration
+# ══════════════════════════════════════════════════════════
+
+class EscalationRuleResponse(BaseModel):
+    """Escalation rule — admin view."""
+    id: int
+    priority: Priority
+    max_call_attempts: int
+    max_time_without_response: Optional[str] = Field(
+        None,
+        description="PostgreSQL INTERVAL as string (e.g., '02:00:00')",
+    )
+    escalate_to_role: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: Escalation event record
+# ══════════════════════════════════════════════════════════
+
+class EscalationResponse(BaseModel):
+    """
+    Record of an escalation event that occurred.
+    
+    Created automatically when:
+      - NO_RESPONSE: solver didn't answer calls (Stage 4)
+      - DEADLINE_APPROACHING: issue near deadline (Stage 7)
+    
+    Shown when manager asks "show escalated issues" in chat.
+    Also displayed in manager dashboard.
+    """
+    id: int
+    issue_id: int
+    issue_title: Optional[str] = None
+    site_name: Optional[str] = None
+    assignment_id: Optional[int] = None
+    solver_name: Optional[str] = Field(
+        None,
+        description="Solver who didn't respond (for NO_RESPONSE type)",
+    )
+    escalation_type: str = Field(
+        ...,
+        description="NO_RESPONSE | DEADLINE_APPROACHING | MANUAL",
+    )
+    escalated_to_role: str = Field(
+        ...,
+        description="Who was notified: manager | supervisor | admin",
+    )
+    escalated_by_user_id: Optional[int] = None
+    reason: str = Field(
+        ...,
+        description="Human-readable explanation of why escalation occurred",
+    )
+    total_missed_calls: Optional[int] = None
+    time_elapsed_without_response: Optional[str] = Field(
+        None,
+        description="Time since first call (for NO_RESPONSE)",
+    )
+    notification_sent: bool = Field(
+        ...,
+        description="Whether email alerts have been dispatched",
+    )
+    notification_sent_at: Optional[datetime] = None
+    resolved: bool = Field(
+        ...,
+        description="Whether the escalation has been addressed",
+    )
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EscalationListResponse(BaseModel):
+    """
+    Paginated escalation list.
+    Used by manager dashboard and "show escalated issues" chat query.
+    """
+    total: int
+    escalations: List[EscalationResponse]"""
+PURPOSE: Shapes issue history/audit trail responses.
+─────────────────────────────────────────────────────
+USED BY:
+  - GET /api/v1/history/{issue_id}   → IssueHistoryListResponse
+  - GET /api/v1/issues/{id}/timeline → IssueHistoryListResponse
+
+COMMAND: Every status change, assignment, complaint, and escalation
+is logged in issue_history table. This schema formats that audit trail
+into a human-readable timeline for the issue detail view.
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+from app.core.enums import ActionType
+
+
+# ── Response: Single history entry ───────────────────────
+class  IssueHistoryResponse(BaseModel):
+    id: int
+    issue_id: int
+    changed_by_user_id: Optional[int] = None
+    changed_by_name: Optional[str] = None
+    old_status: Optional[str] = None
+    new_status: Optional[str] = None
+    action_type: ActionType
+    details: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Response: Full history list ──────────────────────────
+class IssueHistoryListResponse(BaseModel):
+    total: int
+    issue_id: int
+    history: List[IssueHistoryResponse]"""
+PURPOSE: Image upload response and AI verification schemas.
+──────────────────────────────────────────────────────────────
+Image UPLOAD is the one action that needs a separate endpoint
+because file upload cannot happen through text chat.
+
+FLOW:
+  1. User selects a photo in the mobile app / web UI
+  2. Frontend calls POST /api/v1/images/upload (multipart form)
+  3. Backend uploads to ImageKit CDN → returns URL
+  4. Frontend gets the URL and includes it in the NEXT chat message:
+     ChatRequest(message="pipe broken...", image_url="https://ik.imagekit.io/...")
+
+So the image upload endpoint is a HELPER for the chat flow.
+The actual issue creation / completion still happens through chat.
+
+USED BY:
+  POST /api/v1/images/upload  → returns ImageUploadResponse with CDN URL
+  GET  /api/v1/images/by-issue/{id} → ImageListResponse (read-only)
+  Internal: ai_service → AIVerificationResult
+
+AI Verification happens AUTOMATICALLY when solver sends AFTER photo:
+  - Solver chats: "work completed, here is the photo" + image_url
+  - chatbot_service detects complete_work intent
+  - Creates AFTER image record
+  - AI vision analyzes the photo
+  - If confidence > 0.85 → ai_flag = OK
+  - If confidence ≤ 0.85 → ai_flag = SUSPECT
+  - Updates issue to RESOLVED_PENDING_REVIEW
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from app.core.enums import ImageType, AIFlag
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: Image upload result — returned after file upload
+# ══════════════════════════════════════════════════════════
+
+class ImageUploadResponse(BaseModel):
+    """
+    Returned by POST /api/v1/images/upload after file is uploaded to ImageKit.
+    
+    The frontend uses the image_url from this response and passes it
+    to the chat endpoint in the next ChatRequest.image_url field.
+    
+    This is a HELPER endpoint — not the main action.
+    The actual issue creation / work completion happens in chat.
+    """
+    id: int = Field(
+        ..., description="Image record ID in database",
+    )
+    image_url: str = Field(
+        ..., description=(
+            "ImageKit CDN URL — use this in ChatRequest.image_url "
+            "when sending the chat message"
+        ),
+    )
+    image_type: ImageType = Field(
+        ..., description="BEFORE or AFTER",
+    )
+    issue_id: Optional[int] = Field(
+        None, description="Issue ID if linked during upload",
+    )
+    ai_flag: AIFlag = Field(
+        default=AIFlag.NOT_CHECKED,
+        description="AI verification result (for AFTER photos)",
+    )
+    ai_details: Optional[Dict[str, Any]] = Field(
+        None,
+        description="AI analysis details (confidence, findings)",
+    )
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ══════════════════════════════════════════════════════════
+# INTERNAL: AI verification output
+# ══════════════════════════════════════════════════════════
+
+class AIVerificationResult(BaseModel):
+    """
+    INTERNAL — returned by ai_service.verify_completion_image().
+    Used by chatbot_service when processing solver's AFTER photo.
+    
+    confidence > 0.85 → ai_flag = OK (repair looks complete)
+    confidence ≤ 0.85 → ai_flag = SUSPECT (potential issues found)
+    """
+    ai_flag: AIFlag = Field(..., description="OK | SUSPECT | NOT_CHECKED")
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0,
+        description="AI confidence score (0.0 to 1.0)",
+    )
+    details: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Problem-specific findings from AI analysis",
+        examples=[
+            {"leak_detected": False, "pipe_condition": "good"},
+            {"wiring_fixed": True, "exposed_conductors": False},
+        ],
+    )
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: Image list — for issue detail views
+# ══════════════════════════════════════════════════════════
+
+class ImageResponse(BaseModel):
+    """Single image record with AI verification details."""
+    id: int
+    issue_id: int
+    uploaded_by_user_id: int
+    uploader_name: Optional[str] = None
+    image_url: str
+    image_type: ImageType
+    ai_flag: AIFlag
+    ai_details: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ImageListResponse(BaseModel):
+    """
+    All images for an issue — separated into BEFORE and AFTER.
+    Used in issue detail views and when user asks about photos in chat.
+    """
+    total: int
+    issue_id: int
+    before_images: List[ImageResponse] = Field(
+        default_factory=list,
+        description="Photos uploaded by supervisor when creating issue",
+    )
+    after_images: List[ImageResponse] = Field(
+        default_factory=list,
+        description="Photos uploaded by solver when completing work",
+    )"""
+PURPOSE: Issue response schemas — READ ONLY.
+─────────────────────────────────────────────
+Issues are NEVER created through a form or direct API call.
+They are ONLY created when the chatbot_service detects
+a "create_issue" intent from the user's free text message.
+
+These schemas are used to:
+  - Format issue data in ChatResponse.data
+  - Return issue details when user asks "show me issue 5"
+  - Display issue lists when user asks "what are my open issues?"
+  - Render issue cards in the dashboard
+
+AIExtractionResult is used INTERNALLY by chatbot_service
+when Groq AI parses the supervisor's natural language message.
+It is NOT exposed to the user directly.
+
+USED BY:
+  - chatbot_service.py → AIExtractionResult (internal AI output)
+  - chatbot_service.py → IssueResponse (query results in chat)
+  - dashboard_service.py → IssueResponse (dashboard data)
+  - GET /api/v1/issues/{id} → IssueDetailResponse (read-only)
+  - GET /api/v1/issues → IssueListResponse (read-only)
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+from decimal import Decimal
+from app.core.enums import Priority, IssueStatus
+
+
+# ══════════════════════════════════════════════════════════
+# INTERNAL: AI Extraction — NOT exposed to users
+# ══════════════════════════════════════════════════════════
+
+class AIExtractionResult(BaseModel):
+    """
+    INTERNAL SCHEMA — used only by chatbot_service and ai_service.
+    Never sent to or from the user directly.
+    
+    When supervisor types: "pipe broken in vepery site need to fix in 5 days"
+    Groq AI (temperature=0) returns this structured data:
+    
+    {
+        "problem_type": "plumbing",
+        "location": "Vepery Site", 
+        "days_to_fix": 5,
+        "priority": "high",
+        "title": "Pipe Leakage",
+        "description": "Major leak in main supply pipe at Vepery site"
+    }
+    
+    chatbot_service uses this to:
+      1. Match site_id from location name
+      2. Create Issue record
+      3. Match solver by problem_type + site_id
+      4. Create assignment
+      5. Initiate Twilio call
+    """
+    problem_type: str = Field(
+        ...,
+        description=(
+            "One of: plumbing, electrical, hvac, carpentry, "
+            "painting, network, mechanical"
+        ),
+        examples=["plumbing"],
+    )
+    location: str = Field(
+        ...,
+        description="Extracted site name — fuzzy matched to sites table",
+        examples=["Vepery Site"],
+    )
+    days_to_fix: int = Field(
+        ...,
+        ge=1,
+        le=365,
+        description="Number of days to fix — used to calculate deadline_at",
+        examples=[5],
+    )
+    priority: Priority = Field(
+        ...,
+        description=(
+            "Determined from urgency keywords in the message: "
+            "urgent/emergency/asap → high, "
+            "soon/important → medium, "
+            "no urgency keywords → low"
+        ),
+        examples=["high"],
+    )
+    title: str = Field(
+        ...,
+        max_length=50,
+        description="Short title generated by AI (max 50 chars)",
+        examples=["Pipe Leakage"],
+    )
+    description: str = Field(
+        ...,
+        description="Detailed professional description generated by AI",
+        examples=["Major leak in main supply pipe requiring immediate plumbing repair"],
+    )
+
+
+# ══════════════════════════════════════════════════════════
+# RESPONSE: Issue data — returned in chat and dashboard
+# ══════════════════════════════════════════════════════════
+
+class IssueResponse(BaseModel):
+    """
+    Issue summary — used in list views and chat query responses.
+    
+    When user asks "what are my open issues?", the chatbot returns
+    a list of these in ChatResponse.data.issues
+    
+    Also used by dashboard endpoints for aggregated views.
+    """
+    id: int
+    site_id: int
+    site_name: Optional[str] = Field(
+        None,
+        description="Resolved from sites table — human readable",
+    )
+    raised_by_supervisor_id: int
+    supervisor_name: Optional[str] = None
+    title: str
+    description: str
+    priority: Priority
+    deadline_at: Optional[datetime] = None
+    status: IssueStatus
+    track_status: Optional[str] = Field(
+        None,
+        description="awaiting_solver | in_progress | awaiting_review | resolved",
+    )
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class IssueImageBrief(BaseModel):
+    """
+    Nested image info inside IssueDetailResponse.
+    Shows BEFORE and AFTER photos with AI verification status.
+    """
+    id: int
+    image_url: str
+    image_type: str = Field(
+        ...,
+        description="BEFORE (supervisor photo) or AFTER (solver photo)",
+    )
+    ai_flag: str = Field(
+        ...,
+        description="OK | SUSPECT | NOT_CHECKED — AI verification result",
+    )
+    uploaded_by_user_id: int
+    uploader_name: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AssignmentBrief(BaseModel):
+    """
+    Nested assignment info inside IssueDetailResponse.
+    Shows who is assigned and current status.
+    """
+    id: int
+    assigned_to_solver_id: int
+    solver_name: Optional[str] = None
+    solver_phone: Optional[str] = None
+    status: str = Field(
+        ...,
+        description="ACTIVE | COMPLETED | REOPENED",
+    )
+    due_date: Optional[datetime] = None
+    total_call_attempts: Optional[int] = Field(
+        None,
+        description="How many Twilio calls made for this assignment",
+    )
+    last_call_status: Optional[str] = Field(
+        None,
+        description="INITIATED | MISSED | ANSWERED",
+    )
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class IssueDetailResponse(BaseModel):
+    """
+    Full issue with nested images and assignments.
+    
+    Used when user asks "show me details of issue 5" in chat.
+    Also used by GET /api/v1/issues/{id} read-only endpoint.
+    
+    Contains everything needed to render a full issue detail view:
+      - Issue metadata (title, priority, status, deadline)
+      - Site info (name, location, GPS)
+      - All BEFORE and AFTER images
+      - All assignments with call attempt history
+    """
+    id: int
+    site_id: int
+    site_name: Optional[str] = None
+    site_location: Optional[str] = None
+    raised_by_supervisor_id: int
+    supervisor_name: Optional[str] = None
+    title: str
+    description: str
+    priority: Priority
+    deadline_at: Optional[datetime] = None
+    status: IssueStatus
+    track_status: Optional[str] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+    images: List[IssueImageBrief] = Field(
+        default_factory=list,
+        description="All BEFORE and AFTER photos",
+    )
+    assignments: List[AssignmentBrief] = Field(
+        default_factory=list,
+        description="All assignments (may have multiple if reopened)",
+    )
+    complaints_count: Optional[int] = Field(
+        None,
+        description="Number of complaints filed for this issue",
+    )
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class IssueListResponse(BaseModel):
+    """
+    Paginated issue list — used in chat query responses and dashboard.
+    When user asks "what are my open issues?", this is embedded
+    inside ChatResponse.data
+    """
+    total: int = Field(..., description="Total matching issues")
+    issues: List[IssueResponse]
+    page: int = Field(default=1)
+    per_page: int = Field(default=20)"""
+PURPOSE: Shapes notification responses and email request structures.
+──────────────────────────────────────────────────────────────────────
+USED BY:
+  - GET  /api/v1/notifications           → NotificationResponse list
+  - Internal: notification_service        → EmailNotificationRequest
+
+COMMAND: Notifications are generated by:
+  - Issue creation → supervisor confirmation
+  - Solver assignment → solver notification
+  - Escalation events → manager/supervisor email alerts
+  - Complaint filed → solver notification
+  - Deadline approaching → all stakeholders alerted
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+
+# ── Internal: Email notification request ─────────────────
+class EmailNotificationRequest(BaseModel):
+    """
+    Used internally by notification_service to send SMTP emails.
+    Constructed during escalation events (Stage 4 and Stage 7).
+    """
+    to_emails: List[str] = Field(
+        ...,
+        description="Recipient email addresses",
+    )
+    subject: str = Field(
+        ...,
+        description="Email subject line",
+    )
+    body_html: str = Field(
+        ...,
+        description="HTML email body",
+    )
+    priority: str = Field(
+        default="normal",
+        description="Email priority: low, normal, high",
+    )
+    issue_id: Optional[int] = Field(
+        None,
+        description="Related issue ID for tracking",
+    )
+    escalation_id: Optional[int] = Field(
+        None,
+        description="Related escalation ID",
+    )
+
+
+# ── Response: In-app notification ────────────────────────
+class NotificationResponse(BaseModel):
+    """
+    In-app notification shown in the user's notification panel.
+    """
+    id: int
+    user_id: int
+    title: str
+    message: str
+    notification_type: str = Field(
+        ...,
+        description="issue_created, solver_assigned, escalation, complaint, deadline_warning",
+    )
+    issue_id: Optional[int] = None
+    is_read: bool = Field(default=False)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}"""
+PURPOSE: Site analytics response schemas.
+Replaces frontend's computeSiteAnalytics() — now computed on backend.
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+
+class SiteSolverBrief(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    avatar: Optional[str] = None
+    active_assignments: int = 0
+
+
+class SiteAnalytics(BaseModel):
+    """Computed analytics for a single site."""
+    total_issues: int = 0
+    open_issues: int = 0
+    assigned_issues: int = 0
+    in_progress_issues: int = 0
+    resolved_pending_review: int = 0
+    completed_issues: int = 0
+    escalated_issues: int = 0
+    reopened_issues: int = 0
+    overdue_count: int = 0
+    complaints_count: int = 0
+    score: int = Field(default=100, ge=0, le=100)
+    health: str = Field(default="Healthy", description="Healthy | Needs Attention | Critical")
+    solvers: List[SiteSolverBrief] = Field(default_factory=list)
+
+    # ML predictions (powered by XGBoost)
+    predicted_issues_next_week: Optional[int] = Field(
+        None, description="XGBoost: predicted new issues in next 7 days"
+    )
+    escalation_risk: Optional[str] = Field(
+        None, description="XGBoost: LOW | MEDIUM | HIGH risk of escalation"
+    )
+
+
+class SiteWithAnalytics(BaseModel):
+    """Site + computed analytics — replaces frontend enrichment."""
+    id: int
+    name: str
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    analytics: SiteAnalytics
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SiteAnalyticsListResponse(BaseModel):
+    total: int
+    sites: List[SiteWithAnalytics]"""
+PURPOSE: Site management — admin only endpoints.
+─────────────────────────────────────────────────
+Sites are referenced during AI extraction when matching
+the location name mentioned in supervisor's chat message.
+
+Example: Supervisor types "pipe broken in vepery site"
+  → AI extracts location = "vepery"
+  → System fuzzy-matches to Site(name="Vepery Site", id=1)
+
+USED BY:
+  POST   /api/v1/sites         → SiteCreate (admin)
+  PUT    /api/v1/sites/{id}    → SiteUpdate (admin)
+  GET    /api/v1/sites         → SiteListResponse
+  POST   /api/v1/sites/assign  → SupervisorSiteAssign (admin)
+"""
+
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List
+from datetime import datetime
+from decimal import Decimal
+
+
+class SiteCreate(BaseModel):
+    """Creates a new facility site with GPS coordinates."""
+    name: str = Field(
+        ...,
+        min_length=2,
+        max_length=100,
+        description="Site identification name",
+        examples=["Vepery Site"],
+    )
+    location: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Human-readable address",
+        examples=["Vepery, Chennai"],
+    )
+    latitude: Optional[Decimal] = Field(None, examples=[13.083944])
+    longitude: Optional[Decimal] = Field(None, examples=[80.270014])
+
+    @field_validator("latitude")
+    @classmethod
+    def validate_latitude(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and (v < -90 or v > 90):
+            raise ValueError("Latitude must be between -90 and 90")
+        return v
+
+    @field_validator("longitude")
+    @classmethod
+    def validate_longitude(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and (v < -180 or v > 180):
+            raise ValueError("Longitude must be between -180 and 180")
+        return v
+
+
+class SiteUpdate(BaseModel):
+    """Partial update for existing site."""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    location: Optional[str] = Field(None, max_length=200)
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+
+
+class SupervisorSiteAssign(BaseModel):
+    """Admin links a supervisor to one or more sites."""
+    supervisor_id: int = Field(..., description="User ID of supervisor", examples=[1])
+    site_ids: List[int] = Field(
+        ..., min_length=1,
+        description="List of site IDs to assign",
+        examples=[[1, 5, 10]],
+    )
+
+
+class SiteResponse(BaseModel):
+    id: int
+    name: str
+    location: Optional[str] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SiteListResponse(BaseModel):
+    total: int
+    sites: List[SiteResponse]"""
+PURPOSE: Solver performance response schemas.
+Replaces frontend's scoreEngine.js — now computed on backend.
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+
+class SolverPerformanceDetail(BaseModel):
+    """Complete solver performance — replaces frontend calculateSolverScore()."""
+    solver_id: int
+    score: int = Field(default=0, ge=0, le=100)
+    label: str = Field(default="Evaluating", description="Top Performer | Good | Needs Attention")
+    label_color: str = Field(default="#f59e0b")
+
+    # Assignment counts
+    total_assigned: int = 0
+    completed_count: int = 0
+    active_count: int = 0
+    in_progress_count: int = 0
+    assigned_not_started_count: int = 0
+    reopened_count: int = 0
+    escalated_count: int = 0
+    overdue_count: int = 0
+
+    # Rates (0-100)
+    completion_rate: int = 0
+    on_time_rate: int = 0
+    call_answer_rate: int = 0
+
+    # Call stats
+    total_calls: int = 0
+    answered_calls: int = 0
+    missed_calls: int = 0
+
+    # Complaint stats
+    complaint_count: int = 0
+
+    # ML predictions (XGBoost)
+    predicted_completion_days: Optional[float] = Field(
+        None, description="XGBoost: predicted avg days to complete next issue"
+    )
+    escalation_probability: Optional[float] = Field(
+        None, description="XGBoost: probability solver's next issue escalates (0-1)"
+    )
+
+
+class SolverWithPerformance(BaseModel):
+    """Solver user info + performance metrics."""
+    id: int
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    avatar: Optional[str] = None
+    role: str
+    is_active: bool
+    performance: SolverPerformanceDetail
+    sites: List[str] = Field(default_factory=list, description="Site names solver works at")
+    skills: List[str] = Field(default_factory=list, description="Skill types")
+
+    model_config = {"from_attributes": True}
+
+
+class SolverPerformanceListResponse(BaseModel):
+    total: int
+    solvers: List[SolverWithPerformance]"""
+PURPOSE: User authentication and profile schemas.
+──────────────────────────────────────────────────
+Auth is the ONE area that uses traditional form-based endpoints.
+Users cannot login through chat — they need structured login first.
+After login, ALL interaction happens through the chat endpoint.
+
+USED BY:
+  POST /api/v1/auth/register  → UserCreate
+  POST /api/v1/auth/login     → UserLogin → TokenResponse
+  GET  /api/v1/auth/me        → UserResponse
+  GET  /api/v1/auth/users     → UserListResponse (admin/manager)
+  PUT  /api/v1/auth/users/{id}→ UserUpdate (admin only)
+"""
+
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List
+from datetime import datetime
+from app.core.enums import UserRole
+
+
+class UserCreate(BaseModel):
+    """
+    Admin registers a new user.
+    Phone is mandatory — used for Twilio calls and login.
+    """
+    name: str = Field(
+        ...,
+        min_length=2,
+        max_length=100,
+        description="Full name of the user",
+        examples=["Priya Sharma"],
+    )
+    phone: str = Field(
+        ...,
+        min_length=10,
+        max_length=20,
+        description="Unique phone — used for auth and Twilio calling",
+        examples=["9123456789"],
+    )
+    email: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Email for escalation notifications",
+        examples=["priya@company.com"],
+    )
+    role: UserRole = Field(
+        ...,
+        description="supervisor | problemsolver | manager",
+        examples=["supervisor"],
+    )
+    password: str = Field(
+        ...,
+        min_length=6,
+        max_length=128,
+        description="Login password (will be hashed with bcrypt)",
+    )
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        """Phone must contain only digits and optional + prefix."""
+        cleaned = v.replace("+", "").replace("-", "").replace(" ", "")
+        if not cleaned.isdigit():
+            raise ValueError("Phone must contain only digits")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and "@" not in v:
+            raise ValueError("Invalid email format")
+        return v
+
+
+class UserUpdate(BaseModel):
+    """
+    Partial update — admin changes user details.
+    Only provided fields are modified.
+    """
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    phone: Optional[str] = Field(None, min_length=10, max_length=20)
+    email: Optional[str] = Field(None, max_length=100)
+    role: Optional[UserRole] = None
+    is_active: Optional[bool] = None
+
+
+class UserLogin(BaseModel):
+    """Phone + password login to get JWT token."""
+    phone: str = Field(
+        ...,
+        description="Registered phone number",
+        examples=["9123456789"],
+    )
+    password: str = Field(
+        ...,
+        description="Account password",
+    )
+
+
+class TokenResponse(BaseModel):
+    """
+    Returned after successful login.
+    Frontend stores access_token and sends in every subsequent request:
+      Authorization: Bearer <access_token>
+    After this, ALL interaction happens through POST /api/v1/chat
+    """
+    access_token: str = Field(..., description="JWT bearer token")
+    token_type: str = Field(default="bearer")
+    user: "UserResponse" = Field(..., description="Logged-in user details")
+
+
+class UserResponse(BaseModel):
+    """
+    Standard user response — never exposes password.
+    Used in auth responses and nested inside other schemas.
+    """
+    id: int
+    name: str
+    phone: str
+    email: Optional[str] = None
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "id": 1,
+                    "name": "Priya Sharma",
+                    "phone": "9123456789",
+                    "email": "priya@company.com",
+                    "role": "supervisor",
+                    "is_active": True,
+                    "created_at": "2026-02-01T10:00:00+05:30",
+                    "updated_at": "2026-02-01T10:00:00+05:30",
+                }
+            ]
+        },
+    }
+
+
+class UserListResponse(BaseModel):
+    """Paginated user list for admin/manager viewing."""
+    total: int = Field(..., description="Total matching users")
+    users: List[UserResponse]"""
+CHAT-FIRST ARCHITECTURE — Schema Registry
+──────────────────────────────────────────
+ALL user actions happen through POST /api/v1/chat
+Backend APIs are either:
+  - Auth (login/register — structured forms)
+  - Chat (THE primary endpoint)
+  - Dashboard (read-only aggregation)
+  - Image upload (file handling)
+  - Webhooks (Twilio callbacks)
+  - History (read-only audit trail)
+
+NO direct create/update endpoints for issues, assignments, complaints.
+Those are ALL created by the chatbot_service based on user's free text.
+"""
+
+from app.schemas.user_schema import (
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserListResponse,
+    UserLogin,
+    TokenResponse,
+)
+from app.schemas.site_schema import (
+    SiteCreate,
+    SiteUpdate,
+    SiteResponse,
+    SiteListResponse,
+    SupervisorSiteAssign,
+)
+from app.schemas.chatbot_schema import (
+    ChatRequest,
+    ChatResponse,
+    ChatHistoryResponse,
+    ChatHistoryListResponse,
+)
+from app.schemas.issue_schema import (
+    AIExtractionResult,
+    IssueResponse,
+    IssueListResponse,
+    IssueDetailResponse,
+    IssueImageBrief,
+    AssignmentBrief,
+)
+from app.schemas.assignment_schema import (
+    AssignmentResponse,
+    AssignmentListResponse,
+    SolverMatchResult,
+)
+from app.schemas.call_log_schema import (
+    CallLogCreate,
+    CallLogUpdate,
+    CallLogResponse,
+    CallLogListResponse,
+    CallStatusCallback,
+)
+from app.schemas.image_schema import (
+    ImageUploadResponse,
+    ImageListResponse,
+    AIVerificationResult,
+)
+from app.schemas.complaint_schema import (
+    ComplaintResponse,
+    ComplaintListResponse,
+)
+from app.schemas.escalation_schema import (
+    EscalationRuleCreate,
+    EscalationRuleResponse,
+    EscalationResponse,
+    EscalationListResponse,
+)
+from app.schemas.dashboard_schema import (
+    DashboardSummary,
+    SupervisorDashboard,
+    ManagerDashboard,
+    SolverAssignment,
+)
+from app.schemas.notification_schema import (
+    EmailNotificationRequest,
+    NotificationResponse,
+)
+from app.schemas.history_schema import (
+    IssueHistoryResponse,
+    IssueHistoryListResponse,
+)
+
+__all__ = [
+    # User / Auth
+    "UserCreate", "UserUpdate", "UserResponse", "UserListResponse",
+    "UserLogin", "TokenResponse",
+    # Site (admin)
+    "SiteCreate", "SiteUpdate", "SiteResponse", "SiteListResponse",
+    "SupervisorSiteAssign",
+    # Chat (PRIMARY user interface)
+    "ChatRequest", "ChatResponse",
+    "ChatHistoryResponse", "ChatHistoryListResponse",
+    # Issue (read-only responses — created via chat only)
+    "AIExtractionResult", "IssueResponse", "IssueListResponse",
+    "IssueDetailResponse", "IssueImageBrief", "AssignmentBrief",
+    # Assignment (internal — created by backend after chat triggers)
+    "AssignmentResponse", "AssignmentListResponse", "SolverMatchResult",
+    # Call Log (internal + Twilio webhook)
+    "CallLogCreate", "CallLogUpdate", "CallLogResponse",
+    "CallLogListResponse", "CallStatusCallback",
+    # Image (upload endpoint for file handling)
+    "ImageUploadResponse", "ImageListResponse", "AIVerificationResult",
+    # Complaint (read-only response — created via chat only)
+    "ComplaintResponse", "ComplaintListResponse",
+    # Escalation (internal + admin read)
+    "EscalationRuleCreate", "EscalationRuleResponse",
+    "EscalationResponse", "EscalationListResponse",
+    # Dashboard (read-only aggregation)
+    "DashboardSummary", "SupervisorDashboard",
+    "ManagerDashboard", "SolverAssignment",
+    # Notification
+    "NotificationResponse", "EmailNotificationRequest",
+    # History (read-only audit trail)
+    "IssueHistoryResponse", "IssueHistoryListResponse",
+]

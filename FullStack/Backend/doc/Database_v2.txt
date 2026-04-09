@@ -1,0 +1,1180 @@
+DATABASE REFERENCE — Facility Management System
+Generated from seed_database.py | Reference date (NOW): 2026-02-25 00:00:00 UTC
+
+All timestamps computed from NOW using days_ago() / days_later() helpers.
+========================================================================================================================
+
+1. users
+
+Structure:
+| Column     | Type                                               | Constraints      |
+| ---------- | -------------------------------------------------- | ---------------- |
+| id         | SERIAL                                             | PK               |
+| name       | VARCHAR(100)                                       | NOT NULL         |
+| phone      | VARCHAR(20)                                        | UNIQUE, NOT NULL |
+| email      | VARCHAR(100)                                       |                  |
+| role       | ENUM('supervisor','problemsolver','manager')       | NOT NULL         |
+| is_active  | BOOLEAN                                            | DEFAULT TRUE     |
+| created_at | TIMESTAMPTZ                                        | DEFAULT NOW()    |
+| updated_at | TIMESTAMPTZ                                        | DEFAULT NOW()    | 
+
+Sample data:
+| id | name                | phone      | email                      | role          | is_active |
+| -- | ------------------- | ---------- | -------------------------- | ------------- | --------- |
+| 1  | Priya Sharma        | 9100000001 | priya.sharma@facility.com  | supervisor    | TRUE      |
+| 2  | Anil Kumar          | 9100000002 | anil.kumar@facility.com    | supervisor    | TRUE      |
+| 3  | Geetha Rajan        | 9100000003 | geetha.rajan@facility.com  | supervisor    | TRUE      |
+| 4  | Rajesh Menon        | 9100000004 | rajesh.menon@facility.com  | manager       | TRUE      |
+| 5  | Lakshmi Narayanan   | 9100000005 | lakshmi.n@facility.com     | manager       | TRUE      |
+| 6  | Ramesh Krishnan     | 9100000006 | ramesh.k@facility.com      | problemsolver | TRUE      |
+| 7  | Suresh Pillai       | 9100000007 | suresh.p@facility.com      | problemsolver | TRUE      |
+| 8  | Mohan Thilak        | 9100000008 | mohan.t@facility.com       | problemsolver | TRUE      |
+| 9  | Kavitha Subramanian | 9100000009 | kavitha.s@facility.com     | problemsolver | TRUE      |
+| 10 | Vijay Moorthy       | 9100000010 | vijay.m@facility.com       | problemsolver | TRUE      |
+
+
+2. sites
+
+Structure:
+| Column     | Type          | Constraints   |
+| ---------- | ------------- | ------------- |
+| id         | SERIAL        | PK            |
+| name       | VARCHAR(100)  | NOT NULL      |
+| location   | VARCHAR(200)  |               |
+| latitude   | DECIMAL(10,8) | (Added)       |
+| longitude  | DECIMAL(11,8) | (Added)       |
+| created_at | TIMESTAMPTZ   | DEFAULT NOW() |
+| updated_at | TIMESTAMPTZ   | DEFAULT NOW() |
+
+Sample data:
+| id | name                           | location                    | latitude   | longitude  |
+| -- | ------------------------------ | --------------------------- | ---------- | ---------- |
+| 1  | Vepery Site                    | Vepery, Chennai             | 13.083944  | 80.270014  |
+| 2  | Ambattur Industrial Park       | Ambattur, Chennai           | 13.113693  | 80.152933  |
+| 3  | Guindy Factory                 | Guindy, Chennai             | 13.004302  | 80.226376  |
+| 4  | Perungudi Site                 | Perungudi, Chennai          | 12.971099  | 80.245373  |
+| 5  | Taramani Tech Park             | Taramani, Chennai           | 12.970181  | 80.250222  |
+| 6  | Chromepet Industrial Area      | Chromepet, Chennai          | 12.939217  | 80.145393  |
+| 7  | Sholinganallur Site            | Sholinganallur, Chennai     | 12.900571  | 80.259749  |
+| 8  | Pallikaranai Factory           | Pallikaranai, Chennai       | 12.971689  | 80.212747  |
+| 9  | Medavakkam Park                | Medavakkam, Chennai         | 12.913848  | 80.197551  |
+| 10 | OMR Tech Hub                   | OMR, Chennai                | 12.96658   | 80.259749  |
+| 11 | Porur Manufacturing Unit       | Porur, Chennai              | 13.0353    | 80.1568    |
+| 12 | Velachery Business Center      | Velachery, Chennai          | 12.9792    | 80.221     |
+| 13 | Adyar Research Lab             | Adyar, Chennai              | 13.0063    | 80.257     |
+| 14 | Nungambakkam Office            | Nungambakkam, Chennai       | 13.0604    | 80.2426    |
+| 15 | Anna Nagar Complex             | Anna Nagar, Chennai         | 13.085     | 80.2096    |
+| 16 | Thiruvanmiyur Site             | Thiruvanmiyur, Chennai      | 12.9833    | 80.2682    |
+| 17 | Tambaram Depot                 | Tambaram, Chennai           | 12.925     | 80.1278    |
+| 18 | Avadi Plant                    | Avadi, Chennai              | 13.1145    | 80.097     |
+| 19 | Sriperumbudur Unit             | Sriperumbudur, Chennai      | 12.9685    | 79.9414    |
+| 20 | Mahabalipuram Resort Facility  | Mahabalipuram, Chennai      | 12.6166    | 80.1927    |
+
+
+3. supervisor_sites (one-to-many): one supervisor in many sites
+
+Structure:
+| Column        | Type | Constraints      |
+| ------------- | ---- | ---------------- |
+| supervisor_id | INT  | FK -> users(id)  |
+| site_id       | INT  | FK -> sites(id)  |
+
+Note: No timestamps on this table (join table only).
+
+Sample data:
+| supervisor_id | site_id |
+| ------------- | ------- |
+| 1             | 1       |
+| 1             | 5       |
+| 1             | 10      |
+| 1             | 13      |
+| 1             | 14      |
+| 1             | 15      |
+| 1             | 16      |
+| 2             | 2       |
+| 2             | 3       |
+| 2             | 6       |
+| 2             | 11      |
+| 2             | 17      |
+| 2             | 18      |
+| 2             | 19      |
+| 3             | 4       |
+| 3             | 7       |
+| 3             | 8       |
+| 3             | 9       |
+| 3             | 12      |
+| 3             | 20      |
+
+
+4. problem_solver_skills
+
+Structure:
+| Column       | Type        | Constraints                                       |
+| ------------ | ----------- | ------------------------------------------------- |
+| id           | SERIAL      | PK                                                |
+| solver_id    | INT         | FK -> users(id), NOT NULL                         |
+| skill_type   | VARCHAR(50) | NOT NULL                                          |
+| site_id      | INT         | FK -> sites(id), NULLABLE (NULL = works all sites)|
+| priority     | INT         | DEFAULT 1 (1-10, higher = preferred)              |
+| is_available | BOOLEAN     | DEFAULT TRUE                                      |
+| created_at   | TIMESTAMPTZ | DEFAULT NOW()                                     |
+| updated_at   | TIMESTAMPTZ | DEFAULT NOW()                                     |
+
+Sample data:
+| id | solver_id | skill_type  | site_id | priority | is_available |
+| -- | --------- | ----------- | ------- | -------- | ------------ |
+| 1  | 6         | plumbing    | 1       | 10       | TRUE         |
+| 2  | 6         | plumbing    | NULL    | 8        | TRUE         |
+| 3  | 6         | mechanical  | 6       | 7        | TRUE         |
+| 4  | 6         | carpentry   | NULL    | 5        | TRUE         |
+| 5  | 7         | electrical  | 2       | 10       | TRUE         |
+| 6  | 7         | electrical  | NULL    | 7        | TRUE         |
+| 7  | 7         | network     | 10      | 9        | TRUE         |
+| 8  | 7         | network     | NULL    | 6        | TRUE         |
+| 9  | 8         | hvac        | 3       | 10       | TRUE         |
+| 10 | 8         | hvac        | NULL    | 8        | TRUE         |
+| 11 | 8         | mechanical  | 5       | 7        | TRUE         |
+| 12 | 8         | plumbing    | 8       | 6        | TRUE         |
+| 13 | 9         | painting    | NULL    | 10       | TRUE         |
+| 14 | 9         | carpentry   | 4       | 9        | TRUE         |
+| 15 | 9         | carpentry   | NULL    | 7        | TRUE         |
+| 16 | 9         | plumbing    | 9       | 5        | TRUE         |
+| 17 | 10        | electrical  | 7       | 9        | TRUE         |
+| 18 | 10        | hvac        | 12      | 8        | TRUE         |
+| 19 | 10        | mechanical  | NULL    | 7        | TRUE         |
+| 20 | 10        | network     | 14      | 6        | FALSE        |
+
+
+5. escalation_rules
+
+Structure:
+| Column                    | Type                        | Constraints/Notes                        |
+| ------------------------- | --------------------------- | ---------------------------------------- |
+| id                        | SERIAL                      | PK                                       |
+| priority                  | ENUM('low','medium','high') | NOT NULL                                 |
+| max_call_attempts         | INT                         | NOT NULL                                 |
+| max_time_without_response | INTERVAL                    | NOT NULL (e.g., '02:00:00' for 2 hours)  |
+| escalate_to_role          | VARCHAR(50)                 | NOT NULL (e.g., 'manager')               |
+| created_at                | TIMESTAMPTZ                 | DEFAULT NOW()                            |
+| updated_at                | TIMESTAMPTZ                 | DEFAULT NOW()                            |
+
+Sample data:
+| id | priority | max_call_attempts | max_time_without_response | escalate_to_role |
+| -- | -------- | ----------------- | ------------------------- | ---------------- |
+| 1  | high     | 3                 | 02:00:00                  | manager          |
+| 2  | high     | 2                 | 00:45:00                  | manager          |
+| 3  | medium   | 4                 | 04:00:00                  | supervisor       |
+| 4  | medium   | 3                 | 02:00:00                  | manager          |
+| 5  | low      | 6                 | 08:00:00                  | supervisor       |
+| 6  | low      | 5                 | 06:00:00                  | manager          |
+
+
+6. issues
+
+Structure:
+| Column                  | Type                                                                                               | Constraints                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| id                      | SERIAL                                                                                             | PK                                                        |
+| site_id                 | INT                                                                                                | FK -> sites(id), NOT NULL                                 |
+| raised_by_supervisor_id | INT                                                                                                | FK -> users(id), NOT NULL                                 |
+| title                   | VARCHAR(200)                                                                                       | NOT NULL                                                  |
+| description             | TEXT                                                                                               | NOT NULL                                                  |
+| priority                | ENUM('low','medium','high')                                                                        | DEFAULT 'medium'                                          |
+| deadline_at             | TIMESTAMPTZ                                                                                        |                                                           |
+| status                  | ENUM('OPEN','ASSIGNED','IN_PROGRESS','RESOLVED_PENDING_REVIEW','COMPLETED','REOPENED','ESCALATED') | DEFAULT 'OPEN'                                            |
+| track_status            | VARCHAR(100)                                                                                       | For tracking (e.g., 'awaiting_solver', 'awaiting_review') |
+| latitude                | DECIMAL(10,8)                                                                                      | (Added)                                                   |
+| longitude               | DECIMAL(11,8)                                                                                      | (Added)                                                   |
+| created_at              | TIMESTAMPTZ                                                                                        | DEFAULT NOW() (Added)                                     |
+| updated_at              | TIMESTAMPTZ                                                                                        | DEFAULT NOW()                                             |
+
+Sample data:
+| id | site_id | sup_id | title                              | description                                                       | priority | deadline_at         | status                  | track_status    | latitude   | longitude  | created_at          | updated_at          |
+| -- | ------- | ------ | ---------------------------------- | ----------------------------------------------------------------- | -------- | ------------------- | ----------------------- | --------------- | ---------- | ---------- | ------------------- | ------------------- |
+| 1  | 1       | 1      | Pipe Leakage in Main Hall          | Major water leak from ceiling pipe joint in main hall affecting work area | high     | 2026-02-15 00:00:00 | COMPLETED               | resolved        | 13.0       | 80.2       | 2026-02-05 00:00:00 | 2026-02-16 00:00:00 |
+| 2  | 2       | 2      | Electrical Panel Fault Block-B     | Panel B3 showing intermittent failures and tripping breakers      | high     | 2026-02-18 00:00:00 | COMPLETED               | resolved        | 13.003     | 80.202     | 2026-02-07 23:00:00 | 2026-02-19 00:00:00 |
+| 3  | 3       | 1      | AC Unit Not Cooling Properly       | Central AC in Block A not maintaining set temperature of 24C      | high     | 2026-02-16 00:00:00 | COMPLETED               | resolved        | 13.006     | 80.204     | 2026-02-05 22:00:00 | 2026-02-17 00:00:00 |
+| 4  | 5       | 1      | Network Switch Failure             | Core network switch in server room lost connectivity              | high     | 2026-02-20 00:00:00 | COMPLETED               | resolved        | 13.009     | 80.206     | 2026-02-09 21:00:00 | 2026-02-21 00:00:00 |
+| 5  | 4       | 3      | Broken Window Conference Room      | Glass cracked in 3rd floor conference room posing safety hazard   | medium   | 2026-02-19 00:00:00 | COMPLETED               | resolved        | 13.012     | 80.208     | 2026-02-08 20:00:00 | 2026-02-20 00:00:00 |
+| 6  | 7       | 3      | Generator Annual Maintenance       | Yearly maintenance check and oil change for backup generator      | medium   | 2026-02-10 00:00:00 | COMPLETED               | resolved        | 13.015     | 80.21      | 2026-01-30 19:00:00 | 2026-02-11 00:00:00 |
+| 7  | 8       | 3      | Bathroom Tiles Replacement         | Cracked tiles in ground floor mens restroom need replacement      | low      | 2026-02-12 00:00:00 | COMPLETED               | resolved        | 13.018     | 80.212     | 2026-02-01 18:00:00 | 2026-02-13 00:00:00 |
+| 8  | 9       | 3      | Parking Lot Light Repair           | Three parking lot lights not functioning in Zone B                | low      | 2026-02-14 00:00:00 | COMPLETED               | resolved        | 13.021     | 80.214     | 2026-02-03 17:00:00 | 2026-02-15 00:00:00 |
+| 9  | 10      | 1      | Fire Alarm System Test             | Quarterly fire alarm system inspection and testing                | high     | 2026-02-22 00:00:00 | COMPLETED               | resolved        | 13.024     | 80.216     | 2026-02-11 16:00:00 | 2026-02-23 00:00:00 |
+| 10 | 13      | 2      | HVAC Duct Cleaning                 | Annual cleaning of HVAC ducts in Building C                       | low      | 2026-02-05 00:00:00 | COMPLETED               | resolved        | 13.027     | 80.218     | 2026-01-25 15:00:00 | 2026-02-06 00:00:00 |
+| 11 | 14      | 1      | Office Wall Painting               | Repainting of reception area walls showing wear                   | low      | 2026-02-08 00:00:00 | COMPLETED               | resolved        | 13.03      | 80.22      | 2026-01-28 14:00:00 | 2026-02-09 00:00:00 |
+| 12 | 15      | 1      | Water Pump Motor Repair            | Main water pump motor making unusual grinding noise               | high     | 2026-02-23 00:00:00 | COMPLETED               | resolved        | 13.033     | 80.222     | 2026-02-12 13:00:00 | 2026-02-24 00:00:00 |
+| 13 | 6       | 2      | Roof Waterproofing                 | Roof leaking during monsoon in warehouse section                  | medium   | 2026-02-17 00:00:00 | COMPLETED               | resolved        | 13.036     | 80.224     | 2026-02-07 00:00:00 | 2026-02-18 00:00:00 |
+| 14 | 11      | 2      | UPS Battery Replacement            | UPS system showing low battery warning for server rack            | high     | 2026-02-24 00:00:00 | COMPLETED               | resolved        | 13.039     | 80.226     | 2026-02-13 23:00:00 | 2026-02-25 00:00:00 |
+| 15 | 12      | 3      | Door Lock Replacement              | Main entrance electronic lock malfunctioning                      | medium   | 2026-02-21 00:00:00 | COMPLETED               | resolved        | 13.042     | 80.228     | 2026-02-10 22:00:00 | 2026-02-22 00:00:00 |
+| 16 | 16      | 1      | Plumbing Valve Repair Cafeteria    | Hot water valve leaking in staff cafeteria kitchen                | medium   | 2026-02-20 00:00:00 | COMPLETED               | resolved        | 13.045     | 80.23      | 2026-02-09 21:00:00 | 2026-02-21 00:00:00 |
+| 17 | 17      | 2      | Intercom System Repair             | Intercom between floors 2 and 3 not working                       | low      | 2026-02-15 00:00:00 | COMPLETED               | resolved        | 13.048     | 80.232     | 2026-02-04 20:00:00 | 2026-02-16 00:00:00 |
+| 18 | 18      | 2      | Emergency Light Check              | Monthly emergency lighting inspection                             | medium   | 2026-02-18 00:00:00 | COMPLETED               | resolved        | 13.051     | 80.234     | 2026-02-07 19:00:00 | 2026-02-19 00:00:00 |
+| 19 | 19      | 3      | Conveyor Belt Alignment            | Production conveyor belt misaligned causing jams                  | high     | 2026-02-25 00:00:00 | COMPLETED               | resolved        | 13.054     | 80.236     | 2026-02-14 18:00:00 | 2026-02-26 00:00:00 |
+| 20 | 20      | 3      | Air Compressor Servicing           | Routine servicing of industrial air compressor                    | low      | 2026-02-10 00:00:00 | COMPLETED               | resolved        | 13.057     | 80.238     | 2026-01-30 17:00:00 | 2026-02-11 00:00:00 |
+| 21 | 3       | 2      | Exhaust Fan Replacement            | Kitchen exhaust fan motor burned out                              | medium   | 2026-02-22 00:00:00 | COMPLETED               | resolved        | 13.06      | 80.24      | 2026-02-11 16:00:00 | 2026-02-23 00:00:00 |
+| 22 | 5       | 1      | Cable Tray Installation            | New cable tray needed for network expansion                       | low      | 2026-02-12 00:00:00 | COMPLETED               | resolved        | 13.063     | 80.242     | 2026-02-01 15:00:00 | 2026-02-13 00:00:00 |
+| 23 | 1       | 1      | Toilet Flush Mechanism Repair      | Multiple flush mechanisms broken in 2nd floor restroom            | medium   | 2026-02-23 00:00:00 | COMPLETED               | resolved        | 13.066     | 80.244     | 2026-02-12 14:00:00 | 2026-02-24 00:00:00 |
+| 24 | 8       | 3      | Window Sealing Work                | Rain water seeping through window frames in Block D               | medium   | 2026-02-20 00:00:00 | COMPLETED               | resolved        | 13.069     | 80.246     | 2026-02-09 13:00:00 | 2026-02-21 00:00:00 |
+| 25 | 9       | 3      | Drainage Pipe Unclogging           | Storm water drain blocked near parking entrance                   | high     | 2026-02-26 00:00:00 | COMPLETED               | resolved        | 13.072     | 80.248     | 2026-02-16 00:00:00 | 2026-02-27 00:00:00 |
+| 26 | 1       | 1      | Ceiling Water Stain Repair         | Water stain expanding on 4th floor ceiling near elevator          | medium   | 2026-03-02 00:00:00 | IN_PROGRESS             | in_progress     | 13.0       | 80.2       | 2026-02-22 00:00:00 | 2026-02-24 00:00:00 |
+| 27 | 2       | 2      | Power Socket Replacement Block-A   | Multiple sockets sparking in open office area                     | high     | 2026-02-28 00:00:00 | IN_PROGRESS             | in_progress     | 13.004     | 80.203     | 2026-02-21 22:00:00 | 2026-02-23 23:00:00 |
+| 28 | 3       | 2      | Chiller Plant Vibration Issue      | Excessive vibration in chiller unit #2                            | high     | 2026-03-01 00:00:00 | IN_PROGRESS             | in_progress     | 13.008     | 80.206     | 2026-02-21 20:00:00 | 2026-02-23 22:00:00 |
+| 29 | 4       | 3      | Stairwell Handrail Loose           | Handrail on fire escape stairwell wobbly and unsafe               | high     | 2026-02-27 00:00:00 | IN_PROGRESS             | in_progress     | 13.012     | 80.209     | 2026-02-21 18:00:00 | 2026-02-23 21:00:00 |
+| 30 | 5       | 1      | WiFi Access Point Replacement      | Dead zone in meeting room cluster                                 | medium   | 2026-03-03 00:00:00 | IN_PROGRESS             | in_progress     | 13.016     | 80.212     | 2026-02-21 16:00:00 | 2026-02-23 20:00:00 |
+| 31 | 6       | 2      | Roller Shutter Repair Warehouse    | Motorized roller shutter stuck halfway                            | medium   | 2026-03-01 00:00:00 | IN_PROGRESS             | in_progress     | 13.02      | 80.215     | 2026-02-21 14:00:00 | 2026-02-23 19:00:00 |
+| 32 | 7       | 3      | Painting Touch-up Corridors        | Scuff marks and damage on main corridor walls                     | low      | 2026-03-05 00:00:00 | IN_PROGRESS             | in_progress     | 13.024     | 80.218     | 2026-02-21 12:00:00 | 2026-02-23 18:00:00 |
+| 33 | 8       | 3      | Water Heater Malfunction           | Solar water heater not heating in guest block                     | medium   | 2026-03-02 00:00:00 | IN_PROGRESS             | in_progress     | 13.028     | 80.221     | 2026-02-21 10:00:00 | 2026-02-23 17:00:00 |
+| 34 | 9       | 3      | Boundary Wall Crack Repair         | Structural crack in eastern boundary wall                         | high     | 2026-02-28 00:00:00 | IN_PROGRESS             | in_progress     | 13.032     | 80.224     | 2026-02-21 08:00:00 | 2026-02-23 16:00:00 |
+| 35 | 10      | 1      | Server Room AC Backup Install      | Secondary AC unit installation for redundancy                     | high     | 2026-03-01 00:00:00 | IN_PROGRESS             | in_progress     | 13.036     | 80.227     | 2026-02-21 06:00:00 | 2026-02-23 15:00:00 |
+| 36 | 11      | 2      | Forklift Hydraulic Leak            | Hydraulic fluid leaking from warehouse forklift                   | high     | 2026-02-27 00:00:00 | IN_PROGRESS             | in_progress     | 13.04      | 80.23      | 2026-02-21 04:00:00 | 2026-02-23 14:00:00 |
+| 37 | 12      | 3      | False Ceiling Repair               | Ceiling tiles sagging in accounts department                      | medium   | 2026-03-03 00:00:00 | IN_PROGRESS             | in_progress     | 13.044     | 80.233     | 2026-02-21 02:00:00 | 2026-02-23 13:00:00 |
+| 38 | 13      | 2      | Transformer Oil Top-up             | Power transformer oil level below minimum mark                    | high     | 2026-02-28 00:00:00 | IN_PROGRESS             | in_progress     | 13.048     | 80.236     | 2026-02-21 00:00:00 | 2026-02-23 12:00:00 |
+| 39 | 14      | 1      | Garden Irrigation Pipe Burst       | Underground irrigation pipe burst near main lawn                  | low      | 2026-03-04 00:00:00 | IN_PROGRESS             | in_progress     | 13.052     | 80.239     | 2026-02-20 22:00:00 | 2026-02-23 11:00:00 |
+| 40 | 15      | 1      | Security Gate Motor Repair         | Automatic gate not closing fully                                  | medium   | 2026-03-01 00:00:00 | IN_PROGRESS             | in_progress     | 13.056     | 80.242     | 2026-02-20 20:00:00 | 2026-02-23 10:00:00 |
+| 41 | 16      | 1      | Pantry Microwave Repair            | Office pantry microwave not heating                               | low      | 2026-03-04 00:00:00 | ASSIGNED                | awaiting_solver | 13.01      | 80.21      | 2026-02-23 00:00:00 | 2026-02-23 19:00:00 |
+| 42 | 17      | 2      | Loading Dock Light Replacement     | Dock area poorly lit, safety concern                              | medium   | 2026-03-02 00:00:00 | ASSIGNED                | awaiting_solver | 13.013     | 80.212     | 2026-02-22 22:00:00 | 2026-02-23 18:00:00 |
+| 43 | 18      | 2      | AC Thermostat Calibration          | Thermostat reading 3 degrees off in server room                   | high     | 2026-02-28 00:00:00 | ASSIGNED                | awaiting_solver | 13.016     | 80.214     | 2026-02-22 20:00:00 | 2026-02-23 17:00:00 |
+| 44 | 19      | 3      | Production Line Conveyor Fix       | Conveyor belt slipping under load                                 | high     | 2026-02-27 00:00:00 | ASSIGNED                | awaiting_solver | 13.019     | 80.216     | 2026-02-22 18:00:00 | 2026-02-23 16:00:00 |
+| 45 | 20      | 3      | Pest Control - Termite Treatment   | Termite damage found in wooden partitions                         | medium   | 2026-03-03 00:00:00 | ASSIGNED                | awaiting_solver | 13.022     | 80.218     | 2026-02-22 16:00:00 | 2026-02-23 15:00:00 |
+| 46 | 1       | 1      | Overhead Tank Cleaning             | Quarterly water tank cleaning and inspection                      | medium   | 2026-03-05 00:00:00 | ASSIGNED                | awaiting_solver | 13.025     | 80.22      | 2026-02-22 14:00:00 | 2026-02-23 14:00:00 |
+| 47 | 2       | 2      | Earthing System Check              | Annual electrical earthing resistance test                        | high     | 2026-03-01 00:00:00 | ASSIGNED                | awaiting_solver | 13.028     | 80.222     | 2026-02-22 12:00:00 | 2026-02-23 13:00:00 |
+| 48 | 3       | 2      | AHU Filter Replacement             | Air handling unit filters due for replacement                     | medium   | 2026-03-02 00:00:00 | ASSIGNED                | awaiting_solver | 13.031     | 80.224     | 2026-02-22 10:00:00 | 2026-02-23 12:00:00 |
+| 49 | 4       | 3      | Wooden Door Frame Repair           | Termite-damaged door frame in storage room                        | low      | 2026-03-07 00:00:00 | ASSIGNED                | awaiting_solver | 13.034     | 80.226     | 2026-02-22 08:00:00 | 2026-02-23 11:00:00 |
+| 50 | 5       | 1      | CCTV Camera Realignment            | Cameras in parking area misaligned after storm                    | medium   | 2026-03-01 00:00:00 | ASSIGNED                | awaiting_solver | 13.037     | 80.228     | 2026-02-22 06:00:00 | 2026-02-23 10:00:00 |
+| 51 | 6       | 2      | Compressor Room Ventilation        | Ventilation fan failed in compressor room                         | high     | 2026-02-28 00:00:00 | ASSIGNED                | awaiting_solver | 13.04      | 80.23      | 2026-02-22 04:00:00 | 2026-02-23 09:00:00 |
+| 52 | 7       | 3      | External Wall Crack Sealing        | Hairline cracks on building exterior wall                         | low      | 2026-03-09 00:00:00 | ASSIGNED                | awaiting_solver | 13.043     | 80.232     | 2026-02-22 02:00:00 | 2026-02-23 08:00:00 |
+| 53 | 8       | 3      | Sewage Pump Failure                | Basement sewage pump not activating                               | high     | 2026-02-28 00:00:00 | OPEN                    | awaiting_solver | 13.02      | 80.22      | 2026-02-24 00:00:00 | 2026-02-24 00:00:00 |
+| 54 | 9       | 3      | Parking Barrier Malfunction        | Entry barrier arm not lifting for vehicles                        | medium   | 2026-03-02 00:00:00 | OPEN                    | awaiting_solver | 13.023     | 80.222     | 2026-02-23 23:00:00 | 2026-02-23 23:00:00 |
+| 55 | 10      | 1      | Fiber Optic Cable Damage           | Construction crew damaged fiber line to Building E                | high     | 2026-02-27 00:00:00 | OPEN                    | awaiting_solver | 13.026     | 80.224     | 2026-02-23 22:00:00 | 2026-02-23 22:00:00 |
+| 56 | 11      | 2      | Roof Sheet Replacement             | Corroded roofing sheets in warehouse section                      | medium   | 2026-03-05 00:00:00 | OPEN                    | awaiting_solver | 13.029     | 80.226     | 2026-02-23 21:00:00 | 2026-02-23 21:00:00 |
+| 57 | 12      | 3      | Lift Motor Overheating             | Service lift motor temperature alarm triggered                    | high     | 2026-02-27 00:00:00 | OPEN                    | awaiting_solver | 13.032     | 80.228     | 2026-02-23 20:00:00 | 2026-02-23 20:00:00 |
+| 58 | 13      | 2      | Coolant Pipe Leak Lab              | Coolant pipe leaking in R&D laboratory                            | high     | 2026-02-28 00:00:00 | OPEN                    | awaiting_solver | 13.035     | 80.23      | 2026-02-23 19:00:00 | 2026-02-23 19:00:00 |
+| 59 | 14      | 1      | Reception Desk Repair              | Reception counter laminate peeling off                            | low      | 2026-03-11 00:00:00 | OPEN                    | awaiting_solver | 13.038     | 80.232     | 2026-02-23 18:00:00 | 2026-02-23 18:00:00 |
+| 60 | 15      | 1      | Exterior Painting Needed           | Building facade paint fading and peeling                          | low      | 2026-03-17 00:00:00 | OPEN                    | awaiting_solver | 13.041     | 80.234     | 2026-02-23 17:00:00 | 2026-02-23 17:00:00 |
+| 61 | 16      | 1      | Emergency Generator Test Fail      | Monthly generator test showed low voltage output                  | high     | 2026-02-27 00:00:00 | OPEN                    | awaiting_solver | 13.044     | 80.236     | 2026-02-23 16:00:00 | 2026-02-23 16:00:00 |
+| 62 | 17      | 2      | Drainage Overflow Issue            | Storm drain overflowing during heavy rain                         | high     | 2026-02-28 00:00:00 | OPEN                    | awaiting_solver | 13.047     | 80.238     | 2026-02-23 15:00:00 | 2026-02-23 15:00:00 |
+| 63 | 18      | 2      | Welding Machine Breakdown          | Production welding machine #3 not striking arc                    | medium   | 2026-03-02 00:00:00 | OPEN                    | awaiting_solver | 13.05      | 80.24      | 2026-02-23 14:00:00 | 2026-02-23 14:00:00 |
+| 64 | 19      | 3      | Chemical Storage Ventilation       | Exhaust fan in chemical storage room failed                       | high     | 2026-02-27 00:00:00 | OPEN                    | awaiting_solver | 13.053     | 80.242     | 2026-02-23 13:00:00 | 2026-02-23 13:00:00 |
+| 65 | 20      | 3      | Water Softener Malfunction         | Water treatment softener not regenerating                         | medium   | 2026-03-03 00:00:00 | OPEN                    | awaiting_solver | 13.056     | 80.244     | 2026-02-23 12:00:00 | 2026-02-23 12:00:00 |
+| 66 | 1       | 1      | Cafeteria Sink Clogged             | Kitchen sink backing up with grey water                           | medium   | 2026-03-01 00:00:00 | OPEN                    | awaiting_solver | 13.059     | 80.246     | 2026-02-23 11:00:00 | 2026-02-23 11:00:00 |
+| 67 | 2       | 2      | Distribution Board Humming         | DB in Block C making buzzing noise                                | high     | 2026-02-27 00:00:00 | OPEN                    | awaiting_solver | 13.062     | 80.248     | 2026-02-23 10:00:00 | 2026-02-23 10:00:00 |
+| 68 | 3       | 2      | Boiler Pressure Valve Repair       | Pressure relief valve replaced on industrial boiler               | high     | 2026-03-01 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.03      | 80.23      | 2026-02-20 00:00:00 | 2026-02-24 00:00:00 |
+| 69 | 4       | 3      | Floor Tile Replacement Lobby       | Broken floor tiles replaced in main lobby                         | medium   | 2026-03-03 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.034     | 80.233     | 2026-02-19 21:00:00 | 2026-02-23 22:00:00 |
+| 70 | 5       | 1      | UPS Firmware Update                | UPS firmware upgraded to latest version                           | medium   | 2026-03-02 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.038     | 80.236     | 2026-02-19 18:00:00 | 2026-02-23 20:00:00 |
+| 71 | 6       | 2      | Crane Wire Rope Inspection         | Overhead crane wire rope inspected and lubricated                 | high     | 2026-02-28 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.042     | 80.239     | 2026-02-19 15:00:00 | 2026-02-23 18:00:00 |
+| 72 | 7       | 3      | Wall Waterproofing Treatment       | External wall waterproof coating applied                          | medium   | 2026-03-04 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.046     | 80.242     | 2026-02-19 12:00:00 | 2026-02-23 16:00:00 |
+| 73 | 10      | 1      | Switch Stack Configuration         | Network switch stack reconfigured after failure                   | high     | 2026-02-28 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.05      | 80.245     | 2026-02-19 09:00:00 | 2026-02-23 14:00:00 |
+| 74 | 11      | 2      | Motor Bearing Replacement          | Conveyor motor bearings replaced with SKF grade                   | high     | 2026-03-01 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.054     | 80.248     | 2026-02-19 06:00:00 | 2026-02-23 12:00:00 |
+| 75 | 12      | 3      | Ceiling Fan Speed Control Fix      | Fan regulator replaced in conference room                         | low      | 2026-03-05 00:00:00 | RESOLVED_PENDING_REVIEW | awaiting_review | 13.058     | 80.251     | 2026-02-19 03:00:00 | 2026-02-23 10:00:00 |
+| 76 | 1       | 1      | Pipe Joint Still Leaking           | Previous repair failed, joint leaking again                       | high     | 2026-02-28 00:00:00 | REOPENED                | in_progress     | 13.04      | 80.24      | 2026-02-19 00:00:00 | 2026-02-24 18:00:00 |
+| 77 | 2       | 2      | Electrical Short Recurring         | Same circuit breaker tripping after repair                        | high     | 2026-02-27 00:00:00 | REOPENED                | in_progress     | 13.043     | 80.242     | 2026-02-18 22:00:00 | 2026-02-24 17:00:00 |
+| 78 | 8       | 3      | Water Heater Still Cold            | Solar heater repair ineffective, water still cold                 | medium   | 2026-03-01 00:00:00 | REOPENED                | in_progress     | 13.046     | 80.244     | 2026-02-18 20:00:00 | 2026-02-24 16:00:00 |
+| 79 | 9       | 3      | Boundary Wall Crack Widening       | Sealed crack reopened after settlement                            | high     | 2026-02-28 00:00:00 | REOPENED                | in_progress     | 13.049     | 80.246     | 2026-02-18 18:00:00 | 2026-02-24 15:00:00 |
+| 80 | 14      | 1      | Irrigation System Leaking Again    | Previous pipe repair failed under pressure                        | medium   | 2026-03-02 00:00:00 | REOPENED                | in_progress     | 13.052     | 80.248     | 2026-02-18 16:00:00 | 2026-02-24 14:00:00 |
+| 81 | 3       | 2      | Chiller Vibration Returned         | Vibration damping fix did not hold                                | high     | 2026-02-27 00:00:00 | REOPENED                | in_progress     | 13.055     | 80.25      | 2026-02-18 14:00:00 | 2026-02-24 13:00:00 |
+| 82 | 6       | 2      | Shutter Motor Burned Again         | Replacement motor burned out within a week                        | medium   | 2026-03-01 00:00:00 | REOPENED                | in_progress     | 13.058     | 80.252     | 2026-02-18 12:00:00 | 2026-02-24 12:00:00 |
+| 83 | 11      | 2      | Forklift Leak Persists             | Hydraulic seal replacement did not fix leak                       | high     | 2026-02-27 00:00:00 | REOPENED                | in_progress     | 13.061     | 80.254     | 2026-02-18 10:00:00 | 2026-02-24 11:00:00 |
+| 84 | 4       | 3      | Lift Motor Complete Failure        | Service lift completely non-functional for 3 days                 | high     | 2026-02-26 00:00:00 | ESCALATED               | awaiting_review | 13.05      | 80.25      | 2026-02-21 00:00:00 | 2026-02-25 00:00:00 |
+| 85 | 7       | 3      | Chemical Spill Ventilation         | Chemical storage ventilation down - safety hazard                 | high     | 2026-02-26 00:00:00 | ESCALATED               | awaiting_review | 13.054     | 80.253     | 2026-02-20 21:00:00 | 2026-02-24 22:00:00 |
+| 86 | 13      | 2      | Transformer Overheating            | Power transformer temperature exceeding safe limits               | high     | 2026-02-26 00:00:00 | ESCALATED               | awaiting_review | 13.058     | 80.256     | 2026-02-20 18:00:00 | 2026-02-24 20:00:00 |
+| 87 | 17      | 2      | Drainage Flooding Basement         | Basement flooding due to blocked storm drain                      | high     | 2026-02-25 00:00:00 | ESCALATED               | awaiting_review | 13.062     | 80.259     | 2026-02-20 15:00:00 | 2026-02-24 18:00:00 |
+| 88 | 19      | 3      | Production Line Down               | Critical conveyor failure halting production                      | high     | 2026-02-25 00:00:00 | ESCALATED               | awaiting_review | 13.066     | 80.262     | 2026-02-20 12:00:00 | 2026-02-24 16:00:00 |
+| 89 | 20      | 3      | Fire Suppression System Fault      | Sprinkler system pressure test failed                             | high     | 2026-02-26 00:00:00 | ESCALATED               | awaiting_review | 13.07      | 80.265     | 2026-02-20 09:00:00 | 2026-02-24 14:00:00 |
+| 90 | 18      | 2      | Welding Gas Leak Detected          | Gas leak from welding station supply line                         | high     | 2026-02-25 00:00:00 | ESCALATED               | awaiting_review | 13.074     | 80.268     | 2026-02-20 06:00:00 | 2026-02-24 12:00:00 |
+
+
+7. issue_assignments
+
+Structure:
+| Column                    | Type                                  | Constraints                           |
+| ------------------------- | ------------------------------------- | ------------------------------------- |
+| id                        | SERIAL                                | PRIMARY KEY                           |
+| issue_id                  | INT                                   | FK -> issues(id), NOT NULL            |
+| assigned_to_solver_id     | INT                                   | FK -> users(id), NOT NULL             |
+| assigned_by_supervisor_id | INT                                   | FK -> users(id), NOT NULL             |
+| due_date                  | TIMESTAMPTZ                           | NULLABLE                              |
+| status                    | ENUM('ACTIVE','COMPLETED','REOPENED') | DEFAULT 'ACTIVE'                      |
+| created_at                | TIMESTAMPTZ                           | DEFAULT NOW()                         |
+| updated_at                | TIMESTAMPTZ                           | DEFAULT NOW()                         |
+
+Sample data:
+| id | issue_id | assigned_to_solver_id | assigned_by_supervisor_id | due_date            | status    | created_at          | updated_at          |
+| -- | -------- | --------------------- | ------------------------- | ------------------- | --------- | ------------------- | ------------------- |
+| 1  | 1        | 6                     | 1                         | 2026-02-15 00:00:00 | COMPLETED | 2026-02-05 01:00:00 | 2026-02-16 00:00:00 |
+| 2  | 2        | 7                     | 2                         | 2026-02-18 00:00:00 | COMPLETED | 2026-02-08 00:00:00 | 2026-02-19 00:00:00 |
+| 3  | 3        | 8                     | 1                         | 2026-02-16 00:00:00 | COMPLETED | 2026-02-05 23:00:00 | 2026-02-17 00:00:00 |
+| 4  | 4        | 9                     | 1                         | 2026-02-20 00:00:00 | COMPLETED | 2026-02-09 22:00:00 | 2026-02-21 00:00:00 |
+| 5  | 5        | 10                    | 3                         | 2026-02-19 00:00:00 | COMPLETED | 2026-02-08 21:00:00 | 2026-02-20 00:00:00 |
+| 6  | 6        | 6                     | 3                         | 2026-02-10 00:00:00 | COMPLETED | 2026-01-30 20:00:00 | 2026-02-11 00:00:00 |
+| 7  | 7        | 7                     | 3                         | 2026-02-12 00:00:00 | COMPLETED | 2026-02-01 19:00:00 | 2026-02-13 00:00:00 |
+| 8  | 8        | 8                     | 3                         | 2026-02-14 00:00:00 | COMPLETED | 2026-02-03 18:00:00 | 2026-02-15 00:00:00 |
+| 9  | 9        | 9                     | 1                         | 2026-02-22 00:00:00 | COMPLETED | 2026-02-11 17:00:00 | 2026-02-23 00:00:00 |
+| 10 | 10       | 10                    | 2                         | 2026-02-05 00:00:00 | COMPLETED | 2026-01-25 16:00:00 | 2026-02-06 00:00:00 |
+| 11 | 11       | 6                     | 1                         | 2026-02-08 00:00:00 | COMPLETED | 2026-01-28 15:00:00 | 2026-02-09 00:00:00 |
+| 12 | 12       | 7                     | 1                         | 2026-02-23 00:00:00 | COMPLETED | 2026-02-12 14:00:00 | 2026-02-24 00:00:00 |
+| 13 | 13       | 8                     | 2                         | 2026-02-17 00:00:00 | COMPLETED | 2026-02-07 01:00:00 | 2026-02-18 00:00:00 |
+| 14 | 14       | 9                     | 2                         | 2026-02-24 00:00:00 | COMPLETED | 2026-02-14 00:00:00 | 2026-02-25 00:00:00 |
+| 15 | 15       | 10                    | 3                         | 2026-02-21 00:00:00 | COMPLETED | 2026-02-10 23:00:00 | 2026-02-22 00:00:00 |
+| 16 | 16       | 6                     | 1                         | 2026-02-20 00:00:00 | COMPLETED | 2026-02-09 22:00:00 | 2026-02-21 00:00:00 |
+| 17 | 17       | 7                     | 2                         | 2026-02-15 00:00:00 | COMPLETED | 2026-02-04 21:00:00 | 2026-02-16 00:00:00 |
+| 18 | 18       | 8                     | 2                         | 2026-02-18 00:00:00 | COMPLETED | 2026-02-07 20:00:00 | 2026-02-19 00:00:00 |
+| 19 | 19       | 9                     | 3                         | 2026-02-25 00:00:00 | COMPLETED | 2026-02-14 19:00:00 | 2026-02-26 00:00:00 |
+| 20 | 20       | 10                    | 3                         | 2026-02-10 00:00:00 | COMPLETED | 2026-01-30 18:00:00 | 2026-02-11 00:00:00 |
+| 21 | 21       | 6                     | 2                         | 2026-02-22 00:00:00 | COMPLETED | 2026-02-11 17:00:00 | 2026-02-23 00:00:00 |
+| 22 | 22       | 7                     | 1                         | 2026-02-12 00:00:00 | COMPLETED | 2026-02-01 16:00:00 | 2026-02-13 00:00:00 |
+| 23 | 23       | 8                     | 1                         | 2026-02-23 00:00:00 | COMPLETED | 2026-02-12 15:00:00 | 2026-02-24 00:00:00 |
+| 24 | 24       | 9                     | 3                         | 2026-02-20 00:00:00 | COMPLETED | 2026-02-09 14:00:00 | 2026-02-21 00:00:00 |
+| 25 | 25       | 10                    | 3                         | 2026-02-26 00:00:00 | COMPLETED | 2026-02-16 01:00:00 | 2026-02-27 00:00:00 |
+| 26 | 26       | 6                     | 1                         | 2026-03-02 00:00:00 | ACTIVE    | 2026-02-22 01:00:00 | 2026-02-24 00:00:00 |
+| 27 | 27       | 7                     | 2                         | 2026-02-28 00:00:00 | ACTIVE    | 2026-02-21 23:00:00 | 2026-02-23 23:00:00 |
+| 28 | 28       | 8                     | 2                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-21 21:00:00 | 2026-02-23 22:00:00 |
+| 29 | 29       | 9                     | 3                         | 2026-02-27 00:00:00 | ACTIVE    | 2026-02-21 19:00:00 | 2026-02-23 21:00:00 |
+| 30 | 30       | 10                    | 1                         | 2026-03-03 00:00:00 | ACTIVE    | 2026-02-21 17:00:00 | 2026-02-23 20:00:00 |
+| 31 | 31       | 6                     | 2                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-21 15:00:00 | 2026-02-23 19:00:00 |
+| 32 | 32       | 7                     | 3                         | 2026-03-05 00:00:00 | ACTIVE    | 2026-02-21 13:00:00 | 2026-02-23 18:00:00 |
+| 33 | 33       | 8                     | 3                         | 2026-03-02 00:00:00 | ACTIVE    | 2026-02-21 11:00:00 | 2026-02-23 17:00:00 |
+| 34 | 34       | 9                     | 3                         | 2026-02-28 00:00:00 | ACTIVE    | 2026-02-21 09:00:00 | 2026-02-23 16:00:00 |
+| 35 | 35       | 10                    | 1                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-21 07:00:00 | 2026-02-23 15:00:00 |
+| 36 | 36       | 6                     | 2                         | 2026-02-27 00:00:00 | ACTIVE    | 2026-02-21 05:00:00 | 2026-02-23 14:00:00 |
+| 37 | 37       | 7                     | 3                         | 2026-03-03 00:00:00 | ACTIVE    | 2026-02-21 03:00:00 | 2026-02-23 13:00:00 |
+| 38 | 38       | 8                     | 2                         | 2026-02-28 00:00:00 | ACTIVE    | 2026-02-21 01:00:00 | 2026-02-23 12:00:00 |
+| 39 | 39       | 9                     | 1                         | 2026-03-04 00:00:00 | ACTIVE    | 2026-02-20 23:00:00 | 2026-02-23 11:00:00 |
+| 40 | 40       | 10                    | 1                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-20 21:00:00 | 2026-02-23 10:00:00 |
+| 41 | 41       | 6                     | 1                         | 2026-03-04 00:00:00 | ACTIVE    | 2026-02-23 02:00:00 | 2026-02-23 19:00:00 |
+| 42 | 42       | 7                     | 2                         | 2026-03-02 00:00:00 | ACTIVE    | 2026-02-23 00:00:00 | 2026-02-23 18:00:00 |
+| 43 | 43       | 8                     | 2                         | 2026-02-28 00:00:00 | ACTIVE    | 2026-02-22 22:00:00 | 2026-02-23 17:00:00 |
+| 44 | 44       | 9                     | 3                         | 2026-02-27 00:00:00 | ACTIVE    | 2026-02-22 20:00:00 | 2026-02-23 16:00:00 |
+| 45 | 45       | 10                    | 3                         | 2026-03-03 00:00:00 | ACTIVE    | 2026-02-22 18:00:00 | 2026-02-23 15:00:00 |
+| 46 | 46       | 6                     | 1                         | 2026-03-05 00:00:00 | ACTIVE    | 2026-02-22 16:00:00 | 2026-02-23 14:00:00 |
+| 47 | 47       | 7                     | 2                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-22 14:00:00 | 2026-02-23 13:00:00 |
+| 48 | 48       | 8                     | 2                         | 2026-03-02 00:00:00 | ACTIVE    | 2026-02-22 12:00:00 | 2026-02-23 12:00:00 |
+| 49 | 49       | 9                     | 3                         | 2026-03-07 00:00:00 | ACTIVE    | 2026-02-22 10:00:00 | 2026-02-23 11:00:00 |
+| 50 | 50       | 10                    | 1                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-22 08:00:00 | 2026-02-23 10:00:00 |
+| 51 | 51       | 6                     | 2                         | 2026-02-28 00:00:00 | ACTIVE    | 2026-02-22 06:00:00 | 2026-02-23 09:00:00 |
+| 52 | 52       | 7                     | 3                         | 2026-03-09 00:00:00 | ACTIVE    | 2026-02-22 04:00:00 | 2026-02-23 08:00:00 |
+| 53 | 68       | 8                     | 2                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-20 01:00:00 | 2026-02-24 00:00:00 |
+| 54 | 69       | 9                     | 3                         | 2026-03-03 00:00:00 | ACTIVE    | 2026-02-19 22:00:00 | 2026-02-23 22:00:00 |
+| 55 | 70       | 10                    | 1                         | 2026-03-02 00:00:00 | ACTIVE    | 2026-02-19 19:00:00 | 2026-02-23 20:00:00 |
+| 56 | 71       | 6                     | 2                         | 2026-02-28 00:00:00 | ACTIVE    | 2026-02-19 16:00:00 | 2026-02-23 18:00:00 |
+| 57 | 72       | 7                     | 3                         | 2026-03-04 00:00:00 | ACTIVE    | 2026-02-19 13:00:00 | 2026-02-23 16:00:00 |
+| 58 | 73       | 8                     | 1                         | 2026-02-28 00:00:00 | ACTIVE    | 2026-02-19 10:00:00 | 2026-02-23 14:00:00 |
+| 59 | 74       | 9                     | 2                         | 2026-03-01 00:00:00 | ACTIVE    | 2026-02-19 07:00:00 | 2026-02-23 12:00:00 |
+| 60 | 75       | 10                    | 3                         | 2026-03-05 00:00:00 | ACTIVE    | 2026-02-19 04:00:00 | 2026-02-23 10:00:00 |
+| 61 | 76       | 6                     | 1                         | 2026-02-28 00:00:00 | REOPENED  | 2026-02-19 01:00:00 | 2026-02-24 18:00:00 |
+| 62 | 77       | 7                     | 2                         | 2026-02-27 00:00:00 | REOPENED  | 2026-02-18 23:00:00 | 2026-02-24 17:00:00 |
+| 63 | 78       | 8                     | 3                         | 2026-03-01 00:00:00 | REOPENED  | 2026-02-18 21:00:00 | 2026-02-24 16:00:00 |
+| 64 | 79       | 9                     | 3                         | 2026-02-28 00:00:00 | REOPENED  | 2026-02-18 19:00:00 | 2026-02-24 15:00:00 |
+| 65 | 80       | 10                    | 1                         | 2026-03-02 00:00:00 | REOPENED  | 2026-02-18 17:00:00 | 2026-02-24 14:00:00 |
+| 66 | 81       | 6                     | 2                         | 2026-02-27 00:00:00 | REOPENED  | 2026-02-18 15:00:00 | 2026-02-24 13:00:00 |
+| 67 | 82       | 7                     | 2                         | 2026-03-01 00:00:00 | REOPENED  | 2026-02-18 13:00:00 | 2026-02-24 12:00:00 |
+| 68 | 83       | 8                     | 2                         | 2026-02-27 00:00:00 | REOPENED  | 2026-02-18 11:00:00 | 2026-02-24 11:00:00 |
+| 69 | 84       | 9                     | 3                         | 2026-02-26 00:00:00 | ACTIVE    | 2026-02-21 01:00:00 | 2026-02-25 00:00:00 |
+| 70 | 85       | 10                    | 3                         | 2026-02-26 00:00:00 | ACTIVE    | 2026-02-20 22:00:00 | 2026-02-24 22:00:00 |
+| 71 | 86       | 6                     | 2                         | 2026-02-26 00:00:00 | ACTIVE    | 2026-02-20 19:00:00 | 2026-02-24 20:00:00 |
+| 72 | 87       | 7                     | 2                         | 2026-02-25 00:00:00 | ACTIVE    | 2026-02-20 16:00:00 | 2026-02-24 18:00:00 |
+| 73 | 88       | 8                     | 3                         | 2026-02-25 00:00:00 | ACTIVE    | 2026-02-20 13:00:00 | 2026-02-24 16:00:00 |
+| 74 | 89       | 9                     | 3                         | 2026-02-26 00:00:00 | ACTIVE    | 2026-02-20 10:00:00 | 2026-02-24 14:00:00 |
+| 75 | 90       | 10                    | 2                         | 2026-02-25 00:00:00 | ACTIVE    | 2026-02-20 07:00:00 | 2026-02-24 12:00:00 |
+
+
+8. call_logs
+
+Structure:
+| Column         | Type                            | Constraints                |
+| -------------- | ------------------------------- | -------------------------- |
+| id             | SERIAL                          | PK                         |
+| assignment_id  | INT                             | FK -> issue_assignments(id)|
+| solver_id      | INT                             | FK -> users(id)            |
+| attempt_number | INT                             | DEFAULT 1                  |
+| initiated_at   | TIMESTAMPTZ                     | NOT NULL                   |
+| answered_at    | TIMESTAMPTZ                     | NULLABLE                   |
+| ended_at       | TIMESTAMPTZ                     | NULLABLE                   |
+| status         | ENUM('MISSED','ANSWERED')       | NOT NULL                   |
+| created_at     | TIMESTAMPTZ                     | DEFAULT NOW()              |
+| updated_at     | TIMESTAMPTZ                     | DEFAULT NOW() (Added)      |
+
+Generation rules:
+  COMPLETED assignments   : 2 logs — attempt 1 MISSED, attempt 2 ANSWERED (+2h)
+  ACTIVE (assign_id % 3 == 0): 1 log — attempt 1 ANSWERED immediately
+  ACTIVE (assign_id % 3 != 0): 2 logs — attempt 1 MISSED, attempt 2 ANSWERED (+2h)
+  REOPENED assignments    : 4 logs — attempts 1-3 MISSED, attempt 4 ANSWERED
+  base_time = assignment.created_at + 5 minutes
+
+Sample data (showing all rows):
+| id | assign_id | solver_id | attempt | initiated_at        | answered_at         | ended_at            | status   |
+| -- | --------- | --------- | ------- | ------------------- | ------------------- | ------------------- | -------- |
+| 1  | 1         | 6         | 1       | 2026-02-05 01:05:00 | NULL                | NULL                | MISSED   |
+| 2  | 1         | 6         | 2       | 2026-02-05 03:05:00 | 2026-02-05 03:05:15 | 2026-02-05 03:08:00 | ANSWERED |
+| 3  | 2         | 7         | 1       | 2026-02-08 00:05:00 | NULL                | NULL                | MISSED   |
+| 4  | 2         | 7         | 2       | 2026-02-08 02:05:00 | 2026-02-08 02:05:15 | 2026-02-08 02:08:00 | ANSWERED |
+| 5  | 3         | 8         | 1       | 2026-02-05 23:05:00 | NULL                | NULL                | MISSED   |
+| 6  | 3         | 8         | 2       | 2026-02-06 01:05:00 | 2026-02-06 01:05:15 | 2026-02-06 01:08:00 | ANSWERED |
+| 7  | 4         | 9         | 1       | 2026-02-09 22:05:00 | NULL                | NULL                | MISSED   |
+| 8  | 4         | 9         | 2       | 2026-02-10 00:05:00 | 2026-02-10 00:05:15 | 2026-02-10 00:08:00 | ANSWERED |
+| 9  | 5         | 10        | 1       | 2026-02-08 21:05:00 | NULL                | NULL                | MISSED   |
+| 10 | 5         | 10        | 2       | 2026-02-08 23:05:00 | 2026-02-08 23:05:15 | 2026-02-08 23:08:00 | ANSWERED |
+| 11 | 6         | 6         | 1       | 2026-01-30 20:05:00 | NULL                | NULL                | MISSED   |
+| 12 | 6         | 6         | 2       | 2026-01-30 22:05:00 | 2026-01-30 22:05:15 | 2026-01-30 22:08:00 | ANSWERED |
+| 13 | 7         | 7         | 1       | 2026-02-01 19:05:00 | NULL                | NULL                | MISSED   |
+| 14 | 7         | 7         | 2       | 2026-02-01 21:05:00 | 2026-02-01 21:05:15 | 2026-02-01 21:08:00 | ANSWERED |
+| 15 | 8         | 8         | 1       | 2026-02-03 18:05:00 | NULL                | NULL                | MISSED   |
+| 16 | 8         | 8         | 2       | 2026-02-03 20:05:00 | 2026-02-03 20:05:15 | 2026-02-03 20:08:00 | ANSWERED |
+| 17 | 9         | 9         | 1       | 2026-02-11 17:05:00 | NULL                | NULL                | MISSED   |
+| 18 | 9         | 9         | 2       | 2026-02-11 19:05:00 | 2026-02-11 19:05:15 | 2026-02-11 19:08:00 | ANSWERED |
+| 19 | 10        | 10        | 1       | 2026-01-25 16:05:00 | NULL                | NULL                | MISSED   |
+| 20 | 10        | 10        | 2       | 2026-01-25 18:05:00 | 2026-01-25 18:05:15 | 2026-01-25 18:08:00 | ANSWERED |
+| 21 | 11        | 6         | 1       | 2026-01-28 15:05:00 | NULL                | NULL                | MISSED   |
+| 22 | 11        | 6         | 2       | 2026-01-28 17:05:00 | 2026-01-28 17:05:15 | 2026-01-28 17:08:00 | ANSWERED |
+| 23 | 12        | 7         | 1       | 2026-02-12 14:05:00 | NULL                | NULL                | MISSED   |
+| 24 | 12        | 7         | 2       | 2026-02-12 16:05:00 | 2026-02-12 16:05:15 | 2026-02-12 16:08:00 | ANSWERED |
+| 25 | 13        | 8         | 1       | 2026-02-07 01:05:00 | NULL                | NULL                | MISSED   |
+| 26 | 13        | 8         | 2       | 2026-02-07 03:05:00 | 2026-02-07 03:05:15 | 2026-02-07 03:08:00 | ANSWERED |
+| 27 | 14        | 9         | 1       | 2026-02-14 00:05:00 | NULL                | NULL                | MISSED   |
+| 28 | 14        | 9         | 2       | 2026-02-14 02:05:00 | 2026-02-14 02:05:15 | 2026-02-14 02:08:00 | ANSWERED |
+| 29 | 15        | 10        | 1       | 2026-02-10 23:05:00 | NULL                | NULL                | MISSED   |
+| 30 | 15        | 10        | 2       | 2026-02-11 01:05:00 | 2026-02-11 01:05:15 | 2026-02-11 01:08:00 | ANSWERED |
+| 31 | 16        | 6         | 1       | 2026-02-09 22:05:00 | NULL                | NULL                | MISSED   |
+| 32 | 16        | 6         | 2       | 2026-02-10 00:05:00 | 2026-02-10 00:05:15 | 2026-02-10 00:08:00 | ANSWERED |
+| 33 | 17        | 7         | 1       | 2026-02-04 21:05:00 | NULL                | NULL                | MISSED   |
+| 34 | 17        | 7         | 2       | 2026-02-04 23:05:00 | 2026-02-04 23:05:15 | 2026-02-04 23:08:00 | ANSWERED |
+| 35 | 18        | 8         | 1       | 2026-02-07 20:05:00 | NULL                | NULL                | MISSED   |
+| 36 | 18        | 8         | 2       | 2026-02-07 22:05:00 | 2026-02-07 22:05:15 | 2026-02-07 22:08:00 | ANSWERED |
+| 37 | 19        | 9         | 1       | 2026-02-14 19:05:00 | NULL                | NULL                | MISSED   |
+| 38 | 19        | 9         | 2       | 2026-02-14 21:05:00 | 2026-02-14 21:05:15 | 2026-02-14 21:08:00 | ANSWERED |
+| 39 | 20        | 10        | 1       | 2026-01-30 18:05:00 | NULL                | NULL                | MISSED   |
+| 40 | 20        | 10        | 2       | 2026-01-30 20:05:00 | 2026-01-30 20:05:15 | 2026-01-30 20:08:00 | ANSWERED |
+| 41 | 21        | 6         | 1       | 2026-02-11 17:05:00 | NULL                | NULL                | MISSED   |
+| 42 | 21        | 6         | 2       | 2026-02-11 19:05:00 | 2026-02-11 19:05:15 | 2026-02-11 19:08:00 | ANSWERED |
+| 43 | 22        | 7         | 1       | 2026-02-01 16:05:00 | NULL                | NULL                | MISSED   |
+| 44 | 22        | 7         | 2       | 2026-02-01 18:05:00 | 2026-02-01 18:05:15 | 2026-02-01 18:08:00 | ANSWERED |
+| 45 | 23        | 8         | 1       | 2026-02-12 15:05:00 | NULL                | NULL                | MISSED   |
+| 46 | 23        | 8         | 2       | 2026-02-12 17:05:00 | 2026-02-12 17:05:15 | 2026-02-12 17:08:00 | ANSWERED |
+| 47 | 24        | 9         | 1       | 2026-02-09 14:05:00 | NULL                | NULL                | MISSED   |
+| 48 | 24        | 9         | 2       | 2026-02-09 16:05:00 | 2026-02-09 16:05:15 | 2026-02-09 16:08:00 | ANSWERED |
+| 49 | 25        | 10        | 1       | 2026-02-16 01:05:00 | NULL                | NULL                | MISSED   |
+| 50 | 25        | 10        | 2       | 2026-02-16 03:05:00 | 2026-02-16 03:05:15 | 2026-02-16 03:08:00 | ANSWERED |
+| 51 | 26        | 6         | 1       | 2026-02-22 01:05:00 | NULL                | NULL                | MISSED   |
+| 52 | 26        | 6         | 2       | 2026-02-22 03:05:00 | 2026-02-22 03:05:20 | 2026-02-22 03:09:00 | ANSWERED |
+| 53 | 27        | 7         | 1       | 2026-02-21 23:05:00 | 2026-02-21 23:05:10 | 2026-02-21 23:07:00 | ANSWERED |
+| 54 | 28        | 8         | 1       | 2026-02-21 21:05:00 | NULL                | NULL                | MISSED   |
+| 55 | 28        | 8         | 2       | 2026-02-21 23:05:00 | 2026-02-21 23:05:20 | 2026-02-21 23:09:00 | ANSWERED |
+| 56 | 29        | 9         | 1       | 2026-02-21 19:05:00 | NULL                | NULL                | MISSED   |
+| 57 | 29        | 9         | 2       | 2026-02-21 21:05:00 | 2026-02-21 21:05:20 | 2026-02-21 21:09:00 | ANSWERED |
+| 58 | 30        | 10        | 1       | 2026-02-21 17:05:00 | 2026-02-21 17:05:10 | 2026-02-21 17:07:00 | ANSWERED |
+| 59 | 31        | 6         | 1       | 2026-02-21 15:05:00 | NULL                | NULL                | MISSED   |
+| 60 | 31        | 6         | 2       | 2026-02-21 17:05:00 | 2026-02-21 17:05:20 | 2026-02-21 17:09:00 | ANSWERED |
+| 61 | 32        | 7         | 1       | 2026-02-21 13:05:00 | NULL                | NULL                | MISSED   |
+| 62 | 32        | 7         | 2       | 2026-02-21 15:05:00 | 2026-02-21 15:05:20 | 2026-02-21 15:09:00 | ANSWERED |
+| 63 | 33        | 8         | 1       | 2026-02-21 11:05:00 | 2026-02-21 11:05:10 | 2026-02-21 11:07:00 | ANSWERED |
+| 64 | 34        | 9         | 1       | 2026-02-21 09:05:00 | NULL                | NULL                | MISSED   |
+| 65 | 34        | 9         | 2       | 2026-02-21 11:05:00 | 2026-02-21 11:05:20 | 2026-02-21 11:09:00 | ANSWERED |
+| 66 | 35        | 10        | 1       | 2026-02-21 07:05:00 | NULL                | NULL                | MISSED   |
+| 67 | 35        | 10        | 2       | 2026-02-21 09:05:00 | 2026-02-21 09:05:20 | 2026-02-21 09:09:00 | ANSWERED |
+| 68 | 36        | 6         | 1       | 2026-02-21 05:05:00 | 2026-02-21 05:05:10 | 2026-02-21 05:07:00 | ANSWERED |
+| 69 | 37        | 7         | 1       | 2026-02-21 03:05:00 | NULL                | NULL                | MISSED   |
+| 70 | 37        | 7         | 2       | 2026-02-21 05:05:00 | 2026-02-21 05:05:20 | 2026-02-21 05:09:00 | ANSWERED |
+| 71 | 38        | 8         | 1       | 2026-02-21 01:05:00 | NULL                | NULL                | MISSED   |
+| 72 | 38        | 8         | 2       | 2026-02-21 03:05:00 | 2026-02-21 03:05:20 | 2026-02-21 03:09:00 | ANSWERED |
+| 73 | 39        | 9         | 1       | 2026-02-20 23:05:00 | 2026-02-20 23:05:10 | 2026-02-20 23:07:00 | ANSWERED |
+| 74 | 40        | 10        | 1       | 2026-02-20 21:05:00 | NULL                | NULL                | MISSED   |
+| 75 | 40        | 10        | 2       | 2026-02-20 23:05:00 | 2026-02-20 23:05:20 | 2026-02-20 23:09:00 | ANSWERED |
+| 76 | 41        | 6         | 1       | 2026-02-23 02:05:00 | NULL                | NULL                | MISSED   |
+| 77 | 41        | 6         | 2       | 2026-02-23 04:05:00 | 2026-02-23 04:05:20 | 2026-02-23 04:09:00 | ANSWERED |
+| 78 | 42        | 7         | 1       | 2026-02-23 00:05:00 | 2026-02-23 00:05:10 | 2026-02-23 00:07:00 | ANSWERED |
+| 79 | 43        | 8         | 1       | 2026-02-22 22:05:00 | NULL                | NULL                | MISSED   |
+| 80 | 43        | 8         | 2       | 2026-02-23 00:05:00 | 2026-02-23 00:05:20 | 2026-02-23 00:09:00 | ANSWERED |
+| 81 | 44        | 9         | 1       | 2026-02-22 20:05:00 | NULL                | NULL                | MISSED   |
+| 82 | 44        | 9         | 2       | 2026-02-22 22:05:00 | 2026-02-22 22:05:20 | 2026-02-22 22:09:00 | ANSWERED |
+| 83 | 45        | 10        | 1       | 2026-02-22 18:05:00 | 2026-02-22 18:05:10 | 2026-02-22 18:07:00 | ANSWERED |
+| 84 | 46        | 6         | 1       | 2026-02-22 16:05:00 | NULL                | NULL                | MISSED   |
+| 85 | 46        | 6         | 2       | 2026-02-22 18:05:00 | 2026-02-22 18:05:20 | 2026-02-22 18:09:00 | ANSWERED |
+| 86 | 47        | 7         | 1       | 2026-02-22 14:05:00 | NULL                | NULL                | MISSED   |
+| 87 | 47        | 7         | 2       | 2026-02-22 16:05:00 | 2026-02-22 16:05:20 | 2026-02-22 16:09:00 | ANSWERED |
+| 88 | 48        | 8         | 1       | 2026-02-22 12:05:00 | 2026-02-22 12:05:10 | 2026-02-22 12:07:00 | ANSWERED |
+| 89 | 49        | 9         | 1       | 2026-02-22 10:05:00 | NULL                | NULL                | MISSED   |
+| 90 | 49        | 9         | 2       | 2026-02-22 12:05:00 | 2026-02-22 12:05:20 | 2026-02-22 12:09:00 | ANSWERED |
+| 91 | 50        | 10        | 1       | 2026-02-22 08:05:00 | NULL                | NULL                | MISSED   |
+| 92 | 50        | 10        | 2       | 2026-02-22 10:05:00 | 2026-02-22 10:05:20 | 2026-02-22 10:09:00 | ANSWERED |
+| 93 | 51        | 6         | 1       | 2026-02-22 06:05:00 | 2026-02-22 06:05:10 | 2026-02-22 06:07:00 | ANSWERED |
+| 94 | 52        | 7         | 1       | 2026-02-22 04:05:00 | NULL                | NULL                | MISSED   |
+| 95 | 52        | 7         | 2       | 2026-02-22 06:05:00 | 2026-02-22 06:05:20 | 2026-02-22 06:09:00 | ANSWERED |
+| 96 | 53        | 8         | 1       | 2026-02-20 01:05:00 | NULL                | NULL                | MISSED   |
+| 97 | 53        | 8         | 2       | 2026-02-20 03:05:00 | 2026-02-20 03:05:20 | 2026-02-20 03:09:00 | ANSWERED |
+| 98 | 54        | 9         | 1       | 2026-02-19 22:05:00 | 2026-02-19 22:05:10 | 2026-02-19 22:07:00 | ANSWERED |
+| 99 | 55        | 10        | 1       | 2026-02-19 19:05:00 | NULL                | NULL                | MISSED   |
+| 100 | 55        | 10        | 2       | 2026-02-19 21:05:00 | 2026-02-19 21:05:20 | 2026-02-19 21:09:00 | ANSWERED |
+| 101 | 56        | 6         | 1       | 2026-02-19 16:05:00 | NULL                | NULL                | MISSED   |
+| 102 | 56        | 6         | 2       | 2026-02-19 18:05:00 | 2026-02-19 18:05:20 | 2026-02-19 18:09:00 | ANSWERED |
+| 103 | 57        | 7         | 1       | 2026-02-19 13:05:00 | 2026-02-19 13:05:10 | 2026-02-19 13:07:00 | ANSWERED |
+| 104 | 58        | 8         | 1       | 2026-02-19 10:05:00 | NULL                | NULL                | MISSED   |
+| 105 | 58        | 8         | 2       | 2026-02-19 12:05:00 | 2026-02-19 12:05:20 | 2026-02-19 12:09:00 | ANSWERED |
+| 106 | 59        | 9         | 1       | 2026-02-19 07:05:00 | NULL                | NULL                | MISSED   |
+| 107 | 59        | 9         | 2       | 2026-02-19 09:05:00 | 2026-02-19 09:05:20 | 2026-02-19 09:09:00 | ANSWERED |
+| 108 | 60        | 10        | 1       | 2026-02-19 04:05:00 | 2026-02-19 04:05:10 | 2026-02-19 04:07:00 | ANSWERED |
+| 109 | 61        | 6         | 1       | 2026-02-19 01:05:00 | NULL                | NULL                | MISSED   |
+| 110 | 61        | 6         | 2       | 2026-02-19 03:05:00 | NULL                | NULL                | MISSED   |
+| 111 | 61        | 6         | 3       | 2026-02-19 05:05:00 | NULL                | NULL                | MISSED   |
+| 112 | 61        | 6         | 4       | 2026-02-19 07:05:00 | 2026-02-19 07:05:12 | 2026-02-19 07:07:00 | ANSWERED |
+| 113 | 62        | 7         | 1       | 2026-02-18 23:05:00 | NULL                | NULL                | MISSED   |
+| 114 | 62        | 7         | 2       | 2026-02-19 01:05:00 | NULL                | NULL                | MISSED   |
+| 115 | 62        | 7         | 3       | 2026-02-19 03:05:00 | NULL                | NULL                | MISSED   |
+| 116 | 62        | 7         | 4       | 2026-02-19 05:05:00 | 2026-02-19 05:05:12 | 2026-02-19 05:07:00 | ANSWERED |
+| 117 | 63        | 8         | 1       | 2026-02-18 21:05:00 | NULL                | NULL                | MISSED   |
+| 118 | 63        | 8         | 2       | 2026-02-18 23:05:00 | NULL                | NULL                | MISSED   |
+| 119 | 63        | 8         | 3       | 2026-02-19 01:05:00 | NULL                | NULL                | MISSED   |
+| 120 | 63        | 8         | 4       | 2026-02-19 03:05:00 | 2026-02-19 03:05:12 | 2026-02-19 03:07:00 | ANSWERED |
+| 121 | 64        | 9         | 1       | 2026-02-18 19:05:00 | NULL                | NULL                | MISSED   |
+| 122 | 64        | 9         | 2       | 2026-02-18 21:05:00 | NULL                | NULL                | MISSED   |
+| 123 | 64        | 9         | 3       | 2026-02-18 23:05:00 | NULL                | NULL                | MISSED   |
+| 124 | 64        | 9         | 4       | 2026-02-19 01:05:00 | 2026-02-19 01:05:12 | 2026-02-19 01:07:00 | ANSWERED |
+| 125 | 65        | 10        | 1       | 2026-02-18 17:05:00 | NULL                | NULL                | MISSED   |
+| 126 | 65        | 10        | 2       | 2026-02-18 19:05:00 | NULL                | NULL                | MISSED   |
+| 127 | 65        | 10        | 3       | 2026-02-18 21:05:00 | NULL                | NULL                | MISSED   |
+| 128 | 65        | 10        | 4       | 2026-02-18 23:05:00 | 2026-02-18 23:05:12 | 2026-02-18 23:07:00 | ANSWERED |
+| 129 | 66        | 6         | 1       | 2026-02-18 15:05:00 | NULL                | NULL                | MISSED   |
+| 130 | 66        | 6         | 2       | 2026-02-18 17:05:00 | NULL                | NULL                | MISSED   |
+| 131 | 66        | 6         | 3       | 2026-02-18 19:05:00 | NULL                | NULL                | MISSED   |
+| 132 | 66        | 6         | 4       | 2026-02-18 21:05:00 | 2026-02-18 21:05:12 | 2026-02-18 21:07:00 | ANSWERED |
+| 133 | 67        | 7         | 1       | 2026-02-18 13:05:00 | NULL                | NULL                | MISSED   |
+| 134 | 67        | 7         | 2       | 2026-02-18 15:05:00 | NULL                | NULL                | MISSED   |
+| 135 | 67        | 7         | 3       | 2026-02-18 17:05:00 | NULL                | NULL                | MISSED   |
+| 136 | 67        | 7         | 4       | 2026-02-18 19:05:00 | 2026-02-18 19:05:12 | 2026-02-18 19:07:00 | ANSWERED |
+| 137 | 68        | 8         | 1       | 2026-02-18 11:05:00 | NULL                | NULL                | MISSED   |
+| 138 | 68        | 8         | 2       | 2026-02-18 13:05:00 | NULL                | NULL                | MISSED   |
+| 139 | 68        | 8         | 3       | 2026-02-18 15:05:00 | NULL                | NULL                | MISSED   |
+| 140 | 68        | 8         | 4       | 2026-02-18 17:05:00 | 2026-02-18 17:05:12 | 2026-02-18 17:07:00 | ANSWERED |
+| 141 | 69        | 9         | 1       | 2026-02-21 01:05:00 | 2026-02-21 01:05:10 | 2026-02-21 01:07:00 | ANSWERED |
+| 142 | 70        | 10        | 1       | 2026-02-20 22:05:00 | NULL                | NULL                | MISSED   |
+| 143 | 70        | 10        | 2       | 2026-02-21 00:05:00 | 2026-02-21 00:05:20 | 2026-02-21 00:09:00 | ANSWERED |
+| 144 | 71        | 6         | 1       | 2026-02-20 19:05:00 | NULL                | NULL                | MISSED   |
+| 145 | 71        | 6         | 2       | 2026-02-20 21:05:00 | 2026-02-20 21:05:20 | 2026-02-20 21:09:00 | ANSWERED |
+| 146 | 72        | 7         | 1       | 2026-02-20 16:05:00 | 2026-02-20 16:05:10 | 2026-02-20 16:07:00 | ANSWERED |
+| 147 | 73        | 8         | 1       | 2026-02-20 13:05:00 | NULL                | NULL                | MISSED   |
+| 148 | 73        | 8         | 2       | 2026-02-20 15:05:00 | 2026-02-20 15:05:20 | 2026-02-20 15:09:00 | ANSWERED |
+| 149 | 74        | 9         | 1       | 2026-02-20 10:05:00 | NULL                | NULL                | MISSED   |
+| 150 | 74        | 9         | 2       | 2026-02-20 12:05:00 | 2026-02-20 12:05:20 | 2026-02-20 12:09:00 | ANSWERED |
+| 151 | 75        | 10        | 1       | 2026-02-20 07:05:00 | 2026-02-20 07:05:10 | 2026-02-20 07:07:00 | ANSWERED |
+
+
+9. issue_images
+
+Structure:
+| Column              | Type                               | Constraints                                  |
+| ------------------- | ---------------------------------- | -------------------------------------------- |
+| id                  | SERIAL                             | PK                                           |
+| issue_id            | INT                                | FK -> issues(id)                             |
+| uploaded_by_user_id | INT                                | FK -> users(id)                              |
+| image_url           | VARCHAR(500)                       | NOT NULL                                     |
+| image_type          | ENUM('BEFORE','AFTER')             | DEFAULT 'AFTER'                              |
+| ai_flag             | ENUM('OK','SUSPECT','NOT_CHECKED') | DEFAULT 'NOT_CHECKED'                        |
+| ai_details          | JSONB                              | Vision results e.g. {confidence: 0.92}       |
+| created_at          | TIMESTAMPTZ                        | DEFAULT NOW() (Added)                        |
+| updated_at          | TIMESTAMPTZ                        | DEFAULT NOW() (Added)                        |
+
+Note: BEFORE images — one per issue (all 90), uploaded by supervisor, ai_flag=NOT_CHECKED.
+      AFTER images  — issues 1-25 and 68-75 (33 total), uploaded by solver, ai_flag=OK.
+
+Sample data:
+| id  | issue_id | uploaded_by | image_url                                                        | image_type | ai_flag     | ai_details                           | created_at          |
+| --- | -------- | ----------- | ---------------------------------------------------------------- | ---------- | ----------- | ------------------------------------ | ------------------- |
+| 1   | 1        | 1           | https://ik.imagekit.io/facility/issues/1/before-1.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-05 00:00:00 |
+| 2   | 2        | 2           | https://ik.imagekit.io/facility/issues/2/before-2.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-07 23:00:00 |
+| 3   | 3        | 1           | https://ik.imagekit.io/facility/issues/3/before-3.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-05 22:00:00 |
+| 4   | 4        | 1           | https://ik.imagekit.io/facility/issues/4/before-4.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-09 21:00:00 |
+| 5   | 5        | 3           | https://ik.imagekit.io/facility/issues/5/before-5.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-08 20:00:00 |
+| 6   | 6        | 3           | https://ik.imagekit.io/facility/issues/6/before-6.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-01-30 19:00:00 |
+| 7   | 7        | 3           | https://ik.imagekit.io/facility/issues/7/before-7.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-01 18:00:00 |
+| 8   | 8        | 3           | https://ik.imagekit.io/facility/issues/8/before-8.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-03 17:00:00 |
+| 9   | 9        | 1           | https://ik.imagekit.io/facility/issues/9/before-9.jpg            | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-11 16:00:00 |
+| 10  | 10       | 2           | https://ik.imagekit.io/facility/issues/10/before-10.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-01-25 15:00:00 |
+| 11  | 11       | 1           | https://ik.imagekit.io/facility/issues/11/before-11.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-01-28 14:00:00 |
+| 12  | 12       | 1           | https://ik.imagekit.io/facility/issues/12/before-12.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-12 13:00:00 |
+| 13  | 13       | 2           | https://ik.imagekit.io/facility/issues/13/before-13.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-07 00:00:00 |
+| 14  | 14       | 2           | https://ik.imagekit.io/facility/issues/14/before-14.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-13 23:00:00 |
+| 15  | 15       | 3           | https://ik.imagekit.io/facility/issues/15/before-15.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-10 22:00:00 |
+| 16  | 16       | 1           | https://ik.imagekit.io/facility/issues/16/before-16.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-09 21:00:00 |
+| 17  | 17       | 2           | https://ik.imagekit.io/facility/issues/17/before-17.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-04 20:00:00 |
+| 18  | 18       | 2           | https://ik.imagekit.io/facility/issues/18/before-18.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-07 19:00:00 |
+| 19  | 19       | 3           | https://ik.imagekit.io/facility/issues/19/before-19.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-14 18:00:00 |
+| 20  | 20       | 3           | https://ik.imagekit.io/facility/issues/20/before-20.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-01-30 17:00:00 |
+| 21  | 21       | 2           | https://ik.imagekit.io/facility/issues/21/before-21.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-11 16:00:00 |
+| 22  | 22       | 1           | https://ik.imagekit.io/facility/issues/22/before-22.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-01 15:00:00 |
+| 23  | 23       | 1           | https://ik.imagekit.io/facility/issues/23/before-23.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-12 14:00:00 |
+| 24  | 24       | 3           | https://ik.imagekit.io/facility/issues/24/before-24.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-09 13:00:00 |
+| 25  | 25       | 3           | https://ik.imagekit.io/facility/issues/25/before-25.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-16 00:00:00 |
+| 26  | 26       | 1           | https://ik.imagekit.io/facility/issues/26/before-26.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 00:00:00 |
+| 27  | 27       | 2           | https://ik.imagekit.io/facility/issues/27/before-27.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 22:00:00 |
+| 28  | 28       | 2           | https://ik.imagekit.io/facility/issues/28/before-28.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 20:00:00 |
+| 29  | 29       | 3           | https://ik.imagekit.io/facility/issues/29/before-29.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 18:00:00 |
+| 30  | 30       | 1           | https://ik.imagekit.io/facility/issues/30/before-30.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 16:00:00 |
+| 31  | 31       | 2           | https://ik.imagekit.io/facility/issues/31/before-31.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 14:00:00 |
+| 32  | 32       | 3           | https://ik.imagekit.io/facility/issues/32/before-32.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 12:00:00 |
+| 33  | 33       | 3           | https://ik.imagekit.io/facility/issues/33/before-33.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 10:00:00 |
+| 34  | 34       | 3           | https://ik.imagekit.io/facility/issues/34/before-34.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 08:00:00 |
+| 35  | 35       | 1           | https://ik.imagekit.io/facility/issues/35/before-35.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 06:00:00 |
+| 36  | 36       | 2           | https://ik.imagekit.io/facility/issues/36/before-36.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 04:00:00 |
+| 37  | 37       | 3           | https://ik.imagekit.io/facility/issues/37/before-37.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 02:00:00 |
+| 38  | 38       | 2           | https://ik.imagekit.io/facility/issues/38/before-38.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 00:00:00 |
+| 39  | 39       | 1           | https://ik.imagekit.io/facility/issues/39/before-39.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 22:00:00 |
+| 40  | 40       | 1           | https://ik.imagekit.io/facility/issues/40/before-40.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 20:00:00 |
+| 41  | 41       | 1           | https://ik.imagekit.io/facility/issues/41/before-41.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 00:00:00 |
+| 42  | 42       | 2           | https://ik.imagekit.io/facility/issues/42/before-42.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 22:00:00 |
+| 43  | 43       | 2           | https://ik.imagekit.io/facility/issues/43/before-43.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 20:00:00 |
+| 44  | 44       | 3           | https://ik.imagekit.io/facility/issues/44/before-44.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 18:00:00 |
+| 45  | 45       | 3           | https://ik.imagekit.io/facility/issues/45/before-45.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 16:00:00 |
+| 46  | 46       | 1           | https://ik.imagekit.io/facility/issues/46/before-46.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 14:00:00 |
+| 47  | 47       | 2           | https://ik.imagekit.io/facility/issues/47/before-47.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 12:00:00 |
+| 48  | 48       | 2           | https://ik.imagekit.io/facility/issues/48/before-48.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 10:00:00 |
+| 49  | 49       | 3           | https://ik.imagekit.io/facility/issues/49/before-49.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 08:00:00 |
+| 50  | 50       | 1           | https://ik.imagekit.io/facility/issues/50/before-50.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 06:00:00 |
+| 51  | 51       | 2           | https://ik.imagekit.io/facility/issues/51/before-51.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 04:00:00 |
+| 52  | 52       | 3           | https://ik.imagekit.io/facility/issues/52/before-52.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-22 02:00:00 |
+| 53  | 53       | 3           | https://ik.imagekit.io/facility/issues/53/before-53.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-24 00:00:00 |
+| 54  | 54       | 3           | https://ik.imagekit.io/facility/issues/54/before-54.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 23:00:00 |
+| 55  | 55       | 1           | https://ik.imagekit.io/facility/issues/55/before-55.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 22:00:00 |
+| 56  | 56       | 2           | https://ik.imagekit.io/facility/issues/56/before-56.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 21:00:00 |
+| 57  | 57       | 3           | https://ik.imagekit.io/facility/issues/57/before-57.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 20:00:00 |
+| 58  | 58       | 2           | https://ik.imagekit.io/facility/issues/58/before-58.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 19:00:00 |
+| 59  | 59       | 1           | https://ik.imagekit.io/facility/issues/59/before-59.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 18:00:00 |
+| 60  | 60       | 1           | https://ik.imagekit.io/facility/issues/60/before-60.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 17:00:00 |
+| 61  | 61       | 1           | https://ik.imagekit.io/facility/issues/61/before-61.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 16:00:00 |
+| 62  | 62       | 2           | https://ik.imagekit.io/facility/issues/62/before-62.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 15:00:00 |
+| 63  | 63       | 2           | https://ik.imagekit.io/facility/issues/63/before-63.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 14:00:00 |
+| 64  | 64       | 3           | https://ik.imagekit.io/facility/issues/64/before-64.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 13:00:00 |
+| 65  | 65       | 3           | https://ik.imagekit.io/facility/issues/65/before-65.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 12:00:00 |
+| 66  | 66       | 1           | https://ik.imagekit.io/facility/issues/66/before-66.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 11:00:00 |
+| 67  | 67       | 2           | https://ik.imagekit.io/facility/issues/67/before-67.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-23 10:00:00 |
+| 68  | 68       | 2           | https://ik.imagekit.io/facility/issues/68/before-68.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 00:00:00 |
+| 69  | 69       | 3           | https://ik.imagekit.io/facility/issues/69/before-69.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 21:00:00 |
+| 70  | 70       | 1           | https://ik.imagekit.io/facility/issues/70/before-70.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 18:00:00 |
+| 71  | 71       | 2           | https://ik.imagekit.io/facility/issues/71/before-71.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 15:00:00 |
+| 72  | 72       | 3           | https://ik.imagekit.io/facility/issues/72/before-72.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 12:00:00 |
+| 73  | 73       | 1           | https://ik.imagekit.io/facility/issues/73/before-73.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 09:00:00 |
+| 74  | 74       | 2           | https://ik.imagekit.io/facility/issues/74/before-74.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 06:00:00 |
+| 75  | 75       | 3           | https://ik.imagekit.io/facility/issues/75/before-75.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 03:00:00 |
+| 76  | 76       | 1           | https://ik.imagekit.io/facility/issues/76/before-76.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-19 00:00:00 |
+| 77  | 77       | 2           | https://ik.imagekit.io/facility/issues/77/before-77.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-18 22:00:00 |
+| 78  | 78       | 3           | https://ik.imagekit.io/facility/issues/78/before-78.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-18 20:00:00 |
+| 79  | 79       | 3           | https://ik.imagekit.io/facility/issues/79/before-79.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-18 18:00:00 |
+| 80  | 80       | 1           | https://ik.imagekit.io/facility/issues/80/before-80.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-18 16:00:00 |
+| 81  | 81       | 2           | https://ik.imagekit.io/facility/issues/81/before-81.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-18 14:00:00 |
+| 82  | 82       | 2           | https://ik.imagekit.io/facility/issues/82/before-82.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-18 12:00:00 |
+| 83  | 83       | 2           | https://ik.imagekit.io/facility/issues/83/before-83.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-18 10:00:00 |
+| 84  | 84       | 3           | https://ik.imagekit.io/facility/issues/84/before-84.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-21 00:00:00 |
+| 85  | 85       | 3           | https://ik.imagekit.io/facility/issues/85/before-85.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 21:00:00 |
+| 86  | 86       | 2           | https://ik.imagekit.io/facility/issues/86/before-86.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 18:00:00 |
+| 87  | 87       | 2           | https://ik.imagekit.io/facility/issues/87/before-87.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 15:00:00 |
+| 88  | 88       | 3           | https://ik.imagekit.io/facility/issues/88/before-88.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 12:00:00 |
+| 89  | 89       | 3           | https://ik.imagekit.io/facility/issues/89/before-89.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 09:00:00 |
+| 90  | 90       | 2           | https://ik.imagekit.io/facility/issues/90/before-90.jpg          | BEFORE     | NOT_CHECKED | {}                                   | 2026-02-20 06:00:00 |
+| 91  | 1        | 6           | https://ik.imagekit.io/facility/issues/1/after-1.jpg             | AFTER      | OK          | {confidence: 0.88, repair_visible: true} | 2026-02-23 00:00:00 |
+| 92  | 2        | 7           | https://ik.imagekit.io/facility/issues/2/after-2.jpg             | AFTER      | OK          | {confidence: 0.892, repair_visible: true} | 2026-02-22 23:00:00 |
+| 93  | 3        | 8           | https://ik.imagekit.io/facility/issues/3/after-3.jpg             | AFTER      | OK          | {confidence: 0.904, repair_visible: true} | 2026-02-22 22:00:00 |
+| 94  | 4        | 9           | https://ik.imagekit.io/facility/issues/4/after-4.jpg             | AFTER      | OK          | {confidence: 0.916, repair_visible: true} | 2026-02-22 21:00:00 |
+| 95  | 5        | 10          | https://ik.imagekit.io/facility/issues/5/after-5.jpg             | AFTER      | OK          | {confidence: 0.928, repair_visible: true} | 2026-02-22 20:00:00 |
+| 96  | 6        | 6           | https://ik.imagekit.io/facility/issues/6/after-6.jpg             | AFTER      | OK          | {confidence: 0.94, repair_visible: true} | 2026-02-22 19:00:00 |
+| 97  | 7        | 7           | https://ik.imagekit.io/facility/issues/7/after-7.jpg             | AFTER      | OK          | {confidence: 0.952, repair_visible: true} | 2026-02-22 18:00:00 |
+| 98  | 8        | 8           | https://ik.imagekit.io/facility/issues/8/after-8.jpg             | AFTER      | OK          | {confidence: 0.964, repair_visible: true} | 2026-02-22 17:00:00 |
+| 99  | 9        | 9           | https://ik.imagekit.io/facility/issues/9/after-9.jpg             | AFTER      | OK          | {confidence: 0.976, repair_visible: true} | 2026-02-22 16:00:00 |
+| 100 | 10       | 10          | https://ik.imagekit.io/facility/issues/10/after-10.jpg           | AFTER      | OK          | {confidence: 0.988, repair_visible: true} | 2026-02-22 15:00:00 |
+| 101 | 11       | 6           | https://ik.imagekit.io/facility/issues/11/after-11.jpg           | AFTER      | OK          | {confidence: 0.88, repair_visible: true} | 2026-02-22 14:00:00 |
+| 102 | 12       | 7           | https://ik.imagekit.io/facility/issues/12/after-12.jpg           | AFTER      | OK          | {confidence: 0.892, repair_visible: true} | 2026-02-22 13:00:00 |
+| 103 | 13       | 8           | https://ik.imagekit.io/facility/issues/13/after-13.jpg           | AFTER      | OK          | {confidence: 0.904, repair_visible: true} | 2026-02-22 12:00:00 |
+| 104 | 14       | 9           | https://ik.imagekit.io/facility/issues/14/after-14.jpg           | AFTER      | OK          | {confidence: 0.916, repair_visible: true} | 2026-02-22 11:00:00 |
+| 105 | 15       | 10          | https://ik.imagekit.io/facility/issues/15/after-15.jpg           | AFTER      | OK          | {confidence: 0.928, repair_visible: true} | 2026-02-22 10:00:00 |
+| 106 | 16       | 6           | https://ik.imagekit.io/facility/issues/16/after-16.jpg           | AFTER      | OK          | {confidence: 0.94, repair_visible: true} | 2026-02-22 09:00:00 |
+| 107 | 17       | 7           | https://ik.imagekit.io/facility/issues/17/after-17.jpg           | AFTER      | OK          | {confidence: 0.952, repair_visible: true} | 2026-02-22 08:00:00 |
+| 108 | 18       | 8           | https://ik.imagekit.io/facility/issues/18/after-18.jpg           | AFTER      | OK          | {confidence: 0.964, repair_visible: true} | 2026-02-22 07:00:00 |
+| 109 | 19       | 9           | https://ik.imagekit.io/facility/issues/19/after-19.jpg           | AFTER      | OK          | {confidence: 0.976, repair_visible: true} | 2026-02-22 06:00:00 |
+| 110 | 20       | 10          | https://ik.imagekit.io/facility/issues/20/after-20.jpg           | AFTER      | OK          | {confidence: 0.988, repair_visible: true} | 2026-02-22 05:00:00 |
+| 111 | 21       | 6           | https://ik.imagekit.io/facility/issues/21/after-21.jpg           | AFTER      | OK          | {confidence: 0.88, repair_visible: true} | 2026-02-22 04:00:00 |
+| 112 | 22       | 7           | https://ik.imagekit.io/facility/issues/22/after-22.jpg           | AFTER      | OK          | {confidence: 0.892, repair_visible: true} | 2026-02-22 03:00:00 |
+| 113 | 23       | 8           | https://ik.imagekit.io/facility/issues/23/after-23.jpg           | AFTER      | OK          | {confidence: 0.904, repair_visible: true} | 2026-02-22 02:00:00 |
+| 114 | 24       | 9           | https://ik.imagekit.io/facility/issues/24/after-24.jpg           | AFTER      | OK          | {confidence: 0.916, repair_visible: true} | 2026-02-22 01:00:00 |
+| 115 | 25       | 10          | https://ik.imagekit.io/facility/issues/25/after-25.jpg           | AFTER      | OK          | {confidence: 0.928, repair_visible: true} | 2026-02-22 00:00:00 |
+| 116 | 68       | 6           | https://ik.imagekit.io/facility/issues/68/after-68.jpg           | AFTER      | OK          | {confidence: 0.94, repair_visible: true} | 2026-02-21 23:00:00 |
+| 117 | 69       | 7           | https://ik.imagekit.io/facility/issues/69/after-69.jpg           | AFTER      | OK          | {confidence: 0.952, repair_visible: true} | 2026-02-21 22:00:00 |
+| 118 | 70       | 8           | https://ik.imagekit.io/facility/issues/70/after-70.jpg           | AFTER      | OK          | {confidence: 0.964, repair_visible: true} | 2026-02-21 21:00:00 |
+| 119 | 71       | 9           | https://ik.imagekit.io/facility/issues/71/after-71.jpg           | AFTER      | OK          | {confidence: 0.976, repair_visible: true} | 2026-02-21 20:00:00 |
+| 120 | 72       | 10          | https://ik.imagekit.io/facility/issues/72/after-72.jpg           | AFTER      | OK          | {confidence: 0.988, repair_visible: true} | 2026-02-21 19:00:00 |
+| 121 | 73       | 6           | https://ik.imagekit.io/facility/issues/73/after-73.jpg           | AFTER      | OK          | {confidence: 0.88, repair_visible: true} | 2026-02-21 18:00:00 |
+| 122 | 74       | 7           | https://ik.imagekit.io/facility/issues/74/after-74.jpg           | AFTER      | OK          | {confidence: 0.892, repair_visible: true} | 2026-02-21 17:00:00 |
+| 123 | 75       | 8           | https://ik.imagekit.io/facility/issues/75/after-75.jpg           | AFTER      | OK          | {confidence: 0.904, repair_visible: true} | 2026-02-21 16:00:00 |
+
+
+10. complaints
+
+Structure:
+| Column                  | Type         | Constraints                |
+| ----------------------- | ------------ | -------------------------- |
+| id                      | SERIAL       | PK                         |
+| issue_id                | INT          | FK -> issues(id)           |
+| assignment_id           | INT          | FK -> issue_assignments(id)|
+| raised_by_supervisor_id | INT          | FK -> users(id)            |
+| target_solver_id        | INT          | FK -> users(id)            |
+| complaint_details       | TEXT         | NOT NULL                   |
+| complaint_image_url     | VARCHAR(500) | NULLABLE                   |
+| created_at              | TIMESTAMPTZ  | DEFAULT NOW()              |
+| updated_at              | TIMESTAMPTZ  | DEFAULT NOW()              |
+
+Sample data:
+| id | issue_id | assign_id | raised_by_sup | target_solver | complaint_details                          | complaint_image_url                                        | created_at          |
+| -- | -------- | --------- | ------------- | ------------- | ------------------------------------------ | ---------------------------------------------------------- | ------------------- |
+| 1  | 76       | 61        | 1             | 6             | Pipe joint still leaking after repair      | https://ik.imagekit.io/facility/complaints/76.jpg          | 2026-02-24 00:00:00 |
+| 2  | 77       | 62        | 2             | 7             | Same circuit breaker tripping within hours | NULL                                                       | 2026-02-23 23:00:00 |
+| 3  | 78       | 63        | 3             | 8             | Water heater still not producing hot water | https://ik.imagekit.io/facility/complaints/78.jpg          | 2026-02-23 22:00:00 |
+| 4  | 79       | 64        | 3             | 9             | Boundary wall crack widened after sealing  | https://ik.imagekit.io/facility/complaints/79.jpg          | 2026-02-23 21:00:00 |
+| 5  | 80       | 65        | 1             | 10            | Irrigation pipe leaking again at same joint | NULL                                                       | 2026-02-23 20:00:00 |
+| 6  | 81       | 66        | 2             | 6             | Chiller vibration returned worse than before | https://ik.imagekit.io/facility/complaints/81.jpg          | 2026-02-23 19:00:00 |
+| 7  | 82       | 67        | 2             | 7             | Shutter motor burned out again within one week | NULL                                                       | 2026-02-23 18:00:00 |
+| 8  | 83       | 68        | 2             | 8             | Forklift hydraulic leak persists           | https://ik.imagekit.io/facility/complaints/83.jpg          | 2026-02-23 17:00:00 |
+| 9  | 84       | 69        | 3             | 9             | Lift non-functional for 3 days, no response | https://ik.imagekit.io/facility/complaints/84.jpg          | 2026-02-23 16:00:00 |
+| 10 | 85       | 70        | 3             | 10            | Chemical storage ventilation still down    | NULL                                                       | 2026-02-23 15:00:00 |
+| 11 | 86       | 71        | 2             | 6             | Transformer still overheating              | https://ik.imagekit.io/facility/complaints/86.jpg          | 2026-02-23 14:00:00 |
+| 12 | 87       | 72        | 2             | 7             | Basement still flooding                    | NULL                                                       | 2026-02-23 13:00:00 |
+| 13 | 88       | 73        | 3             | 8             | Production line still down                 | https://ik.imagekit.io/facility/complaints/88.jpg          | 2026-02-23 12:00:00 |
+| 14 | 89       | 74        | 3             | 9             | Fire suppression system still faulty       | NULL                                                       | 2026-02-23 11:00:00 |
+| 15 | 90       | 75        | 2             | 10            | Welding gas leak not fully sealed          | https://ik.imagekit.io/facility/complaints/90.jpg          | 2026-02-23 10:00:00 |
+| 16 | 1        | 1         | 1             | 6             | Pipe repair looks patchy                   | NULL                                                       | 2026-02-23 09:00:00 |
+| 17 | 2        | 2         | 2             | 7             | Electrical panel cover not secured         | https://ik.imagekit.io/facility/complaints/2.jpg           | 2026-02-23 08:00:00 |
+| 18 | 5        | 5         | 3             | 10            | Network still dropping intermittently      | NULL                                                       | 2026-02-23 07:00:00 |
+| 19 | 10       | 10        | 2             | 10            | Fire alarm sensor response slow            | https://ik.imagekit.io/facility/complaints/10.jpg          | 2026-02-23 06:00:00 |
+| 20 | 15       | 15        | 3             | 10            | Water pump still making noise              | NULL                                                       | 2026-02-23 05:00:00 |
+| 21 | 27       | 27        | 2             | 7             | Power socket using low-quality parts       | https://ik.imagekit.io/facility/complaints/27.jpg          | 2026-02-23 04:00:00 |
+| 22 | 30       | 30        | 1             | 10            | Handrail repair not following standards    | NULL                                                       | 2026-02-23 03:00:00 |
+| 23 | 35       | 35        | 1             | 10            | Forklift repair taking too long            | https://ik.imagekit.io/facility/complaints/35.jpg          | 2026-02-23 02:00:00 |
+| 24 | 37       | 37        | 3             | 7             | Transformer work seems rushed              | NULL                                                       | 2026-02-23 01:00:00 |
+| 25 | 68       | 53        | 2             | 8             | Boiler pressure gauge reading off          | https://ik.imagekit.io/facility/complaints/68.jpg          | 2026-02-23 00:00:00 |
+| 26 | 70       | 55        | 1             | 10            | UPS battery backup time decreased          | NULL                                                       | 2026-02-22 23:00:00 |
+| 27 | 71       | 56        | 2             | 6             | Crane rope inspection report incomplete    | https://ik.imagekit.io/facility/complaints/71.jpg          | 2026-02-22 22:00:00 |
+| 28 | 73       | 58        | 1             | 8             | Switch config causing intermittent drops   | NULL                                                       | 2026-02-22 21:00:00 |
+| 29 | 74       | 59        | 2             | 9             | Motor bearings alignment off               | https://ik.imagekit.io/facility/complaints/74.jpg          | 2026-02-22 20:00:00 |
+| 30 | 75       | 60        | 3             | 10            | Fan speed control making humming noise     | NULL                                                       | 2026-02-22 19:00:00 |
+
+
+11. issue_history
+
+Structure:
+| Column             | Type                                                    | Constraints                          |
+| ------------------ | ------------------------------------------------------- | ------------------------------------ |
+| id                 | SERIAL                                                  | PK                                   |
+| issue_id           | INT                                                     | FK -> issues(id)                     |
+| changed_by_user_id | INT                                                     | FK -> users(id), NULLABLE            |
+| old_status         | VARCHAR(50)                                             | NULLABLE                             |
+| new_status         | VARCHAR(50)                                             |                                      |
+| action_type        | ENUM('ASSIGN','UPDATE','COMPLETE','REOPEN','COMPLAINT') |                                      |
+| details            | TEXT                                                    | e.g., 'Supervisor verified complete' |
+| created_at         | TIMESTAMPTZ                                             | DEFAULT NOW()                        |
+| updated_at         | TIMESTAMPTZ                                             | DEFAULT NOW() (Added)                |
+
+Generation rules (applied per issue based on final status):
+  Every issue        : NULL -> OPEN            ASSIGN    'Issue created via chat'           created_at=issue.created_at
+  Status != OPEN     : OPEN -> ASSIGNED        ASSIGN    'Solver auto-assigned'             created_at=issue.created_at+1h
+  Status in {IP,C,RPR,REOPENED,ESC}: ASSIGNED -> IN_PROGRESS UPDATE 'Solver started work'  created_at=issue.created_at+3h
+  Status = COMPLETED : RPR -> COMPLETED        COMPLETE  'Supervisor approved'              created_at=issue.updated_at
+  Status = REOPENED  : RPR -> REOPENED         COMPLAINT 'Complaint filed - work unsatisfactory' created_at=issue.updated_at-1h
+  Status = ESCALATED : IN_PROGRESS -> ESCALATED UPDATE   'System escalated - no response'  created_at=issue.updated_at
+
+Sample data (showing pattern rows):
+| id  | issue_id | changed_by | old_status              | new_status              | action_type | details                              | created_at          |
+| --- | -------- | ---------- | ----------------------- | ----------------------- | ----------- | ------------------------------------ | ------------------- |
+| 1   | 1        | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-05 00:00:00 |
+| 2   | 1        | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-05 01:00:00 |
+| 3   | 1        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-05 03:00:00 |
+| 4   | 1        | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-16 00:00:00 |
+| 5   | 2        | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-07 23:00:00 |
+| 6   | 2        | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-08 00:00:00 |
+| 7   | 2        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-08 02:00:00 |
+| 8   | 2        | 2          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-19 00:00:00 |
+| 9   | 3        | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-05 22:00:00 |
+| 10  | 3        | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-05 23:00:00 |
+| 11  | 3        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-06 01:00:00 |
+| 12  | 3        | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-17 00:00:00 |
+| 13  | 4        | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-09 21:00:00 |
+| 14  | 4        | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-09 22:00:00 |
+| 15  | 4        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-10 00:00:00 |
+| 16  | 4        | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-21 00:00:00 |
+| 17  | 5        | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-08 20:00:00 |
+| 18  | 5        | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-08 21:00:00 |
+| 19  | 5        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-08 23:00:00 |
+| 20  | 5        | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-20 00:00:00 |
+| 21  | 6        | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-01-30 19:00:00 |
+| 22  | 6        | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-01-30 20:00:00 |
+| 23  | 6        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-01-30 22:00:00 |
+| 24  | 6        | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-11 00:00:00 |
+| 25  | 7        | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-01 18:00:00 |
+| 26  | 7        | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-01 19:00:00 |
+| 27  | 7        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-01 21:00:00 |
+| 28  | 7        | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-13 00:00:00 |
+| 29  | 8        | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-03 17:00:00 |
+| 30  | 8        | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-03 18:00:00 |
+| 31  | 8        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-03 20:00:00 |
+| 32  | 8        | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-15 00:00:00 |
+| 33  | 9        | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-11 16:00:00 |
+| 34  | 9        | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-11 17:00:00 |
+| 35  | 9        | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-11 19:00:00 |
+| 36  | 9        | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-23 00:00:00 |
+| 37  | 10       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-01-25 15:00:00 |
+| 38  | 10       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-01-25 16:00:00 |
+| 39  | 10       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-01-25 18:00:00 |
+| 40  | 10       | 2          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-06 00:00:00 |
+| 41  | 11       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-01-28 14:00:00 |
+| 42  | 11       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-01-28 15:00:00 |
+| 43  | 11       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-01-28 17:00:00 |
+| 44  | 11       | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-09 00:00:00 |
+| 45  | 12       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-12 13:00:00 |
+| 46  | 12       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-12 14:00:00 |
+| 47  | 12       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-12 16:00:00 |
+| 48  | 12       | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-24 00:00:00 |
+| 49  | 13       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-07 00:00:00 |
+| 50  | 13       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-07 01:00:00 |
+| 51  | 13       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-07 03:00:00 |
+| 52  | 13       | 2          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-18 00:00:00 |
+| 53  | 14       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-13 23:00:00 |
+| 54  | 14       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-14 00:00:00 |
+| 55  | 14       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-14 02:00:00 |
+| 56  | 14       | 2          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-25 00:00:00 |
+| 57  | 15       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-10 22:00:00 |
+| 58  | 15       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-10 23:00:00 |
+| 59  | 15       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-11 01:00:00 |
+| 60  | 15       | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-22 00:00:00 |
+| 61  | 16       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-09 21:00:00 |
+| 62  | 16       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-09 22:00:00 |
+| 63  | 16       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-10 00:00:00 |
+| 64  | 16       | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-21 00:00:00 |
+| 65  | 17       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-04 20:00:00 |
+| 66  | 17       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-04 21:00:00 |
+| 67  | 17       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-04 23:00:00 |
+| 68  | 17       | 2          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-16 00:00:00 |
+| 69  | 18       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-07 19:00:00 |
+| 70  | 18       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-07 20:00:00 |
+| 71  | 18       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-07 22:00:00 |
+| 72  | 18       | 2          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-19 00:00:00 |
+| 73  | 19       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-14 18:00:00 |
+| 74  | 19       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-14 19:00:00 |
+| 75  | 19       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-14 21:00:00 |
+| 76  | 19       | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-26 00:00:00 |
+| 77  | 20       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-01-30 17:00:00 |
+| 78  | 20       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-01-30 18:00:00 |
+| 79  | 20       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-01-30 20:00:00 |
+| 80  | 20       | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-11 00:00:00 |
+| 81  | 21       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-11 16:00:00 |
+| 82  | 21       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-11 17:00:00 |
+| 83  | 21       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-11 19:00:00 |
+| 84  | 21       | 2          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-23 00:00:00 |
+| 85  | 22       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-01 15:00:00 |
+| 86  | 22       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-01 16:00:00 |
+| 87  | 22       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-01 18:00:00 |
+| 88  | 22       | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-13 00:00:00 |
+| 89  | 23       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-12 14:00:00 |
+| 90  | 23       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-12 15:00:00 |
+| 91  | 23       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-12 17:00:00 |
+| 92  | 23       | 1          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-24 00:00:00 |
+| 93  | 24       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-09 13:00:00 |
+| 94  | 24       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-09 14:00:00 |
+| 95  | 24       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-09 16:00:00 |
+| 96  | 24       | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-21 00:00:00 |
+| 97  | 25       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-16 00:00:00 |
+| 98  | 25       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-16 01:00:00 |
+| 99  | 25       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-16 03:00:00 |
+| 100 | 25       | 3          | RESOLVED_PENDING_REVIEW | COMPLETED               | COMPLETE    | Supervisor approved                  | 2026-02-27 00:00:00 |
+| 101 | 26       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 00:00:00 |
+| 102 | 26       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 01:00:00 |
+| 103 | 26       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-22 03:00:00 |
+| 104 | 27       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 22:00:00 |
+| 105 | 27       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 23:00:00 |
+| 106 | 27       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-22 01:00:00 |
+| 107 | 28       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 20:00:00 |
+| 108 | 28       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 21:00:00 |
+| 109 | 28       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 23:00:00 |
+| 110 | 29       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 18:00:00 |
+| 111 | 29       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 19:00:00 |
+| 112 | 29       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 21:00:00 |
+| 113 | 30       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 16:00:00 |
+| 114 | 30       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 17:00:00 |
+| 115 | 30       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 19:00:00 |
+| 116 | 31       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 14:00:00 |
+| 117 | 31       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 15:00:00 |
+| 118 | 31       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 17:00:00 |
+| 119 | 32       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 12:00:00 |
+| 120 | 32       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 13:00:00 |
+| 121 | 32       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 15:00:00 |
+| 122 | 33       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 10:00:00 |
+| 123 | 33       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 11:00:00 |
+| 124 | 33       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 13:00:00 |
+| 125 | 34       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 08:00:00 |
+| 126 | 34       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 09:00:00 |
+| 127 | 34       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 11:00:00 |
+| 128 | 35       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 06:00:00 |
+| 129 | 35       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 07:00:00 |
+| 130 | 35       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 09:00:00 |
+| 131 | 36       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 04:00:00 |
+| 132 | 36       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 05:00:00 |
+| 133 | 36       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 07:00:00 |
+| 134 | 37       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 02:00:00 |
+| 135 | 37       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 03:00:00 |
+| 136 | 37       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 05:00:00 |
+| 137 | 38       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 00:00:00 |
+| 138 | 38       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 01:00:00 |
+| 139 | 38       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 03:00:00 |
+| 140 | 39       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 22:00:00 |
+| 141 | 39       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 23:00:00 |
+| 142 | 39       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 01:00:00 |
+| 143 | 40       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 20:00:00 |
+| 144 | 40       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 21:00:00 |
+| 145 | 40       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 23:00:00 |
+| 146 | 41       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 00:00:00 |
+| 147 | 41       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-23 01:00:00 |
+| 148 | 42       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 22:00:00 |
+| 149 | 42       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 23:00:00 |
+| 150 | 43       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 20:00:00 |
+| 151 | 43       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 21:00:00 |
+| 152 | 44       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 18:00:00 |
+| 153 | 44       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 19:00:00 |
+| 154 | 45       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 16:00:00 |
+| 155 | 45       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 17:00:00 |
+| 156 | 46       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 14:00:00 |
+| 157 | 46       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 15:00:00 |
+| 158 | 47       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 12:00:00 |
+| 159 | 47       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 13:00:00 |
+| 160 | 48       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 10:00:00 |
+| 161 | 48       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 11:00:00 |
+| 162 | 49       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 08:00:00 |
+| 163 | 49       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 09:00:00 |
+| 164 | 50       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 06:00:00 |
+| 165 | 50       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 07:00:00 |
+| 166 | 51       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 04:00:00 |
+| 167 | 51       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 05:00:00 |
+| 168 | 52       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-22 02:00:00 |
+| 169 | 52       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-22 03:00:00 |
+| 170 | 53       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-24 00:00:00 |
+| 171 | 54       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 23:00:00 |
+| 172 | 55       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 22:00:00 |
+| 173 | 56       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 21:00:00 |
+| 174 | 57       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 20:00:00 |
+| 175 | 58       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 19:00:00 |
+| 176 | 59       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 18:00:00 |
+| 177 | 60       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 17:00:00 |
+| 178 | 61       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 16:00:00 |
+| 179 | 62       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 15:00:00 |
+| 180 | 63       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 14:00:00 |
+| 181 | 64       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 13:00:00 |
+| 182 | 65       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 12:00:00 |
+| 183 | 66       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 11:00:00 |
+| 184 | 67       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-23 10:00:00 |
+| 185 | 68       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 00:00:00 |
+| 186 | 68       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 01:00:00 |
+| 187 | 68       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 03:00:00 |
+| 188 | 69       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 21:00:00 |
+| 189 | 69       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 22:00:00 |
+| 190 | 69       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 00:00:00 |
+| 191 | 70       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 18:00:00 |
+| 192 | 70       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 19:00:00 |
+| 193 | 70       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 21:00:00 |
+| 194 | 71       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 15:00:00 |
+| 195 | 71       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 16:00:00 |
+| 196 | 71       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 18:00:00 |
+| 197 | 72       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 12:00:00 |
+| 198 | 72       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 13:00:00 |
+| 199 | 72       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 15:00:00 |
+| 200 | 73       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 09:00:00 |
+| 201 | 73       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 10:00:00 |
+| 202 | 73       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 12:00:00 |
+| 203 | 74       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 06:00:00 |
+| 204 | 74       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 07:00:00 |
+| 205 | 74       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 09:00:00 |
+| 206 | 75       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 03:00:00 |
+| 207 | 75       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 04:00:00 |
+| 208 | 75       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 06:00:00 |
+| 209 | 76       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-19 00:00:00 |
+| 210 | 76       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-19 01:00:00 |
+| 211 | 76       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 03:00:00 |
+| 212 | 76       | 1          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 17:00:00 |
+| 213 | 77       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-18 22:00:00 |
+| 214 | 77       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-18 23:00:00 |
+| 215 | 77       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-19 01:00:00 |
+| 216 | 77       | 2          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 16:00:00 |
+| 217 | 78       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-18 20:00:00 |
+| 218 | 78       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-18 21:00:00 |
+| 219 | 78       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-18 23:00:00 |
+| 220 | 78       | 3          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 15:00:00 |
+| 221 | 79       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-18 18:00:00 |
+| 222 | 79       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-18 19:00:00 |
+| 223 | 79       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-18 21:00:00 |
+| 224 | 79       | 3          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 14:00:00 |
+| 225 | 80       | 1          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-18 16:00:00 |
+| 226 | 80       | 1          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-18 17:00:00 |
+| 227 | 80       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-18 19:00:00 |
+| 228 | 80       | 1          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 13:00:00 |
+| 229 | 81       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-18 14:00:00 |
+| 230 | 81       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-18 15:00:00 |
+| 231 | 81       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-18 17:00:00 |
+| 232 | 81       | 2          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 12:00:00 |
+| 233 | 82       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-18 12:00:00 |
+| 234 | 82       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-18 13:00:00 |
+| 235 | 82       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-18 15:00:00 |
+| 236 | 82       | 2          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 11:00:00 |
+| 237 | 83       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-18 10:00:00 |
+| 238 | 83       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-18 11:00:00 |
+| 239 | 83       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-18 13:00:00 |
+| 240 | 83       | 2          | RESOLVED_PENDING_REVIEW | REOPENED                | COMPLAINT   | Complaint filed - work unsatisfactory | 2026-02-24 10:00:00 |
+| 241 | 84       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-21 00:00:00 |
+| 242 | 84       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-21 01:00:00 |
+| 243 | 84       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 03:00:00 |
+| 244 | 84       | NULL       | IN_PROGRESS             | ESCALATED               | UPDATE      | System escalated - no response       | 2026-02-25 00:00:00 |
+| 245 | 85       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 21:00:00 |
+| 246 | 85       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 22:00:00 |
+| 247 | 85       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-21 00:00:00 |
+| 248 | 85       | NULL       | IN_PROGRESS             | ESCALATED               | UPDATE      | System escalated - no response       | 2026-02-24 22:00:00 |
+| 249 | 86       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 18:00:00 |
+| 250 | 86       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 19:00:00 |
+| 251 | 86       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 21:00:00 |
+| 252 | 86       | NULL       | IN_PROGRESS             | ESCALATED               | UPDATE      | System escalated - no response       | 2026-02-24 20:00:00 |
+| 253 | 87       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 15:00:00 |
+| 254 | 87       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 16:00:00 |
+| 255 | 87       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 18:00:00 |
+| 256 | 87       | NULL       | IN_PROGRESS             | ESCALATED               | UPDATE      | System escalated - no response       | 2026-02-24 18:00:00 |
+| 257 | 88       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 12:00:00 |
+| 258 | 88       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 13:00:00 |
+| 259 | 88       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 15:00:00 |
+| 260 | 88       | NULL       | IN_PROGRESS             | ESCALATED               | UPDATE      | System escalated - no response       | 2026-02-24 16:00:00 |
+| 261 | 89       | 3          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 09:00:00 |
+| 262 | 89       | 3          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 10:00:00 |
+| 263 | 89       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 12:00:00 |
+| 264 | 89       | NULL       | IN_PROGRESS             | ESCALATED               | UPDATE      | System escalated - no response       | 2026-02-24 14:00:00 |
+| 265 | 90       | 2          | NULL                    | OPEN                    | ASSIGN      | Issue created via chat               | 2026-02-20 06:00:00 |
+| 266 | 90       | 2          | OPEN                    | ASSIGNED                | ASSIGN      | Solver auto-assigned                 | 2026-02-20 07:00:00 |
+| 267 | 90       | NULL       | ASSIGNED                | IN_PROGRESS             | UPDATE      | Solver started work                  | 2026-02-20 09:00:00 |
+| 268 | 90       | NULL       | IN_PROGRESS             | ESCALATED               | UPDATE      | System escalated - no response       | 2026-02-24 12:00:00 |
+
+
+12. chat_history
+
+Structure:
+| Column       | Type                       | Constraints                               |
+| ------------ | -------------------------- | ----------------------------------------- |
+| id           | SERIAL                     | PK                                        |
+| user_id      | INT                        | FK -> users(id), NULLABLE (AI/SYSTEM=NULL)|
+| issue_id     | INT                        | FK -> issues(id), NULLABLE (general chat) |
+| role_in_chat | ENUM('USER','SYSTEM','AI') | NOT NULL                                  |
+| message      | TEXT                       | NOT NULL                                  |
+| attachments  | JSONB                      | Array of image URLs, DEFAULT []           |
+| created_at   | TIMESTAMPTZ                | DEFAULT NOW()                             |
+| updated_at   | TIMESTAMPTZ                | DEFAULT NOW()                             |
+
+Sample data:
+| id | user_id | issue_id | role   | message                                               | created_at          |
+| -- | ------- | -------- | ------ | ----------------------------------------------------- | ------------------- |
+| 1  | 1       | 1        | USER   | pipe broken in vepery site need to fix in 5 days      | 2026-02-05 00:00:00 |
+| 2  | NULL    | 1        | AI     | Issue #1 created: Pipe Leakage. Solver Ramesh assigned. | 2026-02-05 00:00:03 |
+| 3  | 2       | 2        | USER   | electrical panel fault in ambattur, urgent            | 2026-02-07 23:00:00 |
+| 4  | NULL    | 2        | AI     | Issue #2 created: Electrical Panel Fault. Priority: HIGH. | 2026-02-07 23:00:03 |
+| 5  | 1       | 3        | USER   | AC not cooling in guindy factory                      | 2026-02-05 22:00:00 |
+| 6  | NULL    | 3        | AI     | Issue #3 created: AC Unit Not Cooling. Solver Mohan assigned. | 2026-02-05 22:00:03 |
+| 7  | 3       | 4        | USER   | broken window in perungudi conference room            | 2026-02-09 21:00:00 |
+| 8  | NULL    | 4        | AI     | Issue #4 created: Broken Window. Solver Kavitha assigned. | 2026-02-09 21:00:03 |
+| 9  | 1       | 5        | USER   | network switch down in taramani, critical!            | 2026-02-08 20:00:00 |
+| 10 | NULL    | 5        | AI     | Issue #5 created: Network Switch Failure. Priority: HIGH. | 2026-02-08 20:00:03 |
+| 11 | 6       | 26       | USER   | Started ceiling water stain repair                    | 2026-02-22 18:00:00 |
+| 12 | NULL    | 26       | AI     | Issue #26 updated to IN_PROGRESS.                     | 2026-02-22 18:00:02 |
+| 13 | 7       | 27       | USER   | Working on power socket replacement                   | 2026-02-22 17:00:00 |
+| 14 | NULL    | 27       | AI     | Issue #27 updated to IN_PROGRESS.                     | 2026-02-22 17:00:02 |
+| 15 | 8       | 28       | USER   | Inspecting chiller vibration                          | 2026-02-22 16:00:00 |
+| 16 | NULL    | 28       | AI     | Issue #28 updated to IN_PROGRESS.                     | 2026-02-22 16:00:02 |
+| 17 | 9       | 29       | USER   | Started handrail repair                               | 2026-02-22 15:00:00 |
+| 18 | NULL    | 29       | AI     | Issue #29 updated to IN_PROGRESS.                     | 2026-02-22 15:00:02 |
+| 19 | 10      | 30       | USER   | Replacing WiFi access point                           | 2026-02-22 14:00:00 |
+| 20 | NULL    | 30       | AI     | Issue #30 updated to IN_PROGRESS.                     | 2026-02-22 14:00:02 |
+| 21 | 1       | 76       | USER   | work not done properly, still leaking                 | 2026-02-23 20:00:00 |
+| 22 | NULL    | 76       | AI     | Complaint filed for Issue #76. Reopened.              | 2026-02-23 20:00:03 |
+| 23 | 2       | 77       | USER   | electrical short is back again                        | 2026-02-23 19:00:00 |
+| 24 | NULL    | 77       | AI     | Complaint filed for Issue #77. Reopened.              | 2026-02-23 19:00:03 |
+| 25 | 3       | 78       | USER   | water heater repair didn't work                       | 2026-02-23 18:00:00 |
+| 26 | NULL    | 78       | AI     | Complaint filed for Issue #78. Reopened.              | 2026-02-23 18:00:03 |
+| 27 | NULL    | 84       | SYSTEM | ESCALATION: Issue #84 escalated to manager.           | 2026-02-24 23:00:00 |
+| 28 | NULL    | 85       | SYSTEM | ESCALATION: Issue #85 escalated to manager.           | 2026-02-24 22:00:00 |
+| 29 | NULL    | 86       | SYSTEM | ESCALATION: Issue #86 escalated to manager.           | 2026-02-24 21:00:00 |
+| 30 | NULL    | 87       | SYSTEM | ESCALATION: Issue #87 escalated to manager.           | 2026-02-24 20:00:00 |
+| 31 | NULL    | 88       | SYSTEM | ESCALATION: Issue #88 escalated to manager.           | 2026-02-24 19:00:00 |
+| 32 | NULL    | 89       | SYSTEM | ESCALATION: Issue #89 escalated to manager.           | 2026-02-24 18:00:00 |
+| 33 | NULL    | 90       | SYSTEM | ESCALATION: Issue #90 escalated to manager.           | 2026-02-24 17:00:00 |
+| 34 | 1       | NULL     | USER   | what are my open issues?                              | 2026-02-24 21:00:00 |
+| 35 | NULL    | NULL     | AI     | You have 8 open issues.                               | 2026-02-24 21:00:02 |
+| 36 | 4       | NULL     | USER   | show escalated issues                                 | 2026-02-24 21:00:00 |
+| 37 | NULL    | NULL     | AI     | 7 escalated issues.                                   | 2026-02-24 21:00:02 |
+| 38 | 6       | NULL     | USER   | what is my assignment?                                | 2026-02-24 21:00:00 |
+| 39 | NULL    | NULL     | AI     | 4 active assignments.                                 | 2026-02-24 21:00:02 |
+
+
+13. escalations
+
+Structure:
+| Column                        | Type        | Constraints                         |
+| ----------------------------- | ----------- | ----------------------------------- |
+| id                            | SERIAL      | PK                                  |
+| issue_id                      | INT         | FK -> issues(id)                    |
+| assignment_id                 | INT         | FK -> issue_assignments(id)         |
+| escalation_type               | VARCHAR(50) | 'NO_RESPONSE' or 'DEADLINE_APPROACHING'|
+| escalated_to_role             | VARCHAR(50) | e.g. 'manager'                      |
+| escalated_by_user_id          | INT         | NULLABLE (NULL = system auto)       |
+| reason                        | TEXT        | NOT NULL                            |
+| total_missed_calls            | INT         | NULLABLE                            |
+| time_elapsed_without_response | INTERVAL    | NULLABLE                            |
+| notification_sent             | BOOLEAN     | DEFAULT FALSE                       |
+| notification_sent_at          | TIMESTAMPTZ | NULLABLE                            |
+| resolved                      | BOOLEAN     | DEFAULT FALSE                       |
+| resolved_at                   | TIMESTAMPTZ | NULLABLE                            |
+| created_at                    | TIMESTAMPTZ | DEFAULT NOW()                       |
+| updated_at                    | TIMESTAMPTZ | DEFAULT NOW()                       |
+
+Sample data:
+| id | issue_id | assign_id | escalation_type      | escalated_to | reason                                          | missed_calls | time_elapsed | resolved | updated_at          | created_at          |
+| -- | -------- | --------- | -------------------- | ------------ | ----------------------------------------------- | ------------ | ------------ | -------- | ------------------- | ------------------- |
+| 1  | 84       | 69        | NO_RESPONSE          | manager      | Solver failed to answer 3 calls over 2 hours    | 3            | 2h           | FALSE    | 2026-02-24 23:00:00 | 2026-02-24 22:00:00 |
+| 2  | 85       | 70        | NO_RESPONSE          | manager      | Solver failed to answer 4 calls over 3 hours    | 4            | 3h           | FALSE    | 2026-02-24 22:00:00 | 2026-02-24 21:00:00 |
+| 3  | 86       | 71        | NO_RESPONSE          | manager      | Solver failed to answer 5 calls over 4 hours    | 5            | 4h           | FALSE    | 2026-02-24 21:00:00 | 2026-02-24 20:00:00 |
+| 4  | 87       | 72        | NO_RESPONSE          | manager      | Solver failed to answer 3 calls over 5 hours    | 3            | 5h           | FALSE    | 2026-02-24 20:00:00 | 2026-02-24 19:00:00 |
+| 5  | 88       | 73        | NO_RESPONSE          | manager      | Solver failed to answer 4 calls over 2 hours    | 4            | 2h           | FALSE    | 2026-02-24 19:00:00 | 2026-02-24 18:00:00 |
+| 6  | 89       | 74        | NO_RESPONSE          | manager      | Solver failed to answer 5 calls over 3 hours    | 5            | 3h           | FALSE    | 2026-02-24 18:00:00 | 2026-02-24 17:00:00 |
+| 7  | 90       | 75        | NO_RESPONSE          | manager      | Solver failed to answer 3 calls over 4 hours    | 3            | 4h           | FALSE    | 2026-02-24 17:00:00 | 2026-02-24 16:00:00 |
+| 8  | 26       | 26        | DEADLINE_APPROACHING | manager      | Deadline in 20.5h, status still in_progress     | NULL         | NULL         | FALSE    | 2026-02-24 22:00:00 | 2026-02-24 21:00:00 |
+| 9  | 29       | 29        | DEADLINE_APPROACHING | manager      | Deadline in 23.5h, status still in_progress     | NULL         | NULL         | FALSE    | 2026-02-24 22:00:00 | 2026-02-24 21:00:00 |
+| 10 | 34       | 34        | DEADLINE_APPROACHING | manager      | Deadline in 22.5h, status still in_progress     | NULL         | NULL         | FALSE    | 2026-02-24 22:00:00 | 2026-02-24 21:00:00 |
+| 11 | 37       | 37        | DEADLINE_APPROACHING | manager      | Deadline in 19.5h, status still in_progress     | NULL         | NULL         | FALSE    | 2026-02-24 22:00:00 | 2026-02-24 21:00:00 |
+| 12 | 40       | 40        | DEADLINE_APPROACHING | manager      | Deadline in 22.5h, status still in_progress     | NULL         | NULL         | FALSE    | 2026-02-24 22:00:00 | 2026-02-24 21:00:00 |
+| 13 | 1        | 1         | NO_RESPONSE          | manager      | Solver responded after 4 attempts               | 3            | 3h           | TRUE     | 2026-02-15 00:00:00 | 2026-02-14 23:00:00 |
+| 14 | 5        | 5         | NO_RESPONSE          | manager      | Solver answered on 3rd call                     | 3            | 3h           | TRUE     | 2026-02-15 00:00:00 | 2026-02-14 23:00:00 |
+| 15 | 10       | 10        | DEADLINE_APPROACHING | manager      | Completed before deadline                       | NULL         | NULL         | TRUE     | 2026-02-15 00:00:00 | 2026-02-14 23:00:00 |
+
+
+================================================================================
+ENUM REFERENCE
+================================================================================
+
+User Roles         : supervisor, problemsolver, manager
+Issue Status       : OPEN, ASSIGNED, IN_PROGRESS, RESOLVED_PENDING_REVIEW, COMPLETED, REOPENED, ESCALATED
+Assignment Status  : ACTIVE, COMPLETED, REOPENED
+Call Status        : MISSED, ANSWERED
+Image Type         : BEFORE, AFTER
+AI Flag            : OK, SUSPECT, NOT_CHECKED
+Action Type        : ASSIGN, UPDATE, COMPLETE, REOPEN, COMPLAINT
+Chat Role          : USER, SYSTEM, AI
+
+================================================================================
+FLOW CHAIN
+================================================================================
+
+users (supervisor)
+  -> issues (raises problem)
+     -> issue_assignments (system assigns solver)
+        -> call_logs (auto-calls solver)
+        -> issue_images (solver uploads fix)
+     -> complaints (if not fixed properly)
+        -> NEW issue_assignments (re-assign)
+
+Key foreign keys:
+  issues.raised_by_supervisor_id    -> users.id
+  issue_assignments.assigned_to_solver_id -> users.id
+  call_logs.assignment_id           -> issue_assignments.id
+  complaints.target_solver_id       -> users.id
+  escalations.assignment_id         -> issue_assignments.id

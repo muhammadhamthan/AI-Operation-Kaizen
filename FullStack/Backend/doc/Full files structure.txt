@@ -1,0 +1,1424 @@
+
+BACKEND
+_____________________________________________________________________________________________________________________
+
+backend/
+├── app/
+│   ├── main.py                        # FastAPI app creation (replaces __init__.py)
+│   ├── db/                            # Database setup (NEW folder)
+│   │   ├── __init__.py
+│   │   ├── base.py                    # Base class for models
+│   │   └── session.py                 # Database session + dependency
+│   │
+│   ├── models/                        # SQLAlchemy ORM models (SAME - 95%)
+│   │   ├── __init__.py
+│   │   ├── user.py                    # User model + methods
+│   │   ├── site.py                    # Site model
+│   │   ├── supervisor_site.py         # Junction table
+│   │   ├── issue.py                   # Issue model (core)
+│   │   ├── issue_assignment.py        # Assignment model
+│   │   ├── call_log.py                # Call log model
+│   │   ├── issue_image.py             # Image model (before/after)
+│   │   ├── complaint.py               # Complaint model
+│   │   ├── issue_history.py           # Audit trail
+│   │   ├── chat_history.py            # Chat messages
+│   │   ├── solver_skill.py            # Solver skills mapping
+│   │   └── escalation_rule.py         # Escalation rules configuration
+|    |   |____escaslation.py
+│   │
+│   ├── schemas/                       # Pydantic schemas (CHANGED)
+│   │   ├── __init__.py
+│   │   ├── user_schema.py             # UserCreate, UserResponse
+│   │   ├── issue_schema.py            # IssueCreate, IssueResponse
+│   │   ├── chatbot_schema.py          # ChatRequest, ChatResponse
+│   │   ├── assignment_schema.py       # AssignmentCreate, AssignmentResponse
+│   │   ├── complaint_schema.py        # ComplaintCreate, ComplaintResponse
+│   │   ├── dashboard_schema.py        # DashboardResponse
+│   │   └── notification_schema.py     # NotificationResponse
+│   │
+│   ├── api/                           # API routes (renamed from routes/)
+│   │   ├── __init__.py                # Register all routers
+│   │   ├── deps.py                    # Dependencies (get_db, get_current_user)
+│   │   ├── auth.py                    # Authentication endpoints
+│   │   ├── chatbot.py                 # Universal chatbot endpoint
+│   │   ├── issues.py                  # Issues CRUD + status updates
+│   │   ├── assignments.py             # Assignment management
+│   │   ├── images.py                  # Image upload/retrieve
+│   │   ├── complaints.py              # Complaint management
+│   │   ├── dashboard.py               # Dashboard data (role-based)
+│   │   ├── notifications.py           # In-app notifications
+│   │   ├── webhooks.py                # Exotel/Twilio callbacks
+│   │   └── history.py                 # History/timeline data
+│   │
+│   ├── services/                      # Business logic layer (SAME - 95%)
+│   │   ├── __init__.py
+│   │   ├── auth_service.py            # JWT login/logout
+│   │   ├── chatbot_service.py         # AI intent detection + routing
+│   │   ├── issue_service.py           # Issue CRUD + validation
+│   │   ├── assignment_service.py      # Auto-assignment logic
+│   │   ├── call_service.py            # Exotel integration + call logic
+│   │   ├── image_service.py           # imageKit upload + AI vision
+│   │   ├── complaint_service.py       # Complaint handling + re-assignment
+│   │   ├── notification_service.py    # Email + in-app notifications
+│   │   ├── dashboard_service.py       # Role-based dashboard data
+│   │   └── ai_service.py              # OpenAI integration (intent, summary)
+│   │
+│   ├── core/                          # Core utilities (renamed from utils/)
+│   │   ├── __init__.py
+│   │   ├── security.py                # JWT utilities (was jwt_utils.py)
+│   │   ├── config.py                  # Settings management
+│   │   ├── enums.py                   # Python enums matching DB
+│   │
+│   ├── utils/                         # Helper utilities (SAME)
+│   │   ├── __init__.py
+│   │   └── imageKit_utils.py                # ImageKit upload/download
+│   │
+│   ├── workers/                       # Background tasks (SAME - 100%)
+│   │   ├── __init__.py
+│   │   ├── scheduler.py               # Retry calls every 2 hours
+│   │   ├── escalation.py              # Missed call notifications
+│   │   └── ai_processor.py            # Background image AI analysis
+│   │
+│   └── middleware/                    # FastAPI middleware (CHANGED syntax)
+│       ├── __init__.py
+│       ├── auth_middleware.py         # JWT validation
+│       └── logging_middleware.py      # Request logging
+│
+├── alembic/                           # Database migrations (SAME - was migrations/)
+│   ├── versions/
+│   └── env.py
+│
+├── tests/                             # Unit tests (95% SAME)
+│   ├── __init__.py
+│   ├── conftest.py                    # Test fixtures
+│   ├── test_chatbot.py
+│   ├── test_issues.py
+│   └── ...
+│
+├── .env                               # Environment variables (SAME)
+├── .gitignore
+├── requirements.txt                   # Dependencies (CHANGED packages)
+├── alembic.ini                        # Alembic config (SAME)
+└── README.md
+
+
+.
+__________________________________________________________________________________________________________________________________
+🔥 Architecture Comparison
+With S3
+image_service
+   ↓
+s3_utils
+   ↓
+AWS S3
+
+With ImageKit
+image_service
+   ↓
+imagekit_utils
+   ↓
+ImageKit CDN
+
+
+Everything else remains same.
+
+
+
+API END POINTS
+
+| #  | API Endpoint                 | Method | Used In Tab | Creates Data? | Who        |
+| -- | ---------------------------- | ------ | ----------- | ------------- | ---------- |
+| 1  | /auth/login                  | POST   | Login       | No            | All        |
+| 2  | /auth/me                     | GET    | App Start   | No            | All        |
+| 3  | /auth/logout                 | POST   | Menu        | No            | All        |
+| 4  | /chatbot/message             | POST   | CHAT        | ✅ YES         | All        |
+| 5  | /chatbot/history             | GET    | CHAT        | No            | All        |
+| 6  | /images/upload               | POST   | CHAT        | Temp          | All        |
+| 7  | /issues                      | GET    | ISSUES      | No            | All        |
+| 8  | /issues/{id}                 | GET    | ISSUES      | No            | All        |
+| 9 | /dashboard/manager           | GET    | DASHBOARD   | No            | Manager    |
+| 10 | /dashboard/supervisor        | GET    | DASHBOARD   | No            | Supervisor |
+| 11 | /dashboard/solver            | GET    | DASHBOARD   | No            | Solver     |
+| 12 | /dashboard/issues/analytics            | GET    | DASHBOARD   | No            | M/S        |
+| 13 | /dashboard/complaints/analytics         | GET    | DASHBOARD   | No            | M/S        |
+| 14 | /dashboard/history/analytics            | GET    | DASHBOARD   | No            | M/S        |
+| 15 | /webhooks/exotel/call-status | POST   | Backend     | ✅ YES         | Exotel     |
+| 16 | /webhooks/twilio/call-status | POST   | Backend     | ✅ YES         | Twilio     |
+| 17 | /health                      | GET    | Monitoring  | No            | System     |
+
+
+
+REQ & RES :
+
+ POST /auth/login
+
+REQUEST:
+
+{
+  "phone": "9123456789",
+  "password": "SecurePass@123"
+}
+
+RESPONSE (Success - 200):
+
+{
+  "success": true,
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJyb2xlIjoic3VwZXJ2aXNvciIsInNpdGVfaWRzIjpbMSw1LDEwXSwiaWF0IjoxNzA4MTYwNDAwLCJleHAiOjE3MDgxNjQwMDB9.abc123",
+  "refresh_token": "refresh_token_abc123xyz",
+  "expires_in": 3600,
+  "user": {
+    "id": 1,
+    "name": "Priya Sharma",
+    "phone": "9123456789",
+    "email": "priya@company.com",
+    "role": "supervisor",
+    "site_ids": [1, 5, 10],
+    "created_at": "2026-02-01T10:00:00Z"
+  }
+}
+
+
+RESPONSE (Error - 401):
+
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_CREDENTIALS",
+    "message": "Invalid phone number or password"
+  }
+}
+
+
+2. GET /auth/me
+
+REQUEST:
+
+GET /auth/me
+Headers:
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+RESPONSE (200):
+
+{
+  "id": 1,
+  "name": "Priya Sharma",
+  "phone": "9123456789",
+  "email": "priya@company.com",
+  "role": "supervisor",
+  "site_ids": [1, 5, 10],
+  "sites": [
+    {
+      "site_id": 1,
+      "name": "Vepery Site",
+      "location": "Vepery, Chennai"
+    },
+    {
+      "site_id": 5,
+      "name": "Taramani Tech Park",
+      "location": "Taramani, Chennai"
+    },
+    {
+      "site_id": 10,
+      "name": "OMR Tech Hub",
+      "location": "OMR, Chennai"
+    }
+  ],
+  "created_at": "2026-02-01T10:00:00Z"
+}
+
+
+3. POST /auth/logout
+
+REQUEST:
+
+POST /auth/logout
+Headers:
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+Body: {} (empty)
+
+
+RESPONSE (200):
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+
+4. POST /chatbot/message
+REQUEST - Example 1 (Supervisor creates issue):
+{
+  "message": "Pipe broken at Vepery site, urgent need plumber",
+  "attachments": [
+    {
+      "type": "image",
+      "url": "://temp-bucket/user1_1708160400.jpg"
+    }
+  ],
+  "context": {
+    "latitude": 13.083944,
+    "longitude": 80.270014
+  }
+}
+
+
+RESPONSE - Example 1 (Issue created):
+{
+  "reply_text": "✅ Issue created successfully!\n\n🆔 Issue #42\n📍 Site: Vepery Site\n🔧 Assigned to: Ramesh K (Plumber)\n📞 Auto-call initiated at 12:05 PM\n⏰ Deadline: Today 6:00 PM\n📸 Before image uploaded",
+  
+  "intent_detected": "create_issue",
+  
+  "data": {
+    "issue_id": 42,
+    "title": "Pipe broken",
+    "site_id": 1,
+    "site_name": "Vepery Site",
+    "priority": "high",
+    "status": "ASSIGNED",
+    "deadline_at": "2026-02-17T18:00:00Z",
+    "latitude": 13.083944,
+    "longitude": 80.270014,
+    
+    "assignment": {
+      "assignment_id": 15,
+      "solver_id": 6,
+      "solver_name": "Ramesh K",
+      "solver_phone": "9876543210",
+      "skill_type": "plumber"
+    },
+    
+    "before_image": {
+      "image_id": 1,
+      "url": "imagekit://bucket/issues/42-before.jpg"
+    },
+    
+    "call_initiated": true,
+    "call_id": 1
+  },
+  
+  "chat_id": 100
+}
+
+REQUEST - Example 2 (Solver completes work):
+
+{
+  "message": "Fixed the pipe, uploading photo",
+  "attachments": [
+    {
+      "type": "image",
+      "url": "imagekit://temp-bucket/user6_after.jpg"
+    }
+  ],
+  "context": {
+    "issue_id": 42
+  }
+}
+
+RESPONSE - Example 2 (Work completed):
+{
+  "reply_text": "✅ Work submitted!\n\n📸 After photo uploaded\n🤖 AI Check: In progress...\n✅ Status changed: IN_PROGRESS → RESOLVED_PENDING_REVIEW\n👀 Supervisor Priya Sharma will be notified",
+  
+  "intent_detected": "complete_work",
+  
+  "data": {
+    "issue_id": 42,
+    "old_status": "IN_PROGRESS",
+    "new_status": "RESOLVED_PENDING_REVIEW",
+    
+    "after_image": {
+      "image_id": 2,
+      "url": "imagekit://bucket/issues/42-after.jpg",
+      "ai_flag": "NOT_CHECKED",
+      "ai_job_id": "ai_job_abc123"
+    },
+    
+    "assignment_updated": true,
+    "supervisor_notified": true
+  },
+  
+  "chat_id": 101
+}
+
+REQUEST - Example 3 (Supervisor raises complaint):
+{
+  "message": "Work not done properly, leak still visible",
+  "attachments": [
+    {
+      "type": "image",
+      "url": "imagekit://temp-bucket/complaint_evidence.jpg"
+    }
+  ],
+  "context": {
+    "issue_id": 42
+  }
+}
+
+RESPONSE - Example 3 (Complaint raised):
+
+{
+  "reply_text": "⚠️ Complaint raised!\n\n🆔 Complaint #8\n📋 For Issue #42: Pipe broken\n👷 Solver: Ramesh K\n📞 Re-initiating auto-call\n📝 Reason: Work incomplete",
+  
+  "intent_detected": "raise_complaint",
+  
+  "data": {
+    "complaint_id": 8,
+    "issue_id": 42,
+    "complaint_details": "Work not done properly, leak still visible",
+    "target_solver_id": 6,
+    "target_solver_name": "Ramesh K",
+    
+    "issue_status_changed": {
+      "old": "RESOLVED_PENDING_REVIEW",
+      "new": "REOPENED"
+    },
+    
+    "complaint_image": {
+      "url": "imagekit://bucket/complaints/8-evidence.jpg"
+    },
+    
+    "call_initiated": true,
+    "call_id": 5
+  },
+  
+  "chat_id": 102
+}
+
+
+REQUEST - Example 4 (Manager queries):
+{
+  "message": "What is going on today? Give me summary",
+  "attachments": [],
+  "context": {}
+}
+
+RESPONSE - Example 4 (Dashboard query):
+{
+  "reply_text": "📊 Today's Summary (Feb 17, 2026):\n\n✅ Completed: 8 issues\n🔄 In Progress: 12 issues\n🆕 New Today: 5 issues\n🚨 Escalated: 2 issues\n\n⭐ Top Performer: Suresh P (4 completions)\n⚠️ Attention Needed:\n• Generator failure at Sholinganallur (3 missed calls)\n• Roof leak at Chromepet (overdue 2 hours)",
+  
+  "intent_detected": "dashboard_query",
+  
+  "data": {
+    "date": "2026-02-17",
+    "summary": {
+      "completed_today": 8,
+      "in_progress": 12,
+      "new_today": 5,
+      "escalated": 2
+    },
+    
+    "top_performer": {
+      "solver_id": 7,
+      "name": "Suresh P",
+      "completions": 4
+    },
+    
+    "attention_needed": [
+      {
+        "issue_id": 7,
+        "title": "Generator failure",
+        "site": "Sholinganallur",
+        "status": "ESCALATED",
+        "missed_calls": 3
+      },
+      {
+        "issue_id": 6,
+        "title": "Roof leak",
+        "site": "Chromepet",
+        "status": "IN_PROGRESS",
+        "overdue_hours": 2
+      }
+    ]
+  },
+  
+  "chat_id": 103
+}
+
+5. GET /chatbot/history
+REQUEST:
+
+GET /chatbot/history?limit=50&issue_id=42
+Headers:
+  Authorization: Bearer jwt_token…
+
+RESPONSE (200):
+{
+  "messages": [
+    {
+      "chat_id": 103,
+      "user_id": 1,
+      "issue_id": null,
+      "role_in_chat": "AI",
+      "message": "📊 Today's Summary: 8 completed...",
+      "attachments": [],
+      "created_at": "2026-02-17T12:00:00Z"
+    },
+    {
+      "chat_id": 102,
+      "user_id": 1,
+      "issue_id": 42,
+      "role_in_chat": "USER",
+      "message": "Work not done properly, leak still there",
+      "attachments": ["imagekit://bucket/complaints/8-evidence.jpg"],
+      "created_at": "2026-02-17T11:30:00Z"
+    },
+    {
+      "chat_id": 101,
+      "user_id": 6,
+      "issue_id": 42,
+      "role_in_chat": "USER",
+      "message": "Fixed the pipe, uploading photo",
+      "attachments": ["imagekit://bucket/issues/42-after.jpg"],
+      "created_at": "2026-02-17T11:00:00Z"
+    },
+    {
+      "chat_id": 100,
+      "user_id": 1,
+      "issue_id": 42,
+      "role_in_chat": "USER",
+      "message": "Pipe broken at Vepery site urgent",
+      "attachments": ["imagekit://bucket/issues/42-before.jpg"],
+      "created_at": "2026-02-17T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "total_count": 250,
+    "limit": 50,
+    "offset": 0,
+    "has_more": true
+  }
+}
+
+
+6. POST /images/upload 
+REQUEST:
+Content-Type: multipart/form-data
+Headers:
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+Body (multipart/form-data):
+  file: <binary image data>
+
+
+
+RESPONSE (Success - 201 Created):
+
+{
+  "success": true,
+  "temp_url": "https://ik.imagekit.io/yourapp/temp/user1_1708162320_a3f9d2c1.jpg",
+  "file_id": "temp_abc123xyz",
+  "file_name": "photo.jpg",
+  "file_size_bytes": 2456789,
+  "mime_type": "image/jpeg",
+  "dimensions": {
+    "width": 1920,
+    "height": 1080
+  },
+  "uploaded_at": "2026-02-17T15:12:00Z",
+  "expires_at": "2026-02-17T16:12:00Z",
+  "expires_in_seconds": 3600
+}
+
+
+RESPONSE (Error - 400 Bad Request):
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_FILE_TYPE",
+    "message": "Only image files (JPEG, PNG, HEIC) are allowed"
+  }
+}
+
+
+
+7. GET /issues
+
+REQUEST:
+
+GET /issues?status=ASSIGNED&site_id=1&priority=high&page=1&limit=20
+Headers:
+  Authorization: Bearer jwt_token...
+
+RESPONSE (200):
+{
+  "issues": [
+    {
+      "issue_id": 42,
+      "title": "Pipe broken",
+      "description": "Major leak in main supply pipe",
+      "site_id": 1,
+      "site_name": "Vepery Site",
+      "priority": "high",
+      "status": "IN_PROGRESS",
+      "deadline_at": "2026-02-17T18:00:00Z",
+      "raised_by": {
+        "user_id": 1,
+        "name": "Priya Sharma"
+      },
+      "assigned_to": {
+        "user_id": 6,
+        "name": "Ramesh K",
+        "skill_type": "plumber"
+      },
+      "created_at": "2026-02-17T11:00:00Z",
+      "updated_at": "2026-02-17T13:05:00Z"
+    },
+    {
+      "issue_id": 41,
+      "title": "AC not cooling",
+      "description": "Cooling unit not functioning",
+      "site_id": 3,
+      "site_name": "Guindy Factory",
+      "priority": "medium",
+      "status": "ASSIGNED",
+      "deadline_at": "2026-02-18T12:00:00Z",
+      "raised_by": {
+        "user_id": 2,
+        "name": "Anil Kumar"
+      },
+      "assigned_to": {
+        "user_id": 8,
+        "name": "Mohan T",
+        "skill_type": "ac_technician"
+      },
+      "created_at": "2026-02-17T10:00:00Z",
+      "updated_at": "2026-02-17T10:05:00Z"
+    }
+  ]
+}
+
+8. GET /issues/{id}
+REQUEST:
+
+GET /issues/42
+Headers:
+  Authorization: Bearer jwt_token...
+
+RESPONSE (200):
+{
+  "issue_id": 42,
+  "title": "Pipe broken",
+  "description": "Major leak in main supply pipe",
+  "priority": "high",
+  "status": "RESOLVED_PENDING_REVIEW",
+  "deadline_at": "2026-02-17T18:00:00Z",
+  "latitude": 13.083944,
+  "longitude": 80.270014,
+  "created_at": "2026-02-17T11:00:00Z",
+  "updated_at": "2026-02-17T17:05:00Z",
+  
+  "site": {
+    "site_id": 1,
+    "name": "Vepery Site",
+    "location": "Vepery, Chennai",
+    "latitude": 13.083944,
+    "longitude": 80.270014
+  },
+  
+  "raised_by": {
+    "user_id": 1,
+    "name": "Priya Sharma",
+    "role": "supervisor",
+    "phone": "9123456789",
+    "email": "priya@company.com",
+    "raised_at": "2026-02-17T11:00:00Z"
+  },
+  
+  "assignment": {
+    "assignment_id": 15,
+    "assigned_to": {
+      "user_id": 6,
+      "name": "Ramesh K",
+      "skill_type": "plumber",
+      "phone": "9876543210"
+    },
+    "assigned_by": {
+      "user_id": 1,
+      "name": "Priya Sharma"
+    },
+    "assigned_at": "2026-02-17T11:05:00Z",
+    "due_date": "2026-02-17T18:00:00Z",
+    "status": "ACTIVE"
+  },
+  
+  "images": [
+    {
+      "image_id": 1,
+      "type": "BEFORE",
+      "url": "https://imagekit.amazonaws.com/bucket/issues/42-before.jpg",
+      "uploaded_by": {
+        "user_id": 1,
+        "name": "Priya Sharma"
+      },
+      "uploaded_at": "2026-02-17T11:00:00Z",
+      "ai_flag": "NOT_CHECKED",
+      "ai_details": null
+    },
+    {
+      "image_id": 2,
+      "type": "AFTER",
+      "url": "https://imagekit.amazonaws.com/bucket/issues/42-after.jpg",
+      "uploaded_by": {
+        "user_id": 6,
+        "name": "Ramesh K"
+      },
+      "uploaded_at": "2026-02-17T17:00:00Z",
+      "ai_flag": "OK",
+      "ai_confidence": 0.92,
+      "ai_details": {
+        "analysis": "No visible leak detected",
+        "leak_detected": false,
+        "confidence": 0.92
+      }
+    }
+  ],
+  
+  "call_logs": [
+    {
+      "call_id": 1,
+      "attempt_number": 1,
+      "status": "MISSED",
+      "initiated_at": "2026-02-17T11:05:00Z",
+      "answered_at": null,
+      "ended_at": null,
+      "duration_seconds": null
+    },
+    {
+      "call_id": 2,
+      "attempt_number": 2,
+      "status": "MISSED",
+      "initiated_at": "2026-02-17T12:05:00Z",
+      "answered_at": null,
+      "ended_at": null,
+      "duration_seconds": null
+    },
+    {
+      "call_id": 3,
+      "attempt_number": 3,
+      "status": "ANSWERED",
+      "initiated_at": "2026-02-17T13:00:00Z",
+      "answered_at": "2026-02-17T13:00:15Z",
+      "ended_at": "2026-02-17T13:02:15Z",
+      "duration_seconds": 120
+    }
+  ],
+  
+  "complaints": [
+    {
+      "complaint_id": 8,
+      "complaint_details": "Leak still visible after repair",
+      "complaint_image_url": "imagekit://bucket/complaints/8-evidence.jpg",
+      "raised_by": {
+        "user_id": 1,
+        "name": "Priya Sharma"
+      },
+      "created_at": "2026-02-17T18:00:00Z"
+    }
+  ],
+  
+  "history_preview": [
+    {
+      "action": "Status changed: IN_PROGRESS → RESOLVED_PENDING_REVIEW",
+      "user": "Ramesh K",
+      "timestamp": "2026-02-17T17:05:00Z"
+    },
+    {
+      "action": "Status changed: ASSIGNED → IN_PROGRESS",
+      "user": "Ramesh K",
+      "timestamp": "2026-02-17T13:05:00Z"
+    },
+    {
+      "action": "Assigned to Ramesh K",
+      "user": "System",
+      "timestamp": "2026-02-17T11:05:00Z"
+    }
+  ]
+}
+
+
+
+
+
+📊 DASHBOARD STRUCTURE (Revised)
+
+┌──────────────────────────────────────────┐
+│     USER CLICKS DASHBOARD BUTTON         │
+└────────────────┬─────────────────────────┘
+                 │
+                 ▼
+┌──────────────────────────────────────────┐
+│    DASHBOARD HOME SCREEN                 │
+│  API: GET /dashboard/{role}              │
+├──────────────────────────────────────────┤
+│                                          │
+│  ┌─────────────────────────────────┐    │
+│  │  📊 ISSUES CARD                 │    │◄─── Card 1 (tap)
+│  │  Total: 45                      │    │
+│  │  Open: 12 | Completed: 25      │    │
+│  │  High Priority: 8               │    │
+│  └─────────────────────────────────┘    │
+│                                          │
+│  ┌─────────────────────────────────┐    │
+│  │  ⚠️ COMPLAINTS CARD             │    │◄─── Card 2 (tap)
+│  │  Pending: 5                     │    │
+│  │  Resolved Today: 3              │    │
+│  │  Most Complained: Ramesh K      │    │
+│  └─────────────────────────────────┘    │
+│                                          │
+│  ┌─────────────────────────────────┐    │
+│  │  📜 ISSUE HISTORY CARD          │    │◄─── Card 3 (tap)
+│  │  Total Events: 150              │    │
+│  │  Today: 25                      │    │
+│  │  Last Activity: 5 mins ago      │    │
+│  └─────────────────────────────────┘    │
+│                                          │
+└──────────────────────────────────────────┘
+                 │
+                 │ User taps "ISSUES CARD"
+                 ▼
+┌──────────────────────────────────────────┐
+│   ISSUES ANALYTICS SCREEN                │
+│  API: GET /dashboard/issues/analytics    │
+├──────────────────────────────────────────┤
+│                                          │
+│  [Filters: Date Range | Site | Priority]│
+│                                          │
+│  📈 LINE CHART                           │
+│  ┌──────────────────────────────────┐   │
+│  │ Issues Over Time (7 days)        │   │
+│  │      15 ●─────●                  │   │
+│  │         │      \                 │   │
+│  │      10 │       ●───●            │   │
+│  │         │            \           │   │
+│  │       5 ●             ●──●       │   │
+│  │    Mon Tue Wed Thu Fri Sat Sun   │   │
+│  │  ━ New  ━ Completed  ━ Pending   │   │
+│  └──────────────────────────────────┘   │
+│                                          │
+│  📊 BAR CHART                            │
+│  ┌──────────────────────────────────┐   │
+│  │ Issues by Site                   │   │
+│  │  Vepery    ████████ 8            │   │
+│  │  Taramani  ██████ 6              │   │
+│  │  Guindy    ████ 4                │   │
+│  │  Ambattur  ██ 2                  │   │
+│  └──────────────────────────────────┘   │
+│                                          │
+│  🥧 PIE CHART                            │
+│  ┌──────────────────────────────────┐   │
+│  │ Issues by Status                 │   │
+│  │       ╱───╲                      │   │
+│  │      │ 40% │ Completed (20)      │   │
+│  │       ╲───╱                      │   │
+│  │    25% In Progress (12)          │   │
+│  │    20% Assigned (10)             │   │
+│  │    15% Open (8)                  │   │
+│  └──────────────────────────────────┘   │
+│                                          │
+│  📊 BAR CHART                            │
+│  ┌──────────────────────────────────┐   │
+│  │ Issues by Priority               │   │
+│  │  High   ██████ 8                 │   │
+│  │  Medium ████████████ 15          │   │
+│  │  Low    ████ 5                   │   │
+│  └──────────────────────────────────┘   │
+│                                          │
+└──────────────────────────────────────────┘
+
+9. GET /dashboard/manager (Summary for 3 cards)
+10. GET /dashboard/supervisor (Summary for 3 cards)
+11. GET /dashboard/solver (Summary for 3 cards)
+
+PURPOSE:
+Returns summary data to display on 3 cards in dashboard home. NOT detailed charts - just overview numbers.
+
+
+REQUEST:
+
+GET /dashboard/manager
+Headers:
+  Authorization: Bearer jwt_token...
+
+RESPONSE (200) - Manager:
+{
+  "role": "manager",
+  "user": {
+    "id": 4,
+    "name": "Rajesh Menon"
+  },
+  
+  "issues_card": {
+    "total_active": 45,
+    "open": 12,
+    "assigned": 10,
+    "in_progress": 8,
+    "pending_review": 5,
+    "completed_today": 25,
+    "high_priority": 8,
+    "escalated": 2
+  },
+  
+  "complaints_card": {
+    "total_pending": 5,
+    "resolved_today": 3,
+    "total_all_time": 45,
+    "most_complained_solver": {
+      "solver_id": 6,
+      "name": "Ramesh K",
+      "count": 4
+    }
+  },
+  
+  "history_card": {
+    "total_events_today": 25,
+    "total_events_all_time": 1500,
+    "last_activity": {
+      "type": "issue_completed",
+      "message": "Issue #42 completed",
+      "timestamp": "2026-02-17T13:13:00Z"
+    }
+  },
+  
+  "last_updated": "2026-02-17T13:18:00Z"
+}
+
+RESPONSE (200) - Supervisor:
+
+{
+  "role": "supervisor",
+  "user": {
+    "id": 1,
+    "name": "Priya Sharma",
+    "my_sites": [
+      {"site_id": 1, "name": "Vepery Site"},
+      {"site_id": 5, "name": "Taramani Tech Park"},
+      {"site_id": 10, "name": "OMR Tech Hub"}
+    ]
+  },
+  
+  "issues_card": {
+    "total_active": 12,
+    "my_issues_raised": 25,
+    "pending_my_verification": 3,
+    "completed_today": 2,
+    "high_priority": 4
+  },
+  
+  "complaints_card": {
+    "total_pending": 2,
+    "raised_by_me": 5,
+    "resolved_today": 1
+  },
+  
+  "history_card": {
+    "total_events_today": 8,
+    "my_issues_events": 50
+  }
+}
+
+RESPONSE (200) - Solver:
+{
+  "role": "problemsolver",
+  "user": {
+    "id": 6,
+    "name": "Ramesh K",
+    "skill_type": "plumber"
+  },
+  
+  "issues_card": {
+    "my_active_assignments": 2,
+    "completed_today": 1,
+    "completed_this_week": 8,
+    "pending_calls": 0,
+    "avg_completion_time_hours": 5.5
+  },
+  
+  "complaints_card": {
+    "complaints_against_me": 4,
+    "pending_complaints": 1,
+    "resolved_complaints": 3
+  },
+  
+  "history_card": {
+    "my_activity_today": 5,
+    "total_assignments": 45
+  }
+}
+
+12. GET /dashboard/issues/analytics ⭐ NEW - DETAILED CHARTS
+REQUEST:
+
+GET /dashboard/issues/analytics?date_range=7d&site_id=1&priority=all
+Headers:
+  Authorization: Bearer jwt_token...
+
+
+RESPONSE (200):
+
+{
+  "filters_applied": {
+    "date_range": "7d",
+    "start_date": "2026-02-11",
+    "end_date": "2026-02-17",
+    "site_id": null,
+    "priority": "all",
+    "role_filter": "manager (all sites)"
+  },
+  
+  "line_chart": {
+    "title": "Issues Over Time (Last 7 Days)",
+    "labels": ["Feb 11", "Feb 12", "Feb 13", "Feb 14", "Feb 15", "Feb 16", "Feb 17"],
+    "datasets": [
+      {
+        "label": "New Issues",
+        "data": [5, 8, 6, 7, 9, 5, 8],
+        "color": "#3b82f6"
+      },
+      {
+        "label": "Completed",
+        "data": [4, 6, 5, 6, 7, 4, 5],
+        "color": "#10b981"
+      },
+      {
+        "label": "Pending",
+        "data": [10, 12, 13, 14, 16, 17, 20],
+        "color": "#f59e0b"
+      }
+    ]
+  },
+  
+  "bar_chart_by_site": {
+    "title": "Issues by Site",
+    "labels": ["Vepery", "Taramani", "Guindy", "Ambattur", "Sholinganallur"],
+    "datasets": [
+      {
+        "label": "Open",
+        "data": [3, 2, 4, 1, 2],
+        "color": "#ef4444"
+      },
+      {
+        "label": "In Progress",
+        "data": [2, 3, 1, 2, 1],
+        "color": "#f59e0b"
+      },
+      {
+        "label": "Completed",
+        "data": [5, 4, 6, 3, 7],
+        "color": "#10b981"
+      }
+    ]
+  },
+  
+  "pie_chart_by_status": {
+    "title": "Issues by Status",
+    "labels": ["Completed", "In Progress", "Assigned", "Open", "Escalated"],
+    "data": [25, 12, 10, 8, 2],
+    "colors": ["#10b981", "#f59e0b", "#3b82f6", "#6b7280", "#ef4444"],
+    "percentages": [43.9, 21.1, 17.5, 14.0, 3.5]
+  },
+  
+  "bar_chart_by_priority": {
+    "title": "Issues by Priority",
+    "labels": ["High", "Medium", "Low"],
+    "data": [8, 15, 5],
+    "colors": ["#ef4444", "#f59e0b", "#10b981"]
+  },
+  
+  "pie_chart_by_solver": {
+    "title": "Issues by Solver (Active)",
+    "labels": ["Ramesh K", "Suresh P", "Mohan T", "Kavitha S", "Vijay M"],
+    "data": [8, 6, 5, 4, 3],
+    "colors": ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"]
+  },
+  
+  "summary_stats": {
+    "total_issues": 57,
+    "avg_resolution_time_hours": 6.5,
+    "completion_rate_percent": 78.5,
+    "escalation_rate_percent": 3.5
+  }
+}
+
+13. GET /dashboard/complaints/analytics ⭐ NEW - COMPLAINTS CHARTS
+
+REQUEST:
+
+GET /dashboard/complaints/analytics?date_range=30d&site_id=all
+Headers:
+  Authorization: Bearer jwt_token...
+
+
+RESPONSE (200):
+
+{
+  "filters_applied": {
+    "date_range": "30d",
+    "start_date": "2026-01-18",
+    "end_date": "2026-02-17"
+  },
+  
+  "line_chart": {
+    "title": "Complaints Over Time (Last 30 Days)",
+    "labels": ["Week 1", "Week 2", "Week 3", "Week 4"],
+    "datasets": [
+      {
+        "label": "New Complaints",
+        "data": [3, 5, 2, 4],
+        "color": "#ef4444"
+      },
+      {
+        "label": "Resolved",
+        "data": [2, 4, 3, 3],
+        "color": "#10b981"
+      }
+    ]
+  },
+  
+  "bar_chart_by_solver": {
+    "title": "Complaints by Solver",
+    "labels": ["Ramesh K", "Mohan T", "Suresh P", "Vijay M", "Kavitha S"],
+    "datasets": [
+      {
+        "label": "Pending",
+        "data": [2, 1, 0, 1, 1],
+        "color": "#ef4444"
+      },
+      {
+        "label": "Resolved",
+        "data": [2, 3, 2, 1, 2],
+        "color": "#10b981"
+      }
+    ]
+  },
+  
+  "pie_chart_by_issue_type": {
+    "title": "Complaints by Issue Type",
+    "labels": ["Plumbing", "Electrical", "AC", "Maintenance", "Generator"],
+    "data": [8, 5, 3, 2, 1],
+    "colors": ["#3b82f6", "#f59e0b", "#10b981", "#6b7280", "#8b5cf6"]
+  },
+  
+  "bar_chart_by_site": {
+    "title": "Complaints by Site",
+    "labels": ["Vepery", "Taramani", "Guindy", "Ambattur"],
+    "data": [5, 3, 4, 2],
+    "colors": ["#ef4444", "#f59e0b", "#3b82f6", "#10b981"]
+  },
+  
+  "summary_stats": {
+    "total_complaints": 19,
+    "pending": 5,
+    "resolved": 14,
+    "avg_resolution_time_hours": 4.2,
+    "repeat_complaint_rate_percent": 15.8
+  }
+}
+
+14. GET /dashboard/history/analytics ⭐ NEW - HISTORY CHART
+
+
+REQUEST:
+
+GET /dashboard/history/analytics?date_range=7d&action_type=all
+Headers:
+  Authorization: Bearer jwt_token...
+
+RESPONSE (200):
+{
+  "filters_applied": {
+    "date_range": "7d",
+    "action_type": "all"
+  },
+  
+  "line_chart": {
+    "title": "Activity Over Time (Last 7 Days)",
+    "labels": ["Feb 11", "Feb 12", "Feb 13", "Feb 14", "Feb 15", "Feb 16", "Feb 17"],
+    "datasets": [
+      {
+        "label": "Total Events",
+        "data": [15, 18, 22, 19, 25, 20, 28],
+        "color": "#3b82f6"
+      }
+    ]
+  },
+  
+  "bar_chart_by_action_type": {
+    "title": "Events by Action Type",
+    "labels": ["Assignments", "Status Updates", "Completions", "Complaints", "Reopens"],
+    "data": [25, 45, 20, 8, 5],
+    "colors": ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#6b7280"]
+  },
+  
+  "pie_chart_by_user_role": {
+    "title": "Activity by User Role",
+    "labels": ["Solvers", "Supervisors", "System", "Managers"],
+    "data": [60, 35, 25, 5],
+    "colors": ["#3b82f6", "#10b981", "#6b7280", "#8b5cf6"],
+    "percentages": [48.0, 28.0, 20.0, 4.0]
+  },
+  
+  "bar_chart_by_site": {
+    "title": "Activity by Site",
+    "labels": ["Vepery", "Taramani", "Guindy", "Ambattur", "Sholinganallur"],
+    "data": [35, 28, 22, 18, 15],
+    "colors": ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
+  },
+  
+  "recent_activity_feed": [
+    {
+      "event_id": 500,
+      "type": "COMPLETE",
+      "icon": "✅",
+      "message": "Issue #42 completed by Ramesh K",
+      "user": "Ramesh K",
+      "role": "problemsolver",
+      "issue_id": 42,
+      "timestamp": "2026-02-17T13:05:00Z"
+    },
+    {
+      "event_id": 499,
+      "type": "COMPLAINT",
+      "icon": "⚠️",
+      "message": "Complaint raised for Issue #40 by Priya Sharma",
+      "user": "Priya Sharma",
+      "role": "supervisor",
+      "issue_id": 40,
+      "timestamp": "2026-02-17T12:50:00Z"
+    },
+    {
+      "event_id": 498,
+      "type": "ASSIGN",
+      "icon": "👷",
+      "message": "Issue #45 assigned to Suresh P",
+      "user": "System",
+      "role": "system",
+      "issue_id": 45,
+      "timestamp": "2026-02-17T12:30:00Z"
+    }
+  ],
+  
+  "summary_stats": {
+    "total_events": 147,
+    "events_today": 28,
+    "most_active_site": "Vepery",
+    "most_active_user": "Ramesh K",
+    "busiest_hour": "11:00 AM - 12:00 PM"
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+┌──────────────────────────────────────────┐
+│        ISSUES TAB (Button clicked)       │
+└──────────────────┬───────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────┐
+│     ISSUE LIST SCREEN                    │
+│  API: GET /issues                        │
+├──────────────────────────────────────────┤
+│                                          │
+│  ┌────────────────────────────────┐     │
+│  │ #42 - Pipe broken              │◄─── Row 1 (tap here)
+│  │ 📍 Vepery Site                 │     │
+│  │ 🔴 High Priority               │     │
+│  │ ⏰ Due: Today 6 PM             │     │
+│  │ 👷 Ramesh K                    │     │
+│  └────────────────────────────────┘     │
+│                                          │
+│  ┌────────────────────────────────┐     │
+│  │ #41 - AC not cooling           │◄─── Row 2 (tap here)
+│  │ 📍 Taramani Site               │     │
+│  │ 🟡 Medium Priority             │     │
+│  └────────────────────────────────┘     │
+│                                          │
+│  ┌────────────────────────────────┐     │
+│  │ #40 - Generator issue          │◄─── Row 3 (tap here)
+│  │ 📍 Sholinganallur              │     │
+│  │ 🚨 Escalated                   │     │
+│  └────────────────────────────────┘     │
+│                                          │
+│  [Load More...]                          │
+│                                          │
+└──────────────────────────────────────────┘
+                   │
+                   │ User taps Row 1 (#42)
+                   ▼
+┌──────────────────────────────────────────┐
+│    ISSUE DETAIL SCREEN                   │
+│  API: GET /issues/42                     │
+├──────────────────────────────────────────┤
+│                                          │
+│  📋 Issue #42: Pipe broken               │
+│  📍 Site: Vepery                         │
+│  🔴 Priority: High                       │
+│  📅 Deadline: Today 6:00 PM              │
+│  ⚡ Status: IN_PROGRESS                  │
+│                                          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+│  👤 RAISED BY                            │
+│     Priya Sharma (Supervisor)            │
+│     📞 9123456789                        │
+│     🕐 Feb 17, 11:00 AM                 │
+│                                          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+│  👷 ASSIGNED TO                          │
+│     Ramesh K (Plumber)                   │
+│     📞 9876543210                        │
+│     🕐 Assigned: Feb 17, 11:05 AM       │
+│                                          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+│  📸 IMAGES (Can't upload here - view only)│
+│                                          │
+│  BEFORE:                                 │
+│  ┌──────────────────┐                   │
+│  │                  │                   │
+│  │   [Image View]   │◄─── Tap to zoom  │
+│  │                  │                   │
+│  └──────────────────┘                   │
+│  Uploaded by: Priya Sharma              │
+│  Time: Feb 17, 11:00 AM                 │
+│                                          │
+│  AFTER:                                  │
+│  ┌──────────────────┐                   │
+│  │                  │                   │
+│  │   [Image View]   │◄─── Tap to zoom  │
+│  │                  │                   │
+│  └──────────────────┘                   │
+│  Uploaded by: Ramesh K                   │
+│  Time: Feb 17, 5:00 PM                  │
+│  ✅ AI Check: Passed (92% confidence)   │
+│                                          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+│  📞 CALL LOGS                            │
+│  Attempt 1: ❌ Missed - 11:05 AM        │
+│  Attempt 2: ❌ Missed - 12:05 PM        │
+│  Attempt 3: ✅ Answered - 1:00 PM (2m)  │
+│                                          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+│  📜 HISTORY                              │
+│  [View Full Timeline] ────────────────► │
+│                                          │
+│  Recent:                                 │
+│  • Status: IN_PROGRESS (5:00 PM)        │
+│  • Assigned to Ramesh (11:05 AM)        │
+│  • Issue created (11:00 AM)             │
+│                                          │
+└──────────────────────────────────────────┘
+
+
+💬 CHAT TAB - WHERE ALL UPLOADS HAPPEN:
+
+
+┌──────────────────────────────────────────┐
+│           CHAT TAB                       │
+└──────────────────────────────────────────┘
+
+SCENARIO 1: Supervisor creates issue with image
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────────────────────────────────┐
+│  Priya: Pipe broken at Vepery urgent     │
+│  [📷 Image attached]                     │◄── Image uploaded HERE
+│                                    11:00 │
+├──────────────────────────────────────────┤
+│  🤖 AI: ✅ Issue created!                │
+│     🆔 Issue #42                         │
+│     📸 Before image uploaded             │◄── Stored in DB
+│     🔧 Assigned: Ramesh K                │
+│                                    11:00 │
+└──────────────────────────────────────────┘
+
+FLOW:
+1. User taps 📷 camera icon in chat
+2. Selects image
+3. API: POST /images/upload (temp storage)
+4. Gets temp URL
+5. User types message + sends
+6. API: POST /chatbot/message
+   - Detects intent: "create_issue"
+   - Moves temp image to permanent: imageKit://issues/42-before.jpg
+   - Inserts into issue_images table
+   - Creates issue in DB
+   - Auto-assigns solver
+
+
+SCENARIO 2: Solver completes work with image
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────────────────────────────────┐
+│  Ramesh: Fixed the pipe issue            │
+│  [📷 After image]                        │◄── Image uploaded HERE
+│                                    17:00 │
+├──────────────────────────────────────────┤
+│  🤖 AI: ✅ Work submitted!               │
+│     📸 After image uploaded              │◄── Stored in DB
+│     🤖 AI Check: Passed (92%)            │
+│     ✅ Status: Pending review            │
+│                                    17:00 │
+└──────────────────────────────────────────┘
+
+FLOW:
+1. Solver taps 📷 camera icon in chat
+2. Takes photo/selects from gallery
+3. API: POST /images/upload (temp)
+4. Types "Fixed the pipe"
+5. API: POST /chatbot/message
+   - Detects intent: "complete_work"
+   - Moves temp image to: imageKit://issues/42-after.jpg
+   - Inserts into issue_images table (type: AFTER)
+   - Triggers AI Vision API to validate
+   - Updates issue status
+   - Notifies supervisor
+
+
+SCENARIO 3: Supervisor raises complaint with image
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────────────────────────────────┐
+│  Priya: Work not done, leak still there  │
+│  [📷 Evidence image]                     │◄── Image uploaded HERE
+│                                    18:00 │
+├──────────────────────────────────────────┤
+│  🤖 AI: ⚠️ Complaint raised!             │
+│     🆔 Complaint #8                      │
+│     📸 Evidence uploaded                 │◄── Stored in complaints
+│     🔄 Status: Reopened                  │
+│     📞 Re-calling Ramesh                 │
+│                                    18:00 │
+└──────────────────────────────────────────┘
+
+FLOW:
+1. Supervisor sees issue not fixed properly
+2. Opens chat, taps 📷
+3. Takes evidence photo
+4. API: POST /images/upload (temp)
+5. Types complaint message
+6. API: POST /chatbot/message
+   - Detects intent: "raise_complaint"
+   - Moves image to: ImageKit://complaints/42-evidence.jpg
+   - Inserts into complaints table
+   - Reopens issue
+   - Triggers new call to solver
+
+
+
+
+
+
+
+

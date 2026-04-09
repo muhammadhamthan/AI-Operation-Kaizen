@@ -1,21 +1,12 @@
 /**
  * src/components/chat/ChatInput.js
  *
- * WHAT CHANGED vs original:
- * 1. Added uploadImageToImageKit import from imagekitService
- * 2. Added uploadProgress state (0-100) for the upload progress bar
- * 3. requestMediaAndLocation() now calls ImageKit directly after picking
- * the image. Once the permanent URL is returned, it is stored in
- * `uploadedImageUrl` (separate from `selectedImage` which is the
- * local preview URI).
- * 4. handleSend() passes `uploadedImageUrl` (CDN URL) instead of the
- * local file URI — so the backend only ever sees the ImageKit URL.
- * 5. A thin progress bar appears at the top of the input bar during upload.
- * 6. The send button is disabled while an upload is in progress.
- * 7. 📍 ADDED CROSS-PLATFORM VOICE DICTATION: Dedicated mic button added next to Send.
- *
- * Everything else (action menu, location capture, offline guard, etc.)
- * is exactly the same as before.
+ * WHAT CHANGED:
+ * 1. Gutted premature ImageKit upload logic.
+ * 2. requestMediaAndLocation() now purely captures the local imageUri and location.
+ * 3. handleSend() passes the local `selectedImage` directly to onSend.
+ * 4. Removed upload progress bars and blocking states.
+ * 5. UI instantly shows local preview and allows immediate sending.
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
@@ -42,9 +33,6 @@ import { setLocation } from '../../store/slices/offlineSlice';
 import { reverseGeocode } from '../../utils/locationCapture';
 import { selectIsOnline } from '../../store/slices/offlineSlice';
 
-// ── NEW: ImageKit direct upload ────────────────────────────────────
-import { uploadImageToImageKit } from '../../services/imagekitService';
-
 // ── 📍 NEW: Voice Import ──────────────────────────────────────────
 import { startVoiceDictation, stopVoiceDictation, destroyVoiceDictation } from '../../utils/voiceUtils';
 
@@ -67,10 +55,7 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
   const dispatch = useDispatch();
 
   const [message, setMessage] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);       // local preview URI
-  const [uploadedImageUrl, setUploadedImageUrl] = useState(null); // permanent CDN URL
-  const [uploadProgress, setUploadProgress] = useState(0);        // 0-100
-  const [isUploading, setIsUploading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);       // purely local URI
   const [stagedLocation, setStagedLocation] = useState(null);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const isOnline = useSelector(selectIsOnline);
@@ -87,8 +72,7 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
   const inputRef = useRef(null);
 
   const hasContent = message.trim().length > 0 || selectedImage !== null;
-  // Can't send while an image is still uploading
-  const canSend = hasContent && isOnline && !isUploading;
+  const canSend = hasContent && isOnline;
 
   const availableActions = useMemo(() => {
     const role = (userRole || '').toLowerCase().replace(/_/g, '');
@@ -164,10 +148,7 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
 
   const removeStagedItems = () => {
     setSelectedImage(null);
-    setUploadedImageUrl(null);
     setStagedLocation(null);
-    setUploadProgress(0);
-    setIsUploading(false);
   };
 
   // 📍 MADE ASYNC TO STOP LISTENING IF SENT
@@ -185,28 +166,26 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
 
       const intentToSend = selectedAction?.id || 'general_query';
 
-      // Pass the CDN URL (not the local URI) to the chat handler
-      onSend(finalMessage, uploadedImageUrl, stagedLocation, intentToSend);
+      // 📍 Pass the LOCAL URI directly to the chat handler
+      onSend(finalMessage, selectedImage, stagedLocation, intentToSend);
 
       setMessage('');
       setSelectedImage(null);
-      setUploadedImageUrl(null);
       setStagedLocation(null);
       setSelectedAction(null);
       setIsActionMenuOpen(false);
-      setUploadProgress(0);
       setInputHeight(24);
       if (inputRef.current) inputRef.current.blur();
     }
   };
 
   /**
-   * Pick image from camera or gallery, then upload directly to ImageKit.
-   * Shows a progress bar while uploading.
+   * Pick image from camera or gallery and capture location locally.
    */
   const requestMediaAndLocation = async (type) => {
     closeMenu();
     try {
+      console.log(`🟢 Requesting ${type === 'camera' ? 'camera' : 'gallery'} permissions...`);
       let imageUri = null;
 
       if (type === 'camera') {
@@ -229,34 +208,9 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
 
       if (!imageUri) return;
 
-      // Show local preview immediately while upload happens
+      // Show local preview immediately 
       setSelectedImage(imageUri);
-      setIsUploading(true);
-      setUploadProgress(0);
-
-      // ── Upload directly to ImageKit ────────────────────────────
-      let cdnUrl = null;
-      try {
-        cdnUrl = await uploadImageToImageKit(imageUri, {
-          imageType: 'BEFORE', // default; solver should pick AFTER separately if needed
-          onProgress: (pct) => setUploadProgress(pct),
-        });
-        setUploadedImageUrl(cdnUrl);
-      } catch (uploadError) {
-        console.error('ImageKit upload failed:', uploadError);
-        Alert.alert(
-          'Upload Failed',
-          'Could not upload the image. Please try again.',
-          [{ text: 'OK' }]
-        );
-        // Clear the staged image so user can try again
-        setSelectedImage(null);
-        setIsUploading(false);
-        setUploadProgress(0);
-        return;
-      } finally {
-        setIsUploading(false);
-      }
+      console.log("🟢 Local image staged:", imageUri);
 
       // ── Capture location after image is staged ─────────────────
       setIsFetchingLocation(true);
@@ -281,7 +235,6 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
         setIsFetchingLocation(false);
       }
     } catch (error) {
-      setIsUploading(false);
       setIsFetchingLocation(false);
       Alert.alert('Error', 'An error occurred while accessing media.');
     }
@@ -402,34 +355,17 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
 
         <View style={styles.inputInnerWrapper}>
 
-          {/* Staged image preview + upload state */}
+          {/* Staged image preview */}
           {selectedImage && (
             <View style={styles.stagedContainer}>
               <View style={styles.previewWrapper}>
                 <Image source={{ uri: selectedImage }} style={styles.previewImage} />
 
-                {/* Upload progress overlay */}
-                {isUploading && (
-                  <View style={styles.uploadOverlay}>
-                    <ActivityIndicator size="small" color="#ffffff" />
-                    <Text style={styles.uploadPercent}>{uploadProgress}%</Text>
+                <TouchableOpacity style={styles.removeBtn} onPress={removeStagedItems}>
+                  <View style={[styles.removeBtnInner, { backgroundColor: isDark ? '#1e1e1e' : '#fff' }]}>
+                    <Ionicons name="close" size={11} color={theme.text} />
                   </View>
-                )}
-
-                {/* Uploaded checkmark */}
-                {!isUploading && uploadedImageUrl && (
-                  <View style={styles.uploadDoneIndicator}>
-                    <Ionicons name="checkmark-circle" size={18} color="#10a37f" />
-                  </View>
-                )}
-
-                {!isUploading && (
-                  <TouchableOpacity style={styles.removeBtn} onPress={removeStagedItems}>
-                    <View style={[styles.removeBtnInner, { backgroundColor: isDark ? '#1e1e1e' : '#fff' }]}>
-                      <Ionicons name="close" size={11} color={theme.text} />
-                    </View>
-                  </TouchableOpacity>
-                )}
+                </TouchableOpacity>
               </View>
 
               {/* Location pill */}
@@ -456,13 +392,6 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
             </View>
           )}
 
-          {/* Upload progress bar (thin strip under staged image) */}
-          {isUploading && (
-            <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
-            </View>
-          )}
-
           <TextInput
             ref={inputRef}
             style={[
@@ -473,13 +402,11 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
             placeholder={
               isListening 
                 ? 'Listening... Speak now.'
-                : isUploading
-                ? 'Uploading image...'
                 : isOnline
                 ? 'Type to experience the power of AI'
                 : 'Waiting for connection...'
             }
-            editable={isOnline && !isUploading && !isListening}
+            editable={isOnline && !isListening}
             placeholderTextColor={isListening ? '#10a37f' : (isDark ? '#4a4a4a' : '#b0b0b8')}
             value={message}
             onChangeText={setMessage}
@@ -679,39 +606,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(128,128,128,0.2)',
   },
-  uploadOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 2,
-  },
-  uploadPercent: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  uploadDoneIndicator: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#fff',
-    borderRadius: 9,
-  },
-  progressBarTrack: {
-    height: 2,
-    backgroundColor: 'rgba(128,128,128,0.2)',
-    borderRadius: 1,
-    marginHorizontal: 8,
-    marginBottom: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#10a37f',
-    borderRadius: 1,
-  },
   removeBtn: {
     position: 'absolute',
     top: -6,
@@ -756,15 +650,12 @@ const styles = StyleSheet.create({
     marginVertical: 1,
     letterSpacing: -0.1,
   },
-  
-  // 📍 NEW CONTAINER FOR THE TWO BUTTONS
   rightActionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 1,
     marginRight: 1,
   },
-  // 📍 MIC BUTTON STYLES
   micButton: {
     width: 32,
     height: 32,

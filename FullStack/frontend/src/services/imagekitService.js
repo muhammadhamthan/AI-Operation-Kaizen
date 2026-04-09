@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'https://api.kairoxaitech.com';
 const IMAGEKIT_UPLOAD_URL = 'https://upload.imagekit.io/api/v1/files/upload';
 
 /**

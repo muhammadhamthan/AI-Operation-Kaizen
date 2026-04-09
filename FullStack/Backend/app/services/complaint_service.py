@@ -55,7 +55,6 @@ class ComplaintService:
         self,
         user: User,
         message: str,
-        image_url: Optional[str],
         issue_id: Optional[int],
     ) -> ChatResponse:
         """
@@ -108,7 +107,6 @@ class ComplaintService:
             raised_by_supervisor_id=user.id,
             target_solver_id=assignment.assigned_to_solver_id,
             complaint_details=message,
-            complaint_image_url=image_url,
         )
         self.db.add(complaint)
 
