@@ -207,6 +207,7 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
   const requestMediaAndLocation = async (type) => {
     closeMenu();
     try {
+      console.log(`🟢 Requesting ${type === 'camera' ? 'camera' : 'gallery'} permissions...`);
       let imageUri = null;
 
       if (type === 'camera') {
@@ -233,14 +234,19 @@ const ChatInput = ({ onSend, showCamera = true, userRole }) => {
       setSelectedImage(imageUri);
       setIsUploading(true);
       setUploadProgress(0);
+      console.log(imageUri)
+      console.log("🟢 Image selected, starting upload to ImageKit...",imageUri);
 
       // ── Upload directly to ImageKit ────────────────────────────
       let cdnUrl = null;
       try {
+        console.log("🟢 About to upload image to ImageKit:");
         cdnUrl = await uploadImageToImageKit(imageUri, {
           imageType: 'BEFORE', // default; solver should pick AFTER separately if needed
           onProgress: (pct) => setUploadProgress(pct),
         });
+
+        console.log("🟢 Image uploaded to ImageKit:", cdnUrl);
         setUploadedImageUrl(cdnUrl);
       } catch (uploadError) {
         console.error('ImageKit upload failed:', uploadError);

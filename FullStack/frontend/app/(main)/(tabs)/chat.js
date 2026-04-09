@@ -36,7 +36,7 @@ import ChatInput from '../../../src/components/chat/ChatInput';
 import ChatHistorySidebar from '../../../src/components/chat/ChatHistorySidebar';
 import Avatar from '../../../src/components/common/Avatar';
 import { navigateToNotification } from '../../../src/utils/notificationNavigation';
-import { sendChatMessage } from '../../../src/services/api';
+import { sendChatWithImage } from '../../../src/services/api';
 
 import { selectIsOnline } from '../../../src/store/slices/offlineSlice';
 import Toast from '../../../src/components/common/Toast';
@@ -142,53 +142,60 @@ export default function ChatScreen() {
     }
   }, [isOnline, currentSessionId, dispatch]);
 
-  const handleSendMessage = async (text, imageUri = null,location = null,intent = null) => { //updatwd by hamthan,intent = null
-    const userMessage = {
-      id: Date.now(),
-      message: text || '', 
-      image: imageUri,     
-      role_in_chat: 'user',
+ const handleSendMessage = async (
+  text,
+  imageUri = null,
+  location = null,
+  intent = null
+) => {
+  const userMessage = {
+    id: Date.now(),
+    message: text || '',
+    image: imageUri,
+    role_in_chat: 'user',
+    created_at: new Date().toISOString(),
+  };
+
+  dispatch(addMessage(userMessage));
+  setIsLoading(true);
+
+  try {
+    // ✅ IMPORTANT: Use sendChatWithImage (NOT sendChatMessage)
+    const result = await sendChatWithImage({
+      text: text || 'Uploaded an image',
+      sessionId: currentSessionId,
+      imageUri: imageUri,
+      intent: intent,
+    });
+
+    if (!result.success) return;
+
+    const response = result.data;
+
+    // ✅ Handle session creation
+    if (!currentSessionId && response.session_id) {
+      dispatch({
+        type: 'chat/setCurrentConversationId',
+        payload: response.session_id,
+      });
+    }
+
+    // ✅ AI response
+    const aiMessage = {
+      id: Date.now() + 1,
+      message: response.message,
+      role_in_chat: 'AI',
       created_at: new Date().toISOString(),
     };
 
-    dispatch(addMessage(userMessage));
-    setIsLoading(true); 
+    dispatch(addMessage(aiMessage));
 
-    try {
-      const result = await sendChatMessage( // by hamthan , added intent as parameter
-        text || 'Uploaded an image',
-        currentSessionId,
-        null,
-        imageUri,
-        intent
-      );
-
-      if (!result.success) return;
-
-      const response = result.data;
-
-      if (!currentSessionId && response.session_id) {
-        dispatch({
-          type: 'chat/setCurrentConversationId',
-          payload: response.session_id,
-        });
-      }
-
-      const aiMessage = {
-        id: Date.now() + 1,
-        message: response.message,
-        role_in_chat: 'AI',
-        created_at: new Date().toISOString(),
-      };
-
-      dispatch(addMessage(aiMessage));
-    } catch (error) {
-      console.error(error);
-    }
-    finally {
-      setIsLoading(false); 
-    }
-  };
+  } catch (error) {
+    console.error("❌ Chat error:", error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleSuggestionPress = (text) => {
     handleSendMessage(text);

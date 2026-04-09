@@ -142,7 +142,6 @@ class ChatbotService:
                         r = await issue_service.create_from_chat(
                             user=user,
                             message=args["message"],
-                            image_url=image_url,
                         )
 
                     elif func == "approve_completion":

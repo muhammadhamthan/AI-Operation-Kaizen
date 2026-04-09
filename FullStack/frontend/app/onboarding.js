@@ -23,6 +23,7 @@ import {
   Platform,
   StatusBar,
   useWindowDimensions,
+  PanResponder, // 📍 ADDED FOR SWIPE GESTURES
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -400,6 +401,35 @@ export default function OnboardingScreen() {
     router.replace('/(auth)/login');
   };
 
+  // 📍 NEW: PAN RESPONDER FOR SWIPE GESTURES
+  const panResponder = React.useMemo(() => 
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only take over if the user intentionally swiped horizontally
+        return Math.abs(gestureState.dx) > 30 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      },
+      onPanResponderRelease: async (evt, gestureState) => {
+        if (gestureState.dx < -50) {
+          // Swiped Left (Go to Next)
+          if (currentIndex < SLIDES.length - 1) {
+            goTo(currentIndex + 1);
+          } else {
+            // 📍 Swiped left on the LAST slide -> Trigger Get Started
+            await AsyncStorage.setItem('has_seen_onboarding', 'true');
+            router.replace('/(auth)/login');
+          }
+        } else if (gestureState.dx > 50) {
+          // Swiped Right (Go to Prev)
+          if (currentIndex > 0) {
+            goTo(currentIndex - 1);
+          }
+        }
+      },
+    }),
+    [currentIndex, goTo, router] // 📍 Added router to dependencies
+  );
+
   const isLast = currentIndex === SLIDES.length - 1;
 
   const floatY   = iconFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });
@@ -498,15 +528,18 @@ export default function OnboardingScreen() {
                 activeOpacity={0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={[styles.skipText, { color: textMuted }]}>Skip</Text>
-                <Ionicons name="chevron-forward" size={14} color={textMuted} />
+                <Text style={[styles.skipText, { color: textMuted }]}>Login</Text>
+                <Ionicons name="chevron-forward" size={14} color={textMuted}  />
               </TouchableOpacity>
             </Animated.View>
           </View>
         </Animated.View>
 
         {/* ── Main area — wide layout switches to row ── */}
-        <View style={[styles.mainArea, isWide && styles.mainAreaWide]}>
+        <View 
+          style={[styles.mainArea, isWide && styles.mainAreaWide]}
+          {...panResponder.panHandlers} // 📍 SWIPE HANDLERS ATTACHED HERE
+        >
 
           {/* ── Icon section ── */}
           <Animated.View

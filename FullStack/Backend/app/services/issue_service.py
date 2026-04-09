@@ -77,7 +77,6 @@ class IssueService:
         self,
         user: User,
         message: str,
-        image_url: Optional[str],
     ) -> ChatResponse:
         
         actions = []
@@ -196,16 +195,16 @@ class IssueService:
         actions.append(f"Issue #{issue.id} created: '{issue.title}'")
 
         # ── 5. BEFORE image ──────────────────────────────
-        if image_url:
-            self.db.add(IssueImage(
-                issue_id=issue.id,
-                uploaded_by_user_id=user.id,
-                image_url=image_url,
-                image_type=ImageType.BEFORE,
-                ai_flag=AIFlag.NOT_CHECKED,
-                ai_details={},
-            ))
-            actions.append("BEFORE image saved")
+        # if image_url:
+        #     self.db.add(IssueImage(
+        #         issue_id=issue.id,
+        #         uploaded_by_user_id=user.id,
+        #         image_url=image_url,
+        #         image_type=ImageType.BEFORE,
+        #         ai_flag=AIFlag.NOT_CHECKED,
+        #         ai_details={},
+        #     ))
+        #     actions.append("BEFORE image saved")
 
         # ── 6. History: OPEN ─────────────────────────────
         self._add_history(
@@ -473,9 +472,7 @@ class IssueService:
         self,
         solver: User,
         message: str,
-        image_url: Optional[str],
         issue_id: Optional[int],
-        ai_service,
     ) -> ChatResponse:
         
         if not issue_id:
@@ -500,33 +497,33 @@ class IssueService:
         actions: list[str] = []
 
         # ── AFTER image + AI verification ────────────────
-        if image_url:
-            img = IssueImage(
-                issue_id=issue.id,
-                uploaded_by_user_id=solver.id,
-                image_url=image_url,
-                image_type=ImageType.AFTER,
-                ai_flag=AIFlag.NOT_CHECKED,
-                ai_details={},
-            )
-            self.db.add(img)
-            actions.append("AFTER photo saved")
+        # if image_url:
+        #     img = IssueImage(
+        #         issue_id=issue.id,
+        #         uploaded_by_user_id=solver.id,
+        #         image_url=image_url,
+        #         image_type=ImageType.AFTER,
+        #         ai_flag=AIFlag.NOT_CHECKED,
+        #         ai_details={},
+        #     )
+        #     self.db.add(img)
+        #     actions.append("AFTER photo saved")
 
-            try:
-                verify = await ai_service.verify_completion_image(
-                    image_url=image_url,
-                    problem_type=issue.title,
-                    issue_description=issue.description,
-                )
-                img.ai_flag = verify.ai_flag
-                img.ai_details = {
-                    "confidence": verify.confidence,
-                    **verify.details,
-                }
-                actions.append(f"AI verification: {verify.ai_flag.value} ({verify.confidence:.2f})")
-            except Exception:
-                logger.exception("AI image verification failed for issue #%s", issue.id)
-                actions.append("AI verification skipped (error)")
+        #     try:
+        #         verify = await ai_service.verify_completion_image(
+        #             image_url=image_url,
+        #             problem_type=issue.title,
+        #             issue_description=issue.description,
+        #         )
+        #         img.ai_flag = verify.ai_flag
+        #         img.ai_details = {
+        #             "confidence": verify.confidence,
+        #             **verify.details,
+        #         }
+        #         actions.append(f"AI verification: {verify.ai_flag.value} ({verify.confidence:.2f})")
+        #     except Exception:
+        #         logger.exception("AI image verification failed for issue #%s", issue.id)
+        #         actions.append("AI verification skipped (error)")
 
         old_status = issue.status.value
         issue.status = IssueStatus.RESOLVED_PENDING_REVIEW
@@ -541,9 +538,12 @@ class IssueService:
         
         self._trigger_score_refresh_for_issue(issue_id)
 
-        photo_note = "📸 Photo uploaded. " if image_url else ""
         return ChatResponse(
-            message=f"✅ Work submitted for Issue #{issue.id}.\n{photo_note}Supervisor notified for review.",
+            message=(
+                f"✅ Work submitted for Issue #{issue.id}.\n"
+                f"🔄 Status updated to 'Pending Review'.\n"
+                f"👨‍💼 Supervisor has been notified."
+            ),
             intent="complete_work",
             issue_id=issue.id,
             assignment_id=assignment.id,
@@ -688,77 +688,6 @@ class IssueService:
             total_returned=len(items),
             has_more=has_more,
         )
-
-    # ══════════════════════════════════════════════════════
-    # 8. DASHBOARD: Paginated issue list  (API read)
-    # ══════════════════════════════════════════════════════
-
-    async def list_issues(
-        self,
-        current_user: User,
-        status_filter: Optional[IssueStatus] = None,
-        priority: Optional[Priority] = None,
-        site_id: Optional[int] = None,
-        search: Optional[str] = None,
-        skip: int = 0,
-        limit: int = 20,
-    ) -> IssueListResponse:
-        """
-        Role-aware paginated list with optional filters.
-
-        - SUPERVISOR  → only their sites
-        - PROBLEMSOLVER → only their assigned issues
-        - MANAGER/ADMIN → all issues
-
-        Eager-loads site + raised_by_supervisor in a single query
-        to avoid N+1 when serialising each IssueResponse.
-        """
-        stmt = (
-            select(Issue)
-            .options(
-                selectinload(Issue.site),
-                selectinload(Issue.raised_by_supervisor),
-            )
-        )
-
-        # ── Role-based scope ─────────────────────────────
-        if current_user.role == UserRole.SUPERVISOR:
-            site_ids = await self._get_supervisor_site_ids(current_user.id)
-            stmt = stmt.where(Issue.site_id.in_(site_ids))
-
-        elif current_user.role == UserRole.PROBLEMSOLVER:
-            sub = select(IssueAssignment.issue_id).where(
-                IssueAssignment.assigned_to_solver_id == current_user.id
-            )
-            result = await self.db.execute(sub)
-            assigned_ids = result.scalars().all()
-            stmt = stmt.where(Issue.id.in_(assigned_ids))
-
-        # ── Optional filters ─────────────────────────────
-        if status_filter:
-            stmt = stmt.where(Issue.status == status_filter)
-        if priority:
-            stmt = stmt.where(Issue.priority == priority)
-        if site_id:
-            stmt = stmt.where(Issue.site_id == site_id)
-        if search:
-            stmt = stmt.where(Issue.title.ilike(f"%{search}%"))
-
-        # ── Total count (reuse same WHERE, no LIMIT) ─────
-        count_stmt = select(sql_func.count()).select_from(stmt.subquery())
-        total: int = (await self.db.execute(count_stmt)).scalar()
-
-        # ── Paginated fetch ───────────────────────────────
-        stmt = stmt.order_by(Issue.created_at.desc()).offset(skip).limit(limit)
-        issues = (await self.db.execute(stmt)).scalars().all()
-
-        return IssueListResponse(
-            total=total,
-            page=skip // limit + 1,
-            per_page=limit,
-            issues=[self._to_response(i) for i in issues],
-        )
-
     # ══════════════════════════════════════════════════════
     # 9. DASHBOARD: Issue detail  (API read)
     # ══════════════════════════════════════════════════════

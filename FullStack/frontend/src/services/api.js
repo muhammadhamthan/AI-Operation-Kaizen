@@ -1,7 +1,6 @@
 /**
  * Real API Service - Connects to PostgreSQL Backend
- * 
- * All API calls to the FastAPI backend
+ * * All API calls to the FastAPI backend
  */
 
 import axios from 'axios';
@@ -9,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
+import  { uploadImageToImageKit } from './imagekitService';
 
 // API Base URL - Backend is on port 8001
 // const getBaseUrl = () => {
@@ -27,10 +27,10 @@ import { withRetry } from '../utils/networkRetry';
 //   }
   
 //   // Native apps need full URL
-//   return 'http://localhost:8001/api';
+//   return 'http://localhost:8001/api';//https://api.kairoxaitech.com
 // };
 
-const backendUrl = 'http://127.0.0.1:8000';
+const backendUrl = 'http://localhost:8000';
 
 
 const API_BASE_URL = backendUrl;
@@ -171,59 +171,107 @@ export const getStoredUser = async () => {
 // ==================== ISSUES API ====================
 
 /**
- * Fetch all issues with optional filters
- */
-
-
-/**
  * Fetch all issues using Cursor-Based Pagination
  */
+
+
+// /**
+//  * Fetch all issues using Cursor-Based Pagination
+//  */
+// export const fetchIssues = async (filters = {}) => {
+//   try {
+//     const queryParams = {};
+    
+//     // Map filters to match backend expectations exactly
+//     if (filters.status) queryParams.status_filter = filters.status; 
+//     if (filters.priority) queryParams.priority = filters.priority;
+//     if (filters.site_id) queryParams.site_id = filters.site_id;
+//     if (filters.search) queryParams.search = filters.search;
+    
+//     // 📍 THE FIX: Translate Redux cursor to Backend 'skip'
+//     const limit = filters.limit || 10;
+//     const currentSkip = filters.cursor ? parseInt(filters.cursor, 10) : 0;
+    
+//     queryParams.skip = currentSkip;
+//     queryParams.limit = limit;
+
+//     // Hit the exact URL that worked for you, passing params as an object
+//     const response = await withRetry(
+//       () => api.get('/api/v1/issues', { params: queryParams }),
+//       { maxRetries: 2 }
+//     );
+    
+//     const data = response.data;
+    
+//     // Extract the list of issues and total count
+//     const rawItems = data.issues || data.items || [];
+//     const totalItems = data.total || 0;
+
+//     // 📍 Calculate Next Cursor for Redux
+//     const nextSkip = currentSkip + limit;
+//     const hasMore = nextSkip < totalItems;
+//     const nextCursor = hasMore ? nextSkip.toString() : null;
+
+//     // Map backend fields to frontend format
+//     const issues = rawItems.map(issue => ({ 
+//       ...issue,
+//       site: { name: issue.site_name },
+//       raised_by: { name: issue.supervisor_name }
+//     }));
+
+//     return {
+//       success: true,
+//       issues,
+//       next_cursor: nextCursor, // Redux gets the stringified skip value
+//       has_more: hasMore,
+//     };
+//   } catch (error) {
+//     console.error('❌ Fetch issues error:', error.response?.data || error.message);
+//     return {
+//       success: false,
+//       error: error.response?.data?.detail || 'Failed to fetch issues',
+//       issues: [],
+//       next_cursor: null,
+//       has_more: false,
+//     };
+//   }
+// };
+
+
 export const fetchIssues = async (filters = {}) => {
   try {
-    // 📍 Let Axios build the query string cleanly to avoid URL parsing errors
     const queryParams = {};
-    if (filters.status) queryParams.status = filters.status;
+    
+    if (filters.status) queryParams.status_filter = filters.status;
     if (filters.priority) queryParams.priority = filters.priority;
     if (filters.site_id) queryParams.site_id = filters.site_id;
-    
-    // Add the boss's cursor and limit parameters
-    if (filters.cursor) queryParams.cursor = filters.cursor;
-    queryParams.limit = filters.limit || 10; // fallback to 20 if limit isn't passed
+    if (filters.search) queryParams.search = filters.search;
 
-    // Hit the exact URL that worked for you, passing params as an object
-    const response = await withRetry(
-      () => api.get('/api/v1/issues/feed', { params: queryParams }),
-      { maxRetries: 2 }
-    );
-    
+    queryParams.limit = filters.limit || 10;
+
+    // ✅ Correct cursor usage
+    if (filters.cursor) {
+      queryParams.cursor = filters.cursor;
+    }
+
+    const response = await api.get('/api/v1/issues', { params: queryParams });
     const data = response.data;
-    console.log(data)
-    
-    // Fallback to empty array if items is missing
-    const rawItems = data.items || [];
 
-    // Map backend fields to frontend format
-    const issues = rawItems.map(issue => ({ 
+    const issues = (data.items || []).map(issue => ({
       ...issue,
-      site: {
-        name: issue.site_name,
-      },
-      raised_by: {
-        name: issue.supervisor_name,
-      }
+      site: { name: issue.site_name },
+      raised_by: { name: issue.supervisor_name }
     }));
 
     return {
       success: true,
       issues,
-      next_cursor: data.next_cursor || null,
-      has_more: data.has_more ?? false,
+      next_cursor: data.next_cursor,
+      has_more: data.has_more,
     };
   } catch (error) {
-    console.error('Fetch issues error:', error.response?.data || error.message);
     return {
       success: false,
-      error: error.response?.data?.detail || 'Failed to fetch issues',
       issues: [],
       next_cursor: null,
       has_more: false,
@@ -372,10 +420,21 @@ export const fetchDashboardStats = async () => {
 export const fetchComplaints = async ({ cursor = null, limit = 20 } = {}) => {
   try {
     const queryParams = { limit };
-    if (cursor) queryParams.cursor = cursor;
+    
+    // 📍 THE FIX: Translate Redux cursor to Backend 'skip'
+    const currentSkip = cursor ? parseInt(cursor, 10) : 0;
+    queryParams.skip = currentSkip;
 
-    // 📍 CHANGED: 'feed' to 'Complaintfeed' to match Python router
-    const response = await api.get('/api/v1/complaints/Complaintfeed', { params: queryParams });
+    const response = await api.get('/api/v1/complaints', { params: queryParams });
+    const data = response.data || {};
+    
+    const rawItems = data.complaints || data.items || [];
+    const totalItems = data.total || 0;
+
+    // 📍 Calculate Next Cursor for Redux
+    const nextSkip = currentSkip + limit;
+    const hasMore = nextSkip < totalItems;
+    const nextCursor = hasMore ? nextSkip.toString() : null;
 
     // Return the whole object exactly as backend sent it
     const complaintsData = response.data || {};
@@ -383,11 +442,15 @@ export const fetchComplaints = async ({ cursor = null, limit = 20 } = {}) => {
     
     return {
       success: true,
-      complaints: complaintsData, // Passes { items, next_cursor, has_more } to Redux
+      complaints: { 
+        items: rawItems, 
+        next_cursor: nextCursor, 
+        has_more: hasMore 
+      },
     };
 
   } catch (error) {
-    console.error("Fetch complaints error:", error);
+    console.error("❌ Fetch complaints error:", error.response?.data || error.message);
     return {
       success: false,
       complaints: { items: [], next_cursor: null, has_more: false },
@@ -477,14 +540,12 @@ export const sendChatMessage = async (
   text,
   sessionId = null,
   currentIssueId = null,
-  imageUrl = null,
   intent = null // added by hamthan
 ) => {
   try {
     const requestBody = {
       message: text,
-      session_id: sessionId,   // ✅ VERY IMPORTANT
-      image_url: imageUrl,
+      session_id: sessionId,
       issue_id: currentIssueId,
       metadata: {
         platform: Platform.OS,
@@ -508,6 +569,67 @@ export const sendChatMessage = async (
     };
   }
 };
+
+
+export const sendChatWithImage = async ({
+  text,
+  sessionId,
+  imageUri,
+  intent,
+  currentIssueId = null
+}) => {
+  try {
+    // 🟢 STEP 1: Send chat
+    const chatRes = await sendChatMessage(
+      text,
+      sessionId,
+      currentIssueId,
+      intent
+    );
+
+    if (!chatRes.success) return chatRes;
+
+    const issueId = chatRes.data.issue_id || currentIssueId;
+
+    // 🟡 STEP 2: Handle image
+    if (imageUri && issueId) {
+
+      // 🔥 Decide image type
+      let imageType = "BEFORE";
+
+      if (intent === "complete_work") {
+        imageType = "AFTER";
+      }
+
+    console.log("🟢 imageType:", imageType);
+    console.log("🟡 Before upload:");
+    console.log("imageUri:", imageUri);
+    console.log("issueId:", issueId);
+    console.log("intent:", intent);
+
+      // 🟣 Upload to ImageKit
+      const imageUrl = await uploadImageToImageKit(imageUri,issueId,imageType);
+      console.log(`✅ Image uploaded to ImageKit: ${imageUrl}`);
+
+      // 🔵 Save to DB
+      await api.post('/api/v1/images/save', {
+        image_url: imageUrl,
+        issue_id: issueId,
+        image_type: imageType
+      });
+
+      console.log(`✅ ${imageType} image saved`);
+    }
+
+    return chatRes;
+
+  } catch (error) {
+    console.error("❌ Chat + Image error:", error);
+    return { success: false };
+  }
+};
+
+
 
 export const fetchChatSessions = async () => {
   try {
@@ -833,8 +955,6 @@ export const fetchDashboardCardIssueDetail = async (cardType, issueId) => {
     };
   }
 };
-
-
 
 
 export default {
