@@ -161,9 +161,7 @@ class ChatbotService:
                         r = await issue_service.solver_complete_work(
                             user,
                             args.get("message", "completed work"),
-                            image_url,
                             args["issue_id"],
-                            None,
                         )
 
                     elif func == "solver_report_blocker":
@@ -179,7 +177,6 @@ class ChatbotService:
                             user=user,
                             issue_id=args["issue_id"],
                             message=args["message"],
-                            image_url=image_url,
                         )
 
                     elif func == "reassign_solver":
@@ -216,15 +213,25 @@ class ChatbotService:
 
                     call_responses.append(r)
 
+                print("Call responses:", call_responses)
+
                 combined_message = "\n\n".join(r.message for r in call_responses)
+
                 if clarifications:
                     combined_message += "\n\n⚠️ " + "\n".join(clarifications)
 
+                # ✅ Extract from first response (safe assumption)
+                primary = call_responses[0] if call_responses else None
+                
                 response = ChatResponse(
                     session_id=session.id,
                     message=combined_message,
                     intent="function_call",
+                    issue_id=primary.issue_id if primary else None,
+                    assignment_id=primary.assignment_id if primary else None,
+                    complaint_id=primary.complaint_id if primary else None,
                     actions_taken=[c["function"] for c in calls],
+                    data=primary.data if primary else None,
                 )
 
             else:
