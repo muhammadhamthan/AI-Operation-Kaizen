@@ -382,7 +382,7 @@ class ComplaintService:
             created_at=complaint["created_at"],
         )
         
-    def _trigger_score_refresh_for_issue(issue_id: int) -> None:
+    def _trigger_score_refresh_for_issue(self, issue_id: int) -> None:
         """
         Fire-and-forget: enqueue Celery task to refresh site + solver scores
         for this issue. Must be called AFTER db.commit().

@@ -77,7 +77,6 @@ class IssueService:
         self,
         user: User,
         message: str,
-        image_url: Optional[str],
     ) -> ChatResponse:
         
         actions = []
@@ -196,16 +195,16 @@ class IssueService:
         actions.append(f"Issue #{issue.id} created: '{issue.title}'")
 
         # ── 5. BEFORE image ──────────────────────────────
-        if image_url:
-            self.db.add(IssueImage(
-                issue_id=issue.id,
-                uploaded_by_user_id=user.id,
-                image_url=image_url,
-                image_type=ImageType.BEFORE,
-                ai_flag=AIFlag.NOT_CHECKED,
-                ai_details={},
-            ))
-            actions.append("BEFORE image saved")
+        # if image_url:
+        #     self.db.add(IssueImage(
+        #         issue_id=issue.id,
+        #         uploaded_by_user_id=user.id,
+        #         image_url=image_url,
+        #         image_type=ImageType.BEFORE,
+        #         ai_flag=AIFlag.NOT_CHECKED,
+        #         ai_details={},
+        #     ))
+        #     actions.append("BEFORE image saved")
 
         # ── 6. History: OPEN ─────────────────────────────
         self._add_history(
@@ -473,9 +472,7 @@ class IssueService:
         self,
         solver: User,
         message: str,
-        image_url: Optional[str],
         issue_id: Optional[int],
-        ai_service,
     ) -> ChatResponse:
         
         if not issue_id:
@@ -500,33 +497,33 @@ class IssueService:
         actions: list[str] = []
 
         # ── AFTER image + AI verification ────────────────
-        if image_url:
-            img = IssueImage(
-                issue_id=issue.id,
-                uploaded_by_user_id=solver.id,
-                image_url=image_url,
-                image_type=ImageType.AFTER,
-                ai_flag=AIFlag.NOT_CHECKED,
-                ai_details={},
-            )
-            self.db.add(img)
-            actions.append("AFTER photo saved")
+        # if image_url:
+        #     img = IssueImage(
+        #         issue_id=issue.id,
+        #         uploaded_by_user_id=solver.id,
+        #         image_url=image_url,
+        #         image_type=ImageType.AFTER,
+        #         ai_flag=AIFlag.NOT_CHECKED,
+        #         ai_details={},
+        #     )
+        #     self.db.add(img)
+        #     actions.append("AFTER photo saved")
 
-            try:
-                verify = await ai_service.verify_completion_image(
-                    image_url=image_url,
-                    problem_type=issue.title,
-                    issue_description=issue.description,
-                )
-                img.ai_flag = verify.ai_flag
-                img.ai_details = {
-                    "confidence": verify.confidence,
-                    **verify.details,
-                }
-                actions.append(f"AI verification: {verify.ai_flag.value} ({verify.confidence:.2f})")
-            except Exception:
-                logger.exception("AI image verification failed for issue #%s", issue.id)
-                actions.append("AI verification skipped (error)")
+        #     try:
+        #         verify = await ai_service.verify_completion_image(
+        #             image_url=image_url,
+        #             problem_type=issue.title,
+        #             issue_description=issue.description,
+        #         )
+        #         img.ai_flag = verify.ai_flag
+        #         img.ai_details = {
+        #             "confidence": verify.confidence,
+        #             **verify.details,
+        #         }
+        #         actions.append(f"AI verification: {verify.ai_flag.value} ({verify.confidence:.2f})")
+        #     except Exception:
+        #         logger.exception("AI image verification failed for issue #%s", issue.id)
+        #         actions.append("AI verification skipped (error)")
 
         old_status = issue.status.value
         issue.status = IssueStatus.RESOLVED_PENDING_REVIEW
@@ -541,9 +538,12 @@ class IssueService:
         
         self._trigger_score_refresh_for_issue(issue_id)
 
-        photo_note = "📸 Photo uploaded. " if image_url else ""
         return ChatResponse(
-            message=f"✅ Work submitted for Issue #{issue.id}.\n{photo_note}Supervisor notified for review.",
+            message=(
+                f"✅ Work submitted for Issue #{issue.id}.\n"
+                f"🔄 Status updated to 'Pending Review'.\n"
+                f"👨‍💼 Supervisor has been notified."
+            ),
             intent="complete_work",
             issue_id=issue.id,
             assignment_id=assignment.id,

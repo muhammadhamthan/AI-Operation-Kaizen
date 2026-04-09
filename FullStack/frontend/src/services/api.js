@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
+import  { uploadImageToImageKit } from './imagekitService';
 
 // API Base URL - Backend is on port 8001
 // const getBaseUrl = () => {
@@ -29,7 +30,7 @@ import { withRetry } from '../utils/networkRetry';
 //   return 'http://localhost:8001/api';//https://api.kairoxaitech.com
 // };
 
-const backendUrl = 'https://api.kairoxaitech.com';
+const backendUrl = 'http://localhost:8000';
 
 
 const API_BASE_URL = backendUrl;
@@ -539,14 +540,12 @@ export const sendChatMessage = async (
   text,
   sessionId = null,
   currentIssueId = null,
-  imageUrl = null,
   intent = null // added by hamthan
 ) => {
   try {
     const requestBody = {
       message: text,
-      session_id: sessionId,   // ✅ VERY IMPORTANT
-      image_url: imageUrl,
+      session_id: sessionId,
       issue_id: currentIssueId,
       metadata: {
         platform: Platform.OS,
@@ -570,6 +569,67 @@ export const sendChatMessage = async (
     };
   }
 };
+
+
+export const sendChatWithImage = async ({
+  text,
+  sessionId,
+  imageUri,
+  intent,
+  currentIssueId = null
+}) => {
+  try {
+    // 🟢 STEP 1: Send chat
+    const chatRes = await sendChatMessage(
+      text,
+      sessionId,
+      currentIssueId,
+      intent
+    );
+
+    if (!chatRes.success) return chatRes;
+
+    const issueId = chatRes.data.issue_id || currentIssueId;
+
+    // 🟡 STEP 2: Handle image
+    if (imageUri && issueId) {
+
+      // 🔥 Decide image type
+      let imageType = "BEFORE";
+
+      if (intent === "complete_work") {
+        imageType = "AFTER";
+      }
+
+    console.log("🟢 imageType:", imageType);
+    console.log("🟡 Before upload:");
+    console.log("imageUri:", imageUri);
+    console.log("issueId:", issueId);
+    console.log("intent:", intent);
+
+      // 🟣 Upload to ImageKit
+      const imageUrl = await uploadImageToImageKit(imageUri,issueId,imageType);
+      console.log(`✅ Image uploaded to ImageKit: ${imageUrl}`);
+
+      // 🔵 Save to DB
+      await api.post('/api/v1/images/save', {
+        image_url: imageUrl,
+        issue_id: issueId,
+        image_type: imageType
+      });
+
+      console.log(`✅ ${imageType} image saved`);
+    }
+
+    return chatRes;
+
+  } catch (error) {
+    console.error("❌ Chat + Image error:", error);
+    return { success: false };
+  }
+};
+
+
 
 export const fetchChatSessions = async () => {
   try {
