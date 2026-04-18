@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     """
     BASE_URL: str = "http://localhost:8000"  # Default for local development; override in .env for production
     # ── Database ──
+    DB_CA_CERT_PATH: str = "app/core/supabase_certif.crt"
+    SYNC_DATABASE_URL: str
     DATABASE_URL: str
     SQL_ECHO: bool = False
     

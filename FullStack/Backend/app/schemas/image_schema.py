@@ -29,6 +29,11 @@ class ImageUploadResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class SaveImageRequest(BaseModel):
+    image_url: str
+    image_type: str      # BEFORE | AFTER
+    issue_id: Optional[int] = None
+    chat_id: Optional[int] = None # For potential attachment update in ChatHistory
 
 class ImageListResponse(BaseModel):
     total: int

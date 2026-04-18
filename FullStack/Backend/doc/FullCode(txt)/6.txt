@@ -1,0 +1,1256 @@
+"""
+Table: call_logs
+Logs every Twilio call attempt to solvers.
+Each retry gets a separate row with incrementing attempt_number.
+Used for escalation checking (count MISSED, time since first call).
+"""
+
+from sqlalchemy import (
+    Column, Integer, Index, ForeignKey, func,String
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+from app.core.enums import CallStatus
+
+
+class CallLog(Base):
+    __tablename__ = "call_logs"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    assignment_id = Column(
+        Integer,
+        ForeignKey("issue_assignments.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Links call to the specific assignment",
+    )
+    solver_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="The problem solver who was called",
+    )
+    call_sid = Column(
+        String(64),
+        nullable=True,          # NULL for logs created before this migration
+        unique=True,
+        index=True,
+        comment="Twilio call SID — used by webhook to find the right log row",
+    )
+    attempt_number = Column(
+        Integer,
+        default=1,
+        nullable=False,
+        comment="Retry sequence: 1, 2, 3...",
+    )
+    initiated_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        comment="When the Twilio call was placed",
+    )
+    answered_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+        comment="When solver picked up (NULL if missed)",
+    )
+    ended_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+        comment="When call terminated (NULL if still ongoing)",
+    )
+    status = Column(
+        ENUM(CallStatus, name="call_status_enum", create_type=True),
+        nullable=False,
+        comment="INITIATED | MISSED | ANSWERED",
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    # Parent assignment
+    assignment = relationship(
+        "IssueAssignment",
+        back_populates="call_logs",
+        lazy="selectin",
+    )
+
+    # The solver who was called
+    solver = relationship(
+        "User",
+        back_populates="call_logs",
+        lazy="selectin",
+    )
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_call_logs_assignment", "assignment_id"),
+        Index("idx_call_logs_solver", "solver_id"),
+        Index("idx_call_logs_status", "status"),
+        Index("idx_call_logs_initiated", "initiated_at"),
+        Index("idx_call_logs_attempt", "attempt_number"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CallLog(id={self.id}, assignment_id={self.assignment_id}, "
+            f"attempt={self.attempt_number}, status={self.status})>"
+        )"""
+Table: chat_history
+Stores all chat messages: USER (supervisor/solver), AI (Groq responses),
+and SYSTEM (escalation alerts, assignment notifications).
+"""
+
+from sqlalchemy import (
+    Column, Integer, Text, Index, ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP, JSONB
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+from app.core.enums import ChatRole
+
+
+class ChatHistory(Base):
+    __tablename__ = "chat_history"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    # ── Link to session ─────────────────────────────
+    session_id = Column(
+        Integer,
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),# CASCADE , If the parent row is deleted, automatically delete all related child rows.
+        nullable=True,
+        comment="Which conversation session this message belongs to",
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="NULL for SYSTEM or AI messages",
+    )
+    issue_id = Column(
+        Integer,
+        ForeignKey("issues.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="NULL for general chat not tied to an issue",
+    )
+    role_in_chat = Column(
+        ENUM(ChatRole, name="chat_role_enum", create_type=True),
+        nullable=False,
+        comment="USER | AI | SYSTEM",
+    )
+    message = Column(
+        Text,
+        nullable=False,
+        comment="Message content",
+    )
+    attachments = Column(
+        JSONB,
+        default=[],
+        nullable=False,
+        comment='Array of file URLs: ["s3://bucket/photo.jpg"]',
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    user = relationship(
+        "User",
+        back_populates="chat_messages",
+        lazy="selectin",
+    )
+    issue = relationship(
+        "Issue",
+        back_populates="chat_messages",
+        lazy="selectin",
+    )
+    session = relationship("ChatSession", back_populates="messages", lazy="selectin")
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_chat_issue", "issue_id"),
+        Index("idx_chat_user", "user_id"),
+        Index("idx_chat_created", created_at.desc()),
+    )
+
+    def __repr__(self) -> str:
+        preview = self.message[:40] if self.message else ""
+        return (
+            f"<ChatHistory(id={self.id}, role={self.role_in_chat}, "
+            f"msg='{preview}...')>"
+        )"""
+Table: chat_sessions
+Each row = one conversation session (like ChatGPT sidebar items).
+A session contains multiple chat_history messages.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Boolean, Index, ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Owner of this conversation session",
+    )
+
+    title = Column(
+        String(200),
+        nullable=False,
+        default="New Chat",
+        comment="Auto-generated from first user message",
+    )
+
+    # Optional: link session to an issue context
+    issue_id = Column(
+        Integer,
+        ForeignKey("issues.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="If this session is about a specific issue",
+    )
+
+    is_active = Column(
+        Boolean,
+        default=True,
+        nullable=False,
+        comment="False = archived/deleted session",
+    )
+
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    user = relationship("User", back_populates="chat_sessions", lazy="selectin")
+    messages = relationship(
+        "ChatHistory",
+        back_populates="session",
+        lazy="dynamic",
+        order_by="ChatHistory.created_at.asc()",
+    )
+    issue = relationship("Issue", lazy="selectin")
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_chat_sessions_user", "user_id"),
+        Index("idx_chat_sessions_updated", "updated_at"),
+        Index("idx_chat_sessions_active", "is_active"),
+    )
+
+    def __repr__(self):
+        return f"<ChatSession(id={self.id}, user_id={self.user_id}, title='{self.title}')>""""
+Table: complaints
+Raised by supervisors when solver's work is unsatisfactory.
+Triggers issue REOPENING and re-calling of the solver.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Text, Index, ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+
+
+class Complaint(Base):
+    __tablename__ = "complaints"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    issue_id = Column(
+        Integer,
+        ForeignKey("issues.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    assignment_id = Column(
+        Integer,
+        ForeignKey("issue_assignments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    raised_by_supervisor_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Supervisor who filed the complaint",
+    )
+    target_solver_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Solver whose work is being contested",
+    )
+    complaint_details = Column(
+        Text,
+        nullable=False,
+        comment="Description of what is wrong with the repair",
+    )
+    complaint_image_url = Column(
+        String(500),
+        nullable=True,
+        comment="Optional evidence photo URL",
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    issue = relationship(
+        "Issue",
+        back_populates="complaints",
+        lazy="selectin",
+    )
+    assignment = relationship(
+        "IssueAssignment",
+        back_populates="complaints",
+        lazy="selectin",
+    )
+    raised_by_supervisor = relationship(
+        "User",
+        back_populates="raised_complaints",
+        foreign_keys=[raised_by_supervisor_id],
+        lazy="selectin",
+    )
+    target_solver = relationship(
+        "User",
+        back_populates="complaints_against",
+        foreign_keys=[target_solver_id],
+        lazy="selectin",
+    )
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_complaints_issue", "issue_id"),
+        Index("idx_complaints_assignment", "assignment_id"),
+        Index("idx_complaints_solver", "target_solver_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Complaint(id={self.id}, issue_id={self.issue_id}, "
+            f"solver_id={self.target_solver_id})>"
+        )"""
+Table: escalations
+EVENT LOG — records when escalations actually happen.
+HAS foreign keys to issues and issue_assignments.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Text, Boolean, Index,
+    ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import TIMESTAMP, INTERVAL
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+
+
+class Escalation(Base):
+    __tablename__ = "escalations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    issue_id = Column(
+        Integer, ForeignKey("issues.id", ondelete="CASCADE"), nullable=False,
+    )
+    assignment_id = Column(
+        Integer, ForeignKey("issue_assignments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    escalation_type = Column(String(30), nullable=False)
+    escalated_to_role = Column(String(20), nullable=False)
+    escalated_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    )
+    reason = Column(Text, nullable=False)
+    total_missed_calls = Column(Integer, nullable=True)
+    time_elapsed_without_response = Column(INTERVAL, nullable=True)
+    notification_sent = Column(Boolean, default=False, nullable=False)
+    notification_sent_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    resolved = Column(Boolean, default=False, nullable=False)
+    resolved_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(),
+        onupdate=func.now(), nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    issue = relationship("Issue", back_populates="escalations", lazy="selectin")
+    assignment = relationship("IssueAssignment", back_populates="escalations", lazy="selectin")
+    escalated_by_user = relationship("User", lazy="selectin")
+
+    __table_args__ = (
+        Index("idx_escalations_issue", "issue_id"),
+        Index("idx_escalations_type", "escalation_type"),
+        Index("idx_escalations_resolved", "resolved"),
+        Index("idx_escalations_created", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<Escalation(id={self.id}, issue_id={self.issue_id}, type={self.escalation_type})>""""
+Table: escalation_rules
+STANDALONE CONFIG TABLE — NO foreign keys to any other table.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Index, func,
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP, INTERVAL
+
+from app.db.base import Base
+from app.core.enums import Priority
+
+
+class EscalationRule(Base):
+    __tablename__ = "escalation_rules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    priority = Column(
+        ENUM(Priority, name="priority_enum", create_type=True),
+        nullable=False,
+    )
+    max_call_attempts = Column(Integer, nullable=False)
+    max_time_without_response = Column(INTERVAL, nullable=False)
+    escalate_to_role = Column(String(50), nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(),
+        onupdate=func.now(), nullable=False,
+    )
+
+    # ── NO RELATIONSHIPS — standalone config table ───────
+
+    __table_args__ = (
+        Index("idx_escalation_rules_priority", "priority"),
+    )
+
+    def __repr__(self):
+        return f"<EscalationRule(id={self.id}, priority={self.priority})>""""
+Table: issues
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Text, Numeric, Index,
+    ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+from app.core.enums import Priority, IssueStatus
+
+
+class Issue(Base):
+    __tablename__ = "issues"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    site_id = Column(
+        Integer, ForeignKey("sites.id", ondelete="RESTRICT"), nullable=False,
+    )
+    raised_by_supervisor_id = Column(
+        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False)
+    priority = Column(
+        ENUM(Priority, name="priority_enum", create_type=True),
+        default=Priority.MEDIUM, nullable=False,
+    )
+    deadline_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    status = Column(
+        ENUM(IssueStatus, name="issue_status_enum", create_type=True),
+        default=IssueStatus.OPEN, nullable=False,
+    )
+    track_status = Column(String(100), nullable=True)
+    latitude = Column(Numeric(precision=10, scale=8), nullable=True)
+    longitude = Column(Numeric(precision=11, scale=8), nullable=True)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(),
+        onupdate=func.now(), nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    site = relationship("Site", back_populates="issues", lazy="selectin")
+
+    raised_by_supervisor = relationship(
+        "User", back_populates="raised_issues",
+        foreign_keys=[raised_by_supervisor_id], lazy="selectin",
+    )
+
+    assignments = relationship(
+        "IssueAssignment", back_populates="issue", lazy="selectin",
+        order_by="IssueAssignment.created_at.desc()",
+    )
+
+    images = relationship(
+        "IssueImage", back_populates="issue", lazy="selectin",
+        order_by="IssueImage.created_at",
+    )
+
+    complaints = relationship("Complaint", back_populates="issue", lazy="dynamic")
+
+    history = relationship(
+        "IssueHistory", back_populates="issue", lazy="dynamic",
+        order_by="IssueHistory.created_at",
+    )
+
+    chat_messages = relationship("ChatHistory", back_populates="issue", lazy="dynamic")
+
+    # THIS MUST POINT TO "Escalation" (events table)
+    # NOT "EscalationRule" (config table)
+    escalations = relationship("Escalation", back_populates="issue", lazy="dynamic")
+
+    __table_args__ = (
+        Index("idx_issues_status", "status"),
+        Index("idx_issues_priority", "priority"),
+        Index("idx_issues_site", "site_id"),
+        Index("idx_issues_supervisor", "raised_by_supervisor_id"),
+        Index("idx_issues_deadline", "deadline_at"),
+    )
+
+    def __repr__(self):
+        return f"<Issue(id={self.id}, title='{self.title}', status={self.status})>""""
+Table: issue_assignments
+"""
+
+from sqlalchemy import (
+    Column, Integer, Index, ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+from app.core.enums import AssignmentStatus
+
+
+class IssueAssignment(Base):
+    __tablename__ = "issue_assignments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    issue_id = Column(
+        Integer, ForeignKey("issues.id", ondelete="CASCADE"), nullable=False,
+    )
+    assigned_to_solver_id = Column(
+        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    assigned_by_supervisor_id = Column(
+        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    due_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    status = Column(
+        ENUM(AssignmentStatus, name="assignment_status_enum", create_type=True),
+        default=AssignmentStatus.ACTIVE, nullable=False,
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(),
+        onupdate=func.now(), nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    issue = relationship("Issue", back_populates="assignments", lazy="selectin")
+
+    assigned_solver = relationship(
+        "User", back_populates="solver_assignments",
+        foreign_keys=[assigned_to_solver_id], lazy="selectin",
+    )
+
+    assigned_by_supervisor = relationship(
+        "User", back_populates="created_assignments",
+        foreign_keys=[assigned_by_supervisor_id], lazy="selectin",
+    )
+
+    call_logs = relationship(
+        "CallLog", back_populates="assignment", lazy="selectin",
+        order_by="CallLog.attempt_number",
+    )
+
+    complaints = relationship("Complaint", back_populates="assignment", lazy="dynamic")
+
+    # THIS MUST POINT TO "Escalation" (events table)
+    # NOT "EscalationRule" (config table)
+    escalations = relationship("Escalation", back_populates="assignment", lazy="dynamic")
+
+    __table_args__ = (
+        Index("idx_assignments_issue", "issue_id"),
+        Index("idx_assignments_solver", "assigned_to_solver_id"),
+        Index("idx_assignments_status", "status"),
+        Index("idx_assignments_due_date", "due_date"),
+    )
+
+    def __repr__(self):
+        return f"<IssueAssignment(id={self.id}, issue_id={self.issue_id}, status={self.status})>""""
+Table: issue_history
+Audit trail tracking every status change and action on an issue.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Text, Index, ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+from app.core.enums import ActionType
+
+
+class IssueHistory(Base):
+    __tablename__ = "issue_history"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    issue_id = Column(
+        Integer,
+        ForeignKey("issues.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    changed_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="User who made the change (NULL for system actions)",
+    )
+    old_status = Column(
+        String(50),
+        nullable=True,
+        comment="Previous status (NULL for creation)",
+    )
+    new_status = Column(
+        String(50),
+        nullable=True,
+        comment="New status after the action",
+    )
+    action_type = Column(
+        ENUM(ActionType, name="action_type_enum", create_type=True),
+        nullable=False,
+        comment="ASSIGN | UPDATE | COMPLETE | REOPEN | COMPLAINT",
+    )
+    details = Column(
+        Text,
+        nullable=True,
+        comment="Human-readable description of what happened",
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    issue = relationship(
+        "Issue",
+        back_populates="history",
+        lazy="selectin",
+    )
+    changed_by_user = relationship(
+        "User",
+        back_populates="history_entries",
+        lazy="selectin",
+    )
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_issue_history_issue", "issue_id"),
+        Index("idx_issue_history_user", "changed_by_user_id"),
+        Index("idx_issue_history_action", "action_type"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<IssueHistory(id={self.id}, issue_id={self.issue_id}, "
+            f"action={self.action_type}, {self.old_status} → {self.new_status})>"
+        )"""
+Table: issue_images
+Stores BEFORE and AFTER photos as SEPARATE rows (never same row).
+BEFORE = supervisor uploads when creating issue.
+AFTER  = solver uploads when completing repair.
+AI vision verification updates ai_flag and ai_details.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Index, ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP, JSONB
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+from app.core.enums import ImageType, AIFlag
+
+
+class IssueImage(Base):
+    __tablename__ = "issue_images"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    issue_id = Column(
+        Integer,
+        ForeignKey("issues.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Which issue this image belongs to",
+    )
+    uploaded_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Supervisor (BEFORE) or solver (AFTER)",
+    )
+    image_url = Column(
+        String(500),
+        nullable=False,
+        comment="ImageKit CDN URL",
+    )
+    image_type = Column(
+        ENUM(ImageType, name="image_type_enum", create_type=True),
+        default=ImageType.AFTER,
+        nullable=False,
+        comment="BEFORE = initial problem photo, AFTER = completion photo",
+    )
+    ai_flag = Column(
+        ENUM(AIFlag, name="ai_flag_enum", create_type=True),
+        default=AIFlag.NOT_CHECKED,
+        nullable=False,
+        comment="OK | SUSPECT | NOT_CHECKED — AI verification result",
+    )
+    ai_details = Column(
+        JSONB,
+        default={},
+        nullable=True,
+        comment='AI analysis: {"confidence": 0.92, "leak_detected": false}',
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    # Parent issue
+    issue = relationship(
+        "Issue",
+        back_populates="images",
+        lazy="selectin",
+    )
+
+    # User who uploaded
+    uploaded_by_user = relationship(
+        "User",
+        back_populates="uploaded_images",
+        lazy="selectin",
+    )
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_issue_images_issue", "issue_id"),
+        Index("idx_issue_images_type", "image_type"),
+        Index("idx_issue_images_flag", "ai_flag"),
+        Index("idx_issue_images_user", "uploaded_by_user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<IssueImage(id={self.id}, issue_id={self.issue_id}, "
+            f"type={self.image_type}, ai_flag={self.ai_flag})>"
+        )"""
+Table: problem_solver_skills
+Maps solvers → skills → sites with priority scoring.
+NULL site_id means the solver works across ALL sites.
+Used by the smart matching algorithm in Stage 2.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Boolean, Index, ForeignKey, func,
+)
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+
+
+class ProblemSolverSkill(Base):
+    __tablename__ = "problem_solver_skills"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    solver_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="The problem solver",
+    )
+    skill_type = Column(
+        String(50),
+        nullable=False,
+        comment="plumber, electrician, hvac, carpentry, painting, network, mechanical, etc.",
+    )
+    site_id = Column(
+        Integer,
+        ForeignKey("sites.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="NULL = works at all sites",
+    )
+    priority = Column(
+        Integer,
+        default=1,
+        nullable=False,
+        comment="1-10 scale, higher = preferred solver for this skill+site",
+    )
+    is_available = Column(
+        Boolean,
+        default=True,
+        nullable=False,
+        comment="FALSE when solver is on leave or unavailable",
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    solver = relationship(
+        "User",
+        back_populates="skills",
+        lazy="selectin",
+    )
+    site = relationship(
+        "Site",
+        back_populates="solver_skills",
+        lazy="selectin",
+    )
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_solver_skills_skill", "skill_type"),
+        Index("idx_solver_skills_site", "site_id"),
+        Index("idx_solver_skills_solver", "solver_id"),
+        Index("idx_solver_skills_skill_site", "skill_type", "site_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ProblemSolverSkill(id={self.id}, solver_id={self.solver_id}, "
+            f"skill='{self.skill_type}', site_id={self.site_id}, "
+            f"priority={self.priority})>"
+        )"""
+Table: sites
+Stores facility locations with GPS coordinates.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Numeric, Index,
+    func,
+)
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+
+
+class Site(Base):
+    __tablename__ = "sites"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    name = Column(
+        String(100),
+        nullable=False,
+        comment="Site identification name",
+    )
+    location = Column(
+        String(200),
+        nullable=True,
+        comment="Human-readable address",
+    )
+    latitude = Column(
+        Numeric(precision=10, scale=8),
+        nullable=True,
+        comment="GPS latitude for location matching",
+    )
+    longitude = Column(
+        Numeric(precision=11, scale=8),
+        nullable=True,
+        comment="GPS longitude for location matching",
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    # Supervisors managing this site (many-to-many)
+    supervisors = relationship(
+        "User",
+        secondary="supervisor_sites",
+        back_populates="supervised_sites",
+        lazy="selectin",
+    )
+
+    # Issues reported at this site
+    issues = relationship(
+        "Issue",
+        back_populates="site",
+        lazy="dynamic",
+    )
+
+    # Solver skills linked to this site
+    solver_skills = relationship(
+        "ProblemSolverSkill",
+        back_populates="site",
+        lazy="dynamic",
+    )
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_sites_location", "location"),
+        Index("idx_sites_name", "name"),
+    )
+
+    #which help us to print the object values instead of numbers
+    def __repr__(self) -> str:
+        return f"<Site(id={self.id}, name='{self.name}')>"
+"""
+Table: supervisor_sites
+Junction table — one supervisor can manage many sites.
+Composite primary key, no timestamps as per requirements.
+"""
+
+from sqlalchemy import (
+    Table, Column, Integer, Boolean, ForeignKey, MetaData,
+)
+
+from app.db.base import Base
+
+# Define as a pure Table object for use with many-to-many relationships
+SupervisorSite = Table(
+    "supervisor_sites",
+    Base.metadata,
+    Column(
+        "supervisor_id",
+        Integer,
+        ForeignKey("users.id"),
+        primary_key=True
+    ),
+    Column(
+        "site_id",
+        Integer,
+        ForeignKey("sites.id"),
+        primary_key=True
+    ),
+    Column(
+        "is_active",
+        Boolean,
+        default=True
+    )
+)
+"""
+Table: users
+Stores supervisors, problem solvers, managers with auth info.
+"""
+
+from sqlalchemy import (
+    Column, Integer, String, Boolean, Index,
+    func,
+)
+from sqlalchemy.dialects.postgresql import ENUM, TIMESTAMP
+from sqlalchemy.orm import relationship
+
+from app.db.base import Base
+from app.core.enums import UserRole
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    # ── Columns ──────────────────────────────────────────
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    name = Column(
+        String(100),
+        nullable=False,
+    )
+    phone = Column(
+        String(20),
+        unique=True,
+        nullable=False,
+        comment="Used for authentication and Twilio calling",
+    )
+    email = Column(
+        String(100),
+        nullable=True,
+        comment="Used for escalation email notifications",
+    )
+    role = Column(
+        ENUM(UserRole, name="user_role", create_type=True),
+        nullable=False,
+        comment="supervisor | problemsolver | manager",
+    )
+    password_hash = Column(
+        String(255),
+        nullable=False,
+        server_default="",
+        comment="Hashed password for authentication",
+    )
+    #IT IS ADDITIONL
+    is_active = Column(
+        Boolean,
+        default=True,
+        nullable=False,
+        comment="Soft delete / deactivation flag",
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    #IT IS ADDITIONL
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ── Relationships ────────────────────────────────────
+    # Sites this supervisor manages (many-to-many)
+    supervised_sites = relationship(
+        "Site",
+        secondary="supervisor_sites",
+        back_populates="supervisors",
+        lazy="selectin",
+    )
+
+    # Issues raised by this supervisor
+    raised_issues = relationship(
+        "Issue",
+        back_populates="raised_by_supervisor",
+        foreign_keys="Issue.raised_by_supervisor_id",
+        lazy="dynamic",
+    )
+
+    # Assignments where this user is the solver
+    solver_assignments = relationship(
+        "IssueAssignment",
+        back_populates="assigned_solver",
+        foreign_keys="IssueAssignment.assigned_to_solver_id",
+        lazy="dynamic",
+    )
+
+    # Assignments created by this supervisor
+    created_assignments = relationship(
+        "IssueAssignment",
+        back_populates="assigned_by_supervisor",
+        foreign_keys="IssueAssignment.assigned_by_supervisor_id",
+        lazy="dynamic",
+    )
+
+    # Call logs for this solver
+    call_logs = relationship(
+        "CallLog",
+        back_populates="solver",
+        lazy="dynamic",
+    )
+
+    # Images uploaded by this user
+    uploaded_images = relationship(
+        "IssueImage",
+        back_populates="uploaded_by_user",
+        lazy="dynamic",
+    )
+
+    # Complaints raised by this supervisor
+    raised_complaints = relationship(
+        "Complaint",
+        back_populates="raised_by_supervisor",
+        foreign_keys="Complaint.raised_by_supervisor_id",
+        lazy="dynamic",
+    )
+
+    # Complaints targeting this solver
+    complaints_against = relationship(
+        "Complaint",
+        back_populates="target_solver",
+        foreign_keys="Complaint.target_solver_id",
+        lazy="dynamic",
+    )
+
+    # Solver skills
+    skills = relationship(
+        "ProblemSolverSkill",
+        back_populates="solver",
+        lazy="selectin",
+    )
+
+    # Chat messages sent by this user
+    chat_messages = relationship(
+        "ChatHistory",
+        back_populates="user",
+        lazy="dynamic",
+    )
+
+    # Issue history entries made by this user
+    history_entries = relationship(
+        "IssueHistory",
+        back_populates="changed_by_user",
+        lazy="dynamic",
+    )
+    
+    # Chat sessions owned by this user
+    chat_sessions = relationship(
+        "ChatSession",
+        back_populates="user",
+        lazy="dynamic",
+        order_by="ChatSession.updated_at.desc()",
+    )
+
+    # ── Indexes ──────────────────────────────────────────
+    __table_args__ = (
+        Index("idx_users_role", "role"),
+        Index("idx_users_phone", "phone"),
+        Index("idx_users_email", "email"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, name='{self.name}', role={self.role})>""""
+Import every model so that Base.metadata contains all tables.
+Alembic and create_all() need this single import point.
+"""
+
+from app.models.user import User
+from app.models.site import Site
+from app.models.supervisor_site import SupervisorSite
+from app.models.issue import Issue
+from app.models.issue_assignment import IssueAssignment
+from app.models.call_log import CallLog
+from app.models.issue_image import IssueImage
+from app.models.complaint import Complaint
+from app.models.issue_history import IssueHistory
+from app.models.chat_history import ChatHistory
+from app.models.problem_solver_skill import ProblemSolverSkill
+from app.models.escalation_rule import EscalationRule
+from app.models.escalation import Escalation
+from app.models.chat_session import ChatSession  
+
+
+__all__ = [
+    "User",
+    "Site",
+    "supervisor_sites",
+    "Issue",
+    "IssueAssignment",
+    "CallLog",
+    "IssueImage",
+    "Complaint",
+    "IssueHistory",
+    "ChatHistory",
+    "ProblemSolverSkill",
+    "EscalationRule",
+    "ChatSession",
+]

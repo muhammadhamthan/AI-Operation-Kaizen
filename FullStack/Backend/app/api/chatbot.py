@@ -35,7 +35,7 @@ router = APIRouter()
 # PRIMARY: Send chat message
 # ══════════════════════════════════════════════════════════
 
-@router.post("/", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse)
 async def send_chat_message(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),

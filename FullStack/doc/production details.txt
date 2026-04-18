@@ -1,0 +1,362 @@
+server running logs
+gunicorn app.main:app \
+-k uvicorn.workers.UvicornWorker \
+-w 4 \
+-b 127.0.0.1:8000 \
+--daemon \
+--access-logfile access.log \
+--error-logfile error.log \
+--log-level info
+
+
+GitHub access token - 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
+
+Add Swap (VERY IMPORTANT for you)
+Since RAM is 1GB, create 2GB swap:
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+Make permanent:
+
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+Check:
+
+free -h
+
+You should see swap. 
+
+
+Here is your **full production setup command list from start → end** (swap → venv → gunicorn → celery → nginx → enable services).
+Follow in order.
+
+---
+
+# 0️⃣ Go to Project Folder
+
+```bash
+cd /home/ubuntu/AI-Operation-Kaizen/FullStack/Backend
+```
+
+---
+
+# 1️⃣ Create Virtual Environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install passlib[bcrypt]
+sudo apt install certbot python3-certbot-nginx -y
+deactivate
+```
+
+---
+
+# 2️⃣ Create Swap (1GB)
+
+```bash
+sudo fallocate -l 1G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+free -h
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+sudo sysctl vm.swappiness=10
+echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+```
+
+---
+
+Create config file:
+
+sudo nano /etc/nginx/sites-available/api.kairoxaitech.com
+
+Paste this:
+
+server {
+    listen 80;
+    server_name api.kairoxaitech.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+
+Save and exit.
+
+Step 3 — Enable the Config
+sudo ln -s /etc/nginx/sites-available/api.kairoxaitech.com /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+# 3️⃣ Gunicorn systemd Service
+
+```bash
+sudo nano /etc/systemd/system/gunicorn.service
+```
+
+Paste:
+
+```ini
+[Unit]
+Description=Gunicorn FastAPI Service
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend
+EnvironmentFile=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/.env
+Environment="PATH=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/venv/bin:/usr/bin"
+
+[Unit]
+Description=Gunicorn FastAPI Service
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend
+EnvironmentFile=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/.env
+Environment="PATH=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/venv/bin:/usr/bin"
+
+ExecStart=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/venv/bin/gunicorn app.main:app \
+    -k uvicorn.workers.UvicornWorker \
+    -w 2 \
+    -b 127.0.0.1:8000 \
+    --timeout 300 \
+    --graceful-timeout 300 \
+    --keep-alive 5
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+# 4️⃣ Celery Worker systemd Service
+
+```bash
+sudo nano /etc/systemd/system/celery-worker.service
+```
+
+Paste:
+
+```ini
+[Unit]
+Description=Celery Worker
+After=network.target redis.service
+Requires=redis.service
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend
+EnvironmentFile=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/.env
+Environment="PATH=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/venv/bin:/usr/bin"
+
+ExecStart=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/venv/bin/celery -A app.workers.celery_app worker -Q calls --loglevel=info --concurrency=2
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+beat 
+sudo nano /etc/systemd/system/celery-beat.service
+
+[Unit]
+Description=Celery Beat Scheduler
+After=network.target redis.service
+Requires=redis.service
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend
+EnvironmentFile=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/.env
+Environment="PATH=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/venv/bin:/usr/bin"
+
+ExecStart=/home/ubuntu/AI-Operation-Kaizen/FullStack/Backend/venv/bin/celery -A app.workers.celery_app beat --loglevel=info
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+
+---
+
+# 5️⃣ Install Redis
+
+```bash
+sudo apt update
+sudo apt install redis-server -y
+sudo systemctl start redis
+sudo systemctl enable redis
+sudo systemctl status redis
+```
+
+---
+
+# 6️⃣ Install Nginx
+
+```bash
+sudo apt install nginx -y
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+---
+
+# 7️⃣ Configure Nginx
+
+```bash
+sudo nano /etc/nginx/sites-available/api.kairoxaitech.com
+```
+
+Paste:
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+Enable:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/fastapi /etc/nginx/sites-enabled
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+---
+
+# 8️⃣ Start All Services
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start gunicorn
+sudo systemctl start celery-worker
+sudo systemctl restart nginx
+```
+
+---
+
+# 9️⃣ Enable Auto Start On Boot
+
+```bash
+sudo systemctl enable gunicorn
+sudo systemctl enable celery-worker
+sudo systemctl enable redis
+sudo systemctl enable nginx
+```
+
+---
+
+# 🔟 Check Everything
+
+```bash
+sudo systemctl status gunicorn
+sudo systemctl status celery-worker
+sudo systemctl status redis
+sudo systemctl status nginx
+free -h
+```
+
+All should show:
+
+```text
+active (running)
+```
+
+---
+
+# 1️⃣1️⃣ Test API
+
+From server:
+
+```bash
+curl http://127.0.0.1:8000/docs
+```
+
+From browser:
+
+```text
+http://YOUR_EC2_PUBLIC_IP/docs
+```
+
+---
+
+# Production Control Commands (Remember These)
+
+| Action           | Command                                 |
+| ---------------- | --------------------------------------- |
+| Restart Gunicorn | `sudo systemctl restart gunicorn`       |
+| Restart Celery   | `sudo systemctl restart celery-worker`  |
+| Restart Nginx    | `sudo systemctl restart nginx`          |
+| Restart Redis    | `sudo systemctl restart redis`          |
+| Gunicorn Logs    | `journalctl -u gunicorn -f`             |
+| Celery Logs      | `journalctl -u celery-worker -f`        |
+| Nginx Logs       | `sudo tail -f /var/log/nginx/error.log` |
+| Memory Check     | `free -h`                               |
+| Disk Check       | `df -h`                                 |
+| CPU Check        | `htop`                                  |
+
+---
+
+# Final Production Architecture
+
+```text
+User → Nginx → Gunicorn → FastAPI
+                           ↓
+                         Redis
+                           ↓
+                     Celery Worker
+                           ↓
+                         Database
+```
+
+---
+
+# You Are Now Running a Real Production Backend Stack
+
+This stack is used in real companies:
+
+* FastAPI
+* Gunicorn
+* Celery
+* Redis
+* Nginx
+* systemd
+* Swap
+
+---
+
+If you want next, I can explain:
+**How to monitor logs and debug when something fails in production.**

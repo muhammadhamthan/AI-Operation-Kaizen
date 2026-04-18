@@ -27,6 +27,8 @@ from app.schemas.image_schema import (
     ImageUploadResponse,
     ImageListResponse,
 )
+from app.models.chat_history import ChatHistory
+from app.schemas.image_schema import SaveImageRequest
 
 router = APIRouter()
 
@@ -86,13 +88,6 @@ async def get_imagekit_auth(
 # POST /save  ─ Save uploaded image reference to DB
 # ══════════════════════════════════════════════════════════════════
 
-from pydantic import BaseModel
-
-class SaveImageRequest(BaseModel):
-    image_url: str
-    image_type: str = "BEFORE"      # BEFORE | AFTER
-    issue_id: Optional[int] = None
-
 
 @router.post(
     "/save",
@@ -119,6 +114,19 @@ async def save_image_reference(
             status_code=400,
             detail=f"Invalid image_type '{data.image_type}'. Must be BEFORE or AFTER.",
         )
+        
+    if data.chat_id:
+        stmt = select(ChatHistory).where(ChatHistory.id == data.chat_id)
+        result = await db.execute(stmt)
+        chat = result.scalar_one_or_none()
+
+        if chat:
+            chat.attachments = [data.image_url]  # Update attachments with the new image URL
+        else:         
+            raise HTTPException(
+                status_code=404,
+                detail=f"Chat message with ID {data.chat_id} not found for attachment update.",
+            )
 
     # ── Validate issue exists if provided ─────────────────────────
     if data.issue_id:
