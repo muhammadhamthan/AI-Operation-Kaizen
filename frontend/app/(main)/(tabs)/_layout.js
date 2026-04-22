@@ -9,28 +9,41 @@ import { useTheme } from '../../../src/theme/ThemeContext';
 import { selectIsOnline } from '../../../src/store/slices/offlineSlice';
 import OfflineBanner from '../../../src/components/common/OfflineBanner';
 
-import useRole from '../../../src/hooks/useRole';
-import { TAB_META, ALL_TAB_ROUTES, isTabVisible } from '../../../src/config/roleNav';
-
+/**
+ * Bottom tab bar — MVP parity: three tabs only (Chat, Issues, Dashboard).
+ *
+ * Role-specific features (Sites, Solvers, Budget, MD, Supervisors,
+ * Customer MD) are reached from cards INSIDE the Dashboard, not from
+ * the bottom bar. Profile is reached from the top-right avatar in the
+ * existing dashboard header.
+ *
+ * The route files for these screens still live in this folder so that
+ * `router.push('/(main)/(tabs)/<route>')` works from dashboard cards;
+ * `href: null` hides them from the tab bar per expo-router convention.
+ */
 export default function TabsLayout() {
   const { theme, isDark } = useTheme();
   const isOnline = useSelector(selectIsOnline);
   const insets = useSafeAreaInsets();
-  const { role } = useRole();
 
-  // ── STRICT MONOCHROME PALETTE (unchanged from MVP) ──
+  // ── Monochrome palette (unchanged from MVP) ──
   const activeColor = isDark ? '#ffffff' : '#101010';
   const inactiveColor = isDark ? '#8e8ea0' : '#8e8ea0';
   const bgColor = isDark ? '#171717' : '#ffffff';
   const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 
-  // 📍 DYNAMIC RESPONSIVE SIZING (unchanged)
   const bottomPadding = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 10);
   const tabHeight = 55 + bottomPadding;
 
-  // Fallback: until the auth slice resolves a role, render nothing hidden —
-  // keep existing MVP tab set (chat/issues/dashboard) as the safe default.
-  const safeRole = role || 'supervisor';
+  // Hidden-but-navigable routes (accessed from dashboard cards).
+  const hiddenRoutes = [
+    'sites',
+    'solvers',
+    'md-card',
+    'supervisors-card',
+    'customer-md-card',
+    'budget',
+  ];
 
   return (
     <>
@@ -61,33 +74,55 @@ export default function TabsLayout() {
           },
         }}
       >
-        {ALL_TAB_ROUTES.map((routeName) => {
-          const meta = TAB_META[routeName];
-          if (!meta) return null;
-          const visible = isTabVisible(safeRole, routeName);
-          return (
-            <Tabs.Screen
-              key={routeName}
-              name={routeName}
-              options={{
-                title: meta.title,
-                // When a tab is not permitted for the current role we set
-                // href: null so expo-router hides it from the tab bar AND
-                // removes the deep-link — role isolation at the navigation
-                // layer (Kairox Section 10).
-                href: visible ? undefined : null,
-                tabBarIcon: ({ color, focused }) => (
-                  <Ionicons
-                    name={focused ? meta.iconActive : meta.iconInactive}
-                    size={24}
-                    color={color}
-                  />
-                ),
-                tabBarTestID: `tab-${routeName}`,
-              }}
-            />
-          );
-        })}
+        {/* ── Visible tabs (MVP parity: 3 tabs only) ── */}
+        <Tabs.Screen
+          name="chat"
+          options={{
+            title: 'Chat',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
+                size={24}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="issues"
+          options={{
+            title: 'Issues',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'document-text' : 'document-text-outline'}
+                size={24}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="dashboard"
+          options={{
+            title: 'Dashboard',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'grid' : 'grid-outline'}
+                size={24}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        {/* ── Hidden routes — reachable via router.push, not visible in tab bar ── */}
+        {hiddenRoutes.map((routeName) => (
+          <Tabs.Screen
+            key={routeName}
+            name={routeName}
+            options={{ href: null }}
+          />
+        ))}
       </Tabs>
     </>
   );

@@ -433,8 +433,78 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.statsRow}>
                 <DashboardCard title="Sites" count={sitesList?.length || 0} icon="business-outline" color="#3b82f6" onPress={() => router.push('/(main)/(tabs)/dashboard/sites')} />
-                <DashboardCard title="Solvers" count={solvers?.length || 0} icon="people-outline" color="#8b5cf6" onPress={() => router.push('/(main)/(tabs)/dashboard/solvers')} />
+                {user?.role !== 'customer_md' && (
+                  <DashboardCard title="Solvers" count={solvers?.length || 0} icon="people-outline" color="#8b5cf6" onPress={() => router.push('/(main)/(tabs)/dashboard/solvers')} />
+                )}
               </View>
+
+              {/* ── Kairox v3.0 role-specific cards (Priority 1) ── */}
+              {user?.role === 'supervisor' && (
+                <View style={styles.statsRow}>
+                  <DashboardCard
+                    title="Managing Director"
+                    count={null}
+                    icon="person-circle-outline"
+                    color="#3b82f6"
+                    onPress={() => router.push('/(main)/(tabs)/md-card')}
+                  />
+                  <DashboardCard
+                    title="Budget Request"
+                    count={null}
+                    icon="wallet-outline"
+                    color="#10a37f"
+                    onPress={() => router.push('/(main)/(tabs)/budget')}
+                  />
+                </View>
+              )}
+              {user?.role === 'manager' && (
+                <>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Supervisors"
+                      count={null}
+                      icon="people-outline"
+                      color="#0ea5e9"
+                      onPress={() => router.push('/(main)/(tabs)/supervisors-card')}
+                    />
+                    <DashboardCard
+                      title="Customer's MD"
+                      count={null}
+                      icon="business-outline"
+                      color="#db2777"
+                      onPress={() => router.push('/(main)/(tabs)/customer-md-card')}
+                    />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Budget"
+                      count={null}
+                      icon="wallet-outline"
+                      color="#10a37f"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/(tabs)/budget')}
+                    />
+                  </View>
+                </>
+              )}
+              {user?.role === 'customer_md' && (
+                <View style={styles.statsRow}>
+                  <DashboardCard
+                    title="Managing Director"
+                    count={null}
+                    icon="person-circle-outline"
+                    color="#3b82f6"
+                    onPress={() => router.push('/(main)/(tabs)/md-card')}
+                  />
+                  <DashboardCard
+                    title="Budget"
+                    count={null}
+                    icon="wallet-outline"
+                    color="#10a37f"
+                    onPress={() => router.push('/(main)/(tabs)/budget')}
+                  />
+                </View>
+              )}
             </>
           )}
         </View>
