@@ -84,6 +84,7 @@ api.interceptors.response.use(
 // so the switch back is one-line when the AWS backend is production-ready.
 // Every mock-backed call emits a [BACKEND-GAP] warn on first invocation.
 import { users as mockUsers } from '../mocks/users';
+import { issues as mockIssues } from '../mocks/issues';
 
 let _mockLoginWarned = false;
 
@@ -272,98 +273,123 @@ export const getStoredUser = async () => {
 
 
 export const fetchIssues = async (filters = {}) => {
-  try {
-    const queryParams = {};
-    
-    if (filters.status) queryParams.status_filter = filters.status;
-    if (filters.priority) queryParams.priority = filters.priority;
-    if (filters.site_id) queryParams.site_id = filters.site_id;
-    if (filters.search) queryParams.search = filters.search;
+  // Kairox v3.0: mock-only (user directive). Filters locally.
+  // TODO(backend): restore the real GET /api/v1/issues call below.
+  // eslint-disable-next-line no-console
+  console.warn('[BACKEND-GAP] issues/list: using mock issues (src/mocks/issues.js)');
+  await new Promise((r) => setTimeout(r, 180));
 
-    queryParams.limit = filters.limit || 10;
-
-    // ✅ Correct cursor usage
-    if (filters.cursor) {
-      queryParams.cursor = filters.cursor;
-    }
-
-    const response = await api.get('/api/v1/issues', { params: queryParams });
-    const data = response.data;
-
-    const issues = (data.items || []).map(issue => ({
-      ...issue,
-      site: { name: issue.site_name },
-      raised_by: { name: issue.supervisor_name }
-    }));
-
-    return {
-      success: true,
-      issues,
-      next_cursor: data.next_cursor,
-      has_more: data.has_more,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      issues: [],
-      next_cursor: null,
-      has_more: false,
-    };
+  let filtered = [...mockIssues];
+  if (filters.status) {
+    filtered = filtered.filter((i) => i.status === filters.status);
   }
+  if (filters.priority) {
+    filtered = filtered.filter((i) => i.priority === filters.priority);
+  }
+  if (filters.site_id) {
+    filtered = filtered.filter((i) => i.site_id === filters.site_id);
+  }
+  if (filters.search) {
+    const q = String(filters.search).toLowerCase();
+    filtered = filtered.filter(
+      (i) =>
+        (i.title || '').toLowerCase().includes(q) ||
+        (i.description || '').toLowerCase().includes(q)
+    );
+  }
+
+  const issuesOut = filtered.map((issue) => ({
+    ...issue,
+    site: issue.site || { name: issue.site_name || `Site ${issue.site_id}` },
+    raised_by:
+      issue.raised_by ||
+      { name: issue.supervisor_name || 'Supervisor' },
+  }));
+
+  return {
+    success: true,
+    issues: issuesOut,
+    next_cursor: null,
+    has_more: false,
+  };
 };
+
+// TODO(backend): restore real call once AWS endpoint is live.
+// const _realFetchIssues = async (filters = {}) => {
+//   try {
+//     const queryParams = {};
+//     if (filters.status) queryParams.status_filter = filters.status;
+//     if (filters.priority) queryParams.priority = filters.priority;
+//     if (filters.site_id) queryParams.site_id = filters.site_id;
+//     if (filters.search) queryParams.search = filters.search;
+//     queryParams.limit = filters.limit || 10;
+//     if (filters.cursor) queryParams.cursor = filters.cursor;
+//     const response = await api.get('/api/v1/issues', { params: queryParams });
+//     const data = response.data;
+//     const issues = (data.items || []).map(issue => ({
+//       ...issue,
+//       site: { name: issue.site_name },
+//       raised_by: { name: issue.supervisor_name }
+//     }));
+//     return { success: true, issues, next_cursor: data.next_cursor, has_more: data.has_more };
+//   } catch (error) {
+//     return { success: false, issues: [], next_cursor: null, has_more: false };
+//   }
+// };
 
 
 /**
  * Fetch single issue by ID
  */
 export const fetchIssueById = async (issueId) => {
-  try {
-    const response = await api.get(`/api/v1/issues/${issueId}`); // URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/{issue_id}
+  // Kairox v3.0: mock-only (user directive).
+  // TODO(backend): restore real GET /api/v1/issues/{issue_id}.
+  // eslint-disable-next-line no-console
+  console.warn(`[BACKEND-GAP] issues/detail: using mock issues for id=${issueId}`);
+  await new Promise((r) => setTimeout(r, 180));
 
-    const issue = {
-      ...response.data,
-      site: response.data.site ? {
-        ...response.data.site,
-        name: response.data.site.name,
-      } : null,
-      raised_by: response.data.raised_by ? {
-        ...response.data.raised_by,
-        avatar: response.data.raised_by.avatar_url,
-      } : null,
-    };
+  const raw = mockIssues.find((i) => String(i.id) === String(issueId));
+  if (!raw) return { success: false, error: 'Issue not found' };
 
-    return {
-      success: true,
-      issue,
-    };
-  } catch (error) {
-    console.error('Fetch issue error:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch issue',
-    };
-  }
+  const issue = {
+    ...raw,
+    site: raw.site || { name: raw.site_name || `Site ${raw.site_id}` },
+    raised_by:
+      raw.raised_by ||
+      { name: raw.supervisor_name || 'Supervisor', avatar: null },
+    images: raw.images || [],
+    call_logs: raw.call_logs || [],
+    complaints_count: raw.complaints_count || 0,
+  };
+  return { success: true, issue };
 };
 
-/**
- * Fetch single issue by ID along with its timeline entries
- */
 export const fetchIssueTimeline = async (issueId) => {
-  try {
-    const response = await api.get(`/api/v1/issues/${issueId}/timeline`);
-
-    return {
-      success: true,
-      timeline: response.data.entries,
-    };
-  } catch (error) {
-    console.error("Timeline fetch error:", error.response?.data || error.message);
-
-    return {
-      success: false,
-      timeline: [],
-    };
-  }
+  // eslint-disable-next-line no-console
+  console.warn(`[BACKEND-GAP] issues/timeline: using mock timeline for id=${issueId}`);
+  // TODO(backend): restore real GET /api/v1/issues/{issue_id}/timeline.
+  await new Promise((r) => setTimeout(r, 120));
+  const raw = mockIssues.find((i) => String(i.id) === String(issueId));
+  if (!raw) return { success: false, timeline: [] };
+  return {
+    success: true,
+    timeline: [
+      {
+        id: `${issueId}-e1`,
+        event_type: 'created',
+        actor_name: raw.raised_by?.name || raw.supervisor_name || 'Supervisor',
+        description: 'Issue raised',
+        created_at: raw.created_at,
+      },
+      {
+        id: `${issueId}-e2`,
+        event_type: 'status_change',
+        actor_name: 'System',
+        description: `Status: ${raw.status}`,
+        created_at: raw.updated_at,
+      },
+    ],
+  };
 };
 // ==================== DASHBOARD API ====================
 /**

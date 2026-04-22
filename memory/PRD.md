@@ -50,10 +50,55 @@
 | P | Scope                                         | Status            |
 |---|-----------------------------------------------|-------------------|
 | 1 | §0, §1, §10 — Foundation + role nav + guards | **✅ done** (Apr 22) |
-| 2 | §2, §3, §5, §6, §16 — Chat, lifecycle, alerts, photo timeline | ⏳ next |
-| 3 | §7, §8, §4, §14 — Personal + group chats     | ⏳                |
-| 4 | §9, §11, §15 — Customer MD dash + budget + diary | ⏳            |
-| 5 | §12, §13, §17 — MD admin + Sheets + Gantt   | ⏳                |
+| 2 | §2, §3, §5, §6, §16 — Chat, lifecycle, alerts, photo timeline | **✅ done** (Apr 22) |
+| 3 | §7, §8, §4, §14 — Personal + group chats     | ⏳ next               |
+| 4 | §9, §11, §15 — Customer MD dash + budget + diary | ⏳                 |
+| 5 | §12, §13, §17 — MD admin + Sheets + Gantt    | ⏳                   |
+
+---
+
+## ✅ Priority 2 — Chat + Lifecycle + Alerts + Photos (Completed Apr 22, 2026)
+
+### Scope delivered
+- **§2 Role-personalised AI chatbot** — empty-state greeting + quick-action chips differ per role. Problem Solver sees "Mark complete / Log diary / Upload DURING"; Supervisor sees "Raise issue / Extend deadline / Escalate / Budget request"; MD sees "Top 5 sites / Escalated issues / Pending budgets"; Customer's MD sees "My sites / Timeline / Monthly report".
+- **§3 Kairox issue lifecycle labels** — backend enums (`OPEN`, `IN_PROGRESS`, `COMPLETED`, `ESCALATED`, `REOPENED`, `ASSIGNED`, `AUTO_ASSIGNED`, `REASSIGNED`) are rebadged as `Active / In Progress / Fixed / Escalated / Not Fixed` via a central map. No backend changes required.
+- **§3 Escalation Report modal** — Supervisor-only. Captures Reason (required), Root cause, Proposed action, Copy-Customer-MD toggle. Submits through mock service; simulated email + MD chat notification.
+- **§5 Dual-channel alert banner** — shows on every issue detail: success (green) when both voice call + WhatsApp delivered, warning (amber) when voice missed + WhatsApp-fallback delivered, danger (red) when both failed. Supervisor/MD can tap "Resend" to re-fire WhatsApp.
+- **§6 Missed-call notice** — when the alert record has `missed_call: true`, the banner shows "Call was missed · WhatsApp message was sent as a fallback" persistently.
+- **§16 Photo timeline** — Before / During / After rows with colour-coded left borders (grey / amber / green), horizontal scroll of thumbnails, fullscreen viewer on tap. Role-aware "Add" button: Supervisor can add Before, Problem Solver can add During / After.
+
+### Files created
+| Path | Purpose |
+|------|---------|
+| `src/config/chatbotIntents.js` | Role → quick-action chips + greeting |
+| `src/config/issueStatuses.js` | Backend enum → Kairox label + icon + theme token |
+| `src/services/mocks/alertMockService.js` | `sendDualChannelAlert`, `getAlertForIssue`, `resendWhatsappNotice` (AsyncStorage-persisted) |
+| `src/services/mocks/photoTimelineMockService.js` | `getPhotos`, `addPhoto` with BEFORE/DURING/AFTER buckets |
+| `src/services/mocks/escalationMockService.js` | `submitEscalation`, `getEscalationsForIssue` |
+| `src/components/chat/QuickActionChips.js` | Role-aware chip grid (replaces hard-coded MVP `SUGGESTIONS`) |
+| `src/components/issue/AlertStatusBanner.js` | 3-variant banner (success/warning/danger) + Resend CTA |
+| `src/components/issue/PhotoTimeline.js` | 3-row timeline + fullscreen viewer + ImagePicker-backed Add |
+| `src/components/issue/EscalationReportModal.js` | Bottom-sheet modal with 3 fields + copy-Customer-MD toggle |
+
+### Files modified (additive only)
+| Path | Change |
+|------|--------|
+| `app/(main)/(tabs)/chat.js` | Replaced local `SUGGESTIONS` array with `<QuickActionChips role={user?.role} />`; greeting now `getChatbotGreeting(role, name)`. |
+| `app/(main)/(tabs)/dashboard/issue-detail.js` | Added AlertStatusBanner below header card, replaced plain ImageGallery with PhotoTimeline, added Supervisor-only Escalate button + modal. Status badge now uses Kairox label. |
+| `src/services/api.js` | `fetchIssues`, `fetchIssueById`, `fetchIssueTimeline` now read from `src/mocks/issues.js` (AWS unavailable). Real calls preserved as commented block. `[BACKEND-GAP]` warns on each. |
+| `src/components/common/StatusBadge.js` | Added optional `label` + `color` prop overrides (one-line additive — also fixes the latent overdue-badge bug). |
+| `src/config/issueStatuses.js` | Extended to handle all MVP uppercase enums (`OPEN`, `ASSIGNED`, `AUTO_ASSIGNED`, `REASSIGNED`, `IN_PROGRESS`, `COMPLETED`, `REOPENED`, `ESCALATED`). |
+
+### Verified on preview
+- Supervisor login → chat shows 6 role-specific chips + "Hi Rajesh. Raise a new issue, check your team, or request a budget."
+- Problem Solver login → chat shows 4 PS-specific chips + "Hi Suresh. What would you like to log today?"
+- Issue #13 (IN_PROGRESS) shows "In Progress" Kairox badge + green `Alert delivered` banner (voice + WhatsApp both OK) + Photo Timeline with seeded Before photo.
+- Issue #6 (ESCALATED) shows "Escalated" badge + amber `Call was missed` banner with `Resend` button + `2d Overdue` pill.
+- Issue #13 Supervisor → "Escalate to Managing Director" button visible at bottom of Actions; tapping opens modal with Reason / Root cause / Proposed action + Copy Customer's MD toggle (on).
+- Lint clean across all 9 new + 5 modified files.
+
+### Known pod limitation (unchanged)
+Metro dev server still can't run here; use `yarn build` + `serve dist` static pipeline. User's local dev workflow unchanged.
 
 ---
 

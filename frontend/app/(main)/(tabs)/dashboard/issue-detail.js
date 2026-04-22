@@ -38,6 +38,11 @@ import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import CallHistorySection from '../../../../src/components/issue/CallHistorySection';
 import Loader from '../../../../src/components/common/Loader';
+// ── Kairox v3.0 additions (Priority 2) ──
+import AlertStatusBanner from '../../../../src/components/issue/AlertStatusBanner';
+import PhotoTimeline from '../../../../src/components/issue/PhotoTimeline';
+import EscalationReportModal from '../../../../src/components/issue/EscalationReportModal';
+import { getStatusLabel, getStatusMeta } from '../../../../src/config/issueStatuses';
 
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Toast from '../../../../src/components/common/Toast';
@@ -81,6 +86,8 @@ export default function IssueDetailScreen() {
   const [capturedLocation, setCapturedLocation] = useState(null);
 
   const [highlightAnim] = useState(new Animated.Value(highlighted === 'true' ? 1 : 0));
+  // ── Kairox v3.0: escalation modal visibility (Supervisor only) ──
+  const [escalationOpen, setEscalationOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -300,7 +307,7 @@ export default function IssueDetailScreen() {
         {/* ── ISSUE IDENTITY ── */}
         <Animated.View style={[styles.card, styles.flatCard, { backgroundColor: highlightColor, borderColor }]}>
           <View style={styles.badgeRow}>
-            <StatusBadge status={issue.status} size="small" />
+            <StatusBadge label={getStatusLabel(issue.status)} status={issue.status} size="small" />
             <StatusBadge status={issue.priority} type="priority" size="small" />
             {isOverdue && <StatusBadge label={`${overdueDays}d overdue`} color="#ef4444" />}
           </View>
@@ -309,6 +316,14 @@ export default function IssueDetailScreen() {
             {issue.description}
           </Text>
         </Animated.View>
+
+        {/* ── Kairox §5/§6: DUAL-CHANNEL ALERT STATUS ── */}
+        <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+          <AlertStatusBanner
+            issueId={issue.id}
+            canResend={user?.role === 'supervisor' || user?.role === 'manager'}
+          />
+        </View>
 
         {/* ── DETAILS ROW ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
@@ -433,10 +448,14 @@ export default function IssueDetailScreen() {
           </View>
         </View>
 
-        {/* ── PHOTOS ── */}
+        {/* ── PHOTOS (Kairox §16 Photo Timeline — replaces plain ImageGallery) ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Photos</Text>
-          <ImageGallery images={issue.images || []} />
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Photo Timeline</Text>
+          <PhotoTimeline
+            issueId={issue.id}
+            role={user?.role}
+            canUpload={user?.role === 'supervisor' || user?.role === 'problem_solver'}
+          />
         </View>
 
         {/* ── CALL HISTORY (Solver Only) ── */}
@@ -448,6 +467,23 @@ export default function IssueDetailScreen() {
 
         {/* ── ACTIONS ── */}
         <View style={styles.actions}>
+
+          {/* ── Kairox §3: SUPERVISOR ESCALATION ACTION ── */}
+          {user?.role === 'supervisor' &&
+            !['closed', 'completed', 'escalated'].includes(String(issue.status || '').toLowerCase()) && (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[
+                styles.primaryActionBtn,
+                { backgroundColor: theme.danger, marginBottom: 12 },
+              ]}
+              onPress={() => setEscalationOpen(true)}
+              testID="issue-escalate-btn"
+            >
+              <Ionicons name="arrow-up-circle" size={18} color="#fff" />
+              <Text style={styles.primaryActionText}>Escalate to Managing Director</Text>
+            </TouchableOpacity>
+          )}
 
           {/* ── PROBLEM SOLVER ACTIONS ── */}
           {isProblemSolver && (
@@ -520,6 +556,15 @@ export default function IssueDetailScreen() {
       <FullScreenSpinner visible={refreshing} message="Updating Issue Details..." color={theme.primary} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
+
+      {/* ── Kairox §3: ESCALATION MODAL ── */}
+      <EscalationReportModal
+        visible={escalationOpen}
+        onClose={() => setEscalationOpen(false)}
+        onSubmitted={() => setToastMessage('Escalation sent to Managing Director')}
+        issueId={issue.id}
+        currentUser={user}
+      />
     </SafeAreaView>
   );
 }
