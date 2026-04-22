@@ -79,37 +79,70 @@ api.interceptors.response.use(
 
 // ==================== AUTH API ====================
 
+// NOTE: Login is mock-only for this build (user directive: "frontend only,
+// use mock data"). The real backend call is preserved below, commented out,
+// so the switch back is one-line when the AWS backend is production-ready.
+// Every mock-backed call emits a [BACKEND-GAP] warn on first invocation.
+import { users as mockUsers } from '../mocks/users';
+
+let _mockLoginWarned = false;
+
 /**
- * Login user with username and password
+ * Login user with username and password (mock).
+ *
+ * Matches against `src/mocks/users.js`. Generates a fake JWT-shaped token
+ * so the rest of the app (interceptors, storage, auth-gate) works unchanged.
  */
 export const loginUser = async (username, password) => {
-  try {
-    const response = await api.post('/api/v1/auth/login', {
-        phone: username,   // IMPORTANT: match backend field
-        password: password,
-    });
-    const { access_token, user } = response.data;
-
-    // Store token and user
-    await AsyncStorage.setItem(TOKEN_KEY, access_token);
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
-
-    return {
-      success: true,
-      user: {
-        ...user,
-        avatar: user.avatar_url,
-      },
-      token: access_token,
-    };
-  } catch (error) {
-    console.error('Login error:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Invalid credentials',
-    };
+  if (!_mockLoginWarned) {
+    // eslint-disable-next-line no-console
+    console.warn('[BACKEND-GAP] auth/login: using mock users; switch api.js loginUser back to POST /api/v1/auth/login when AWS backend is ready');
+    _mockLoginWarned = true;
   }
+
+  // Simulated latency so redux loading states exercise correctly.
+  await new Promise((r) => setTimeout(r, 250));
+
+  const matched = mockUsers.find(
+    (u) =>
+      (u.username === username || u.phone === username || u.email === username) &&
+      u.password === password
+  );
+
+  if (!matched) {
+    return { success: false, error: 'Invalid credentials' };
+  }
+
+  // Fake bearer token — opaque string; interceptors only check truthiness.
+  const access_token = `mock.${matched.id}.${Date.now()}`;
+
+  // Strip password before persisting.
+  // eslint-disable-next-line no-unused-vars
+  const { password: _pw, ...safeUser } = matched;
+  const user = { ...safeUser, avatar_url: safeUser.avatar };
+
+  await AsyncStorage.setItem(TOKEN_KEY, access_token);
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+
+  return {
+    success: true,
+    user: { ...user, avatar: user.avatar_url },
+    token: access_token,
+  };
 };
+
+// TODO(backend): restore the real call once AWS endpoint is live:
+// export const loginUser = async (username, password) => {
+//   try {
+//     const response = await api.post('/api/v1/auth/login', { phone: username, password });
+//     const { access_token, user } = response.data;
+//     await AsyncStorage.setItem(TOKEN_KEY, access_token);
+//     await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+//     return { success: true, user: { ...user, avatar: user.avatar_url }, token: access_token };
+//   } catch (error) {
+//     return { success: false, error: error.response?.data?.detail || 'Invalid credentials' };
+//   }
+// };
 
 /**
  * Get current authenticated user
