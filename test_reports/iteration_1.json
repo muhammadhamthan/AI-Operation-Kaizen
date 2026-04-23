@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend-only E2E test for Kairox AI OpEx: verified the navigation back-stack fix, the new Monthly Report screen across 3 roles, and the Site Diary vs Monthly Report separation for Customer MD. All 6 manager hidden-route back-nav regressions pass, and Monthly Report renders with correct role-scoped hero labels and scope text for Manager / Supervisor / Customer MD. Solver dashboard correctly hides the Monthly Report card.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Chat sessions load on landing",
+        "issue": "Console shows CORS errors calling https://api.kairoxaitech.com/api/v1/chat/sessions (pre-existing, outside scope of this P0 task). Does NOT block dashboard/monthly-report/diary flows which are all mock-service driven.",
+        "affected_selectors": []
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backToDashboard() helper in src/utils/navigation.js correctly uses router.replace('/(main)/(tabs)/dashboard') with router.back() fallback — this cleanly bypasses the expo-router history stack and is the correct pattern for tab-parented deep screens.",
+    "monthly-report.js is wrapped in <RoleGuard action='view:dashboard'> and role-scoped data comes from monthlyReportMockService(me), giving each role a distinct hero label ('Closure rate' for Manager, 'Issues closed' for Supervisor, 'On-time delivery' for Customer MD) and scope string — good separation.",
+    "monthly-report.js is ~610 lines — borderline; if more sections are added, consider splitting HeroTile / KpiCard / PerSiteCard into a ./components folder.",
+    "Minor: MiniStat receives theme/isDark props but flexBasis '22%' combined with gap:8 can wrap awkwardly on narrow screens — confirmed visually OK at 430px but worth checking on 360px Android."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "100%"},
+  "test_credentials": "manager1/manager123, supervisor1/super123, customer1/cust123, solver1/solver123 — all verified working via mock login",
+  "seed_data_creation": "None — all data served from src/services/mocks/monthlyReportMockService.js + siteDiaryMockService.js",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All four roles verified end-to-end at viewport 430x900 against https://57d9061e-1694-4d64-b55f-7a29cafd5e40.preview.emergentagent.com. Key validations performed: (1) Manager dashboard shows Monthly Report card; MR screen renders 'Closure rate' hero + 'All 5 sites · 3 supervisors' scope; monthly-report-back → /dashboard. (2) Supervisor MR renders 'Issues closed' hero + 'Rajesh Kumar · Vepery Industrial Complex, Ambattur Manufacturing Unit' scope; back → /dashboard. (3) Customer MD shows BOTH Site Diary AND Monthly Report cards; Site Diary → /diary (daily entries with Work Done/Issues Noted/Safety); Monthly Report → /monthly-report ('On-time delivery' hero, 'Desai Holdings · 2 sites' scope, 'YOUR SITES' section) — confirmed DIFFERENT screens. (4) Solver dashboard has NO Monthly Report card (correct). (5) All 6 manager hidden-route back buttons (budget-back, sites-back, solvers-back, supervisors-back, customermds-back, monthly-report-back) land on /dashboard, never on /chat — P0 bug is fixed. CORS errors on /api/v1/chat/sessions are pre-existing and unrelated.",
+  "rca of the issue": "Original bug: after login users landed on /chat (first tab). Tapping a dashboard card from the dashboard tab did router.push('/budget'). On /budget the header chevron called router.back() which popped the history entry and returned to /chat (the login landing). Fix: backToDashboard() helper uses router.replace('/(main)/(tabs)/dashboard') to unconditionally jump to the dashboard tab, independent of history. All hidden-route screens were wired to this helper. Verified: 6/6 hidden routes for manager all return to /dashboard."
+}

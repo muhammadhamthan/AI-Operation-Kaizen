@@ -21,6 +21,7 @@ import { useTheme } from '../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../src/store/slices/authSlice';
 import RoleGuard from '../../../src/components/navigation/RoleGuard';
 import EmptyState from '../../../src/components/common/EmptyState';
+import { backToDashboard } from '../../../src/utils/navigation';
 import { users as mockUsers } from '../../../src/mocks/users';
 import { sites as mockSites } from '../../../src/mocks/sites';
 import {
@@ -58,7 +59,7 @@ export default function SiteDiaryRoute() {
   return (
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} testID="diary-back">
+        <TouchableOpacity onPress={backToDashboard} testID="diary-back">
           <Ionicons name="chevron-back" size={22} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Site Diary</Text>

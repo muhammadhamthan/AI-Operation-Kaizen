@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import RoleGuard from '../../../src/components/navigation/RoleGuard';
 import Avatar from '../../../src/components/common/Avatar';
+import { backToDashboard } from '../../../src/utils/navigation';
 import { users as mockUsers } from '../../../src/mocks/users';
 import { issues as mockIssues } from '../../../src/mocks/issues';
 import { sites as mockSites } from '../../../src/mocks/sites';
@@ -51,7 +52,7 @@ export default function SupervisorsCardRoute() {
     <RoleGuard action="view:supervisorsCard">
       <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={() => router.back()} testID="supervisors-back">
+          <TouchableOpacity onPress={backToDashboard} testID="supervisors-back">
             <Ionicons name="chevron-back" size={22} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Supervisors</Text>

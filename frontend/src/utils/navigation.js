@@ -1,19 +1,28 @@
 /**
  * Smart back-navigation for all Kairox destination screens (hidden tabs +
- * modal-ish routes). `router.back()` follows the expo-router history stack
- * so if the user arrived at the app on `chat`, switched to `dashboard`, then
- * tapped a card that pushed into `/budget`, `router.back()` sends them back
- * to `chat` (their first tab) — confusing.
+ * modal-ish routes). Plain `router.back()` follows the expo-router history
+ * stack, so if the user opened the app on Chat, switched tabs to Dashboard,
+ * then tapped a card that pushed `/budget`, `router.back()` sends them to
+ * Chat (their first tab) — confusing.
  *
- * This helper prefers a direct replace to `/dashboard` when we know that's
- * the logical parent.
+ * These helpers force the logical parent.
  */
 import { router } from 'expo-router';
 
+const DASHBOARD = '/(main)/(tabs)/dashboard';
+
+/**
+ * Go back to the main Dashboard tab, regardless of history stack.
+ * Preferred for every screen reached from a dashboard card.
+ */
 export const backToDashboard = () => {
   try {
-    router.replace('/(main)/(tabs)/dashboard');
+    router.replace(DASHBOARD);
   } catch {
-    router.back();
+    try {
+      router.back();
+    } catch {
+      /* noop */
+    }
   }
 };

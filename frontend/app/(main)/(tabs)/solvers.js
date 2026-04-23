@@ -15,6 +15,7 @@ import { useTheme } from '../../../src/theme/ThemeContext';
 import RoleGuard from '../../../src/components/navigation/RoleGuard';
 import EmptyState from '../../../src/components/common/EmptyState';
 import Avatar from '../../../src/components/common/Avatar';
+import { backToDashboard } from '../../../src/utils/navigation';
 import { fetchSolversPerformanceAPI } from '../../../src/services/api';
 
 export default function SolversRoute() {
@@ -38,7 +39,7 @@ export default function SolversRoute() {
     <RoleGuard action="view:solvers">
       <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={() => router.back()} testID="solvers-back">
+          <TouchableOpacity onPress={backToDashboard} testID="solvers-back">
             <Ionicons name="chevron-back" size={22} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Problem Solvers</Text>

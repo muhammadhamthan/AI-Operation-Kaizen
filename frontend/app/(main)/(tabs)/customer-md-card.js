@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import RoleGuard from '../../../src/components/navigation/RoleGuard';
 import Avatar from '../../../src/components/common/Avatar';
+import { backToDashboard } from '../../../src/utils/navigation';
 import { users as mockUsers } from '../../../src/mocks/users';
 import { sites as mockSites } from '../../../src/mocks/sites';
 
@@ -42,7 +43,7 @@ export default function CustomerMDCardRoute() {
     <RoleGuard action="view:customerMDCard">
       <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={() => router.back()} testID="customermds-back">
+          <TouchableOpacity onPress={backToDashboard} testID="customermds-back">
             <Ionicons name="chevron-back" size={22} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Customer{'\u2019'}s MDs</Text>

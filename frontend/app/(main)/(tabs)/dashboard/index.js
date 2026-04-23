@@ -483,6 +483,16 @@ export default function DashboardScreen() {
                       onPress={() => router.push('/(main)/diary')}
                     />
                   </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Monthly Report"
+                      count={null}
+                      icon="document-text-outline"
+                      color="#db2777"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/monthly-report')}
+                    />
+                  </View>
                 </>
               )}
               {user?.role === 'manager' && (
@@ -529,6 +539,16 @@ export default function DashboardScreen() {
                       onPress={() => router.push('/(main)/diary')}
                     />
                   </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Monthly Report"
+                      count={null}
+                      icon="document-text-outline"
+                      color="#db2777"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/monthly-report')}
+                    />
+                  </View>
                 </>
               )}
               {user?.role === 'customer_md' && (
@@ -562,7 +582,7 @@ export default function DashboardScreen() {
                       count={null}
                       icon="document-text-outline"
                       color="#db2777"
-                      onPress={() => router.push('/(main)/diary')}
+                      onPress={() => router.push('/(main)/monthly-report')}
                     />
                   </View>
                 </>

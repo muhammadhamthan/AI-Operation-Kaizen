@@ -17,6 +17,7 @@ import { useTheme } from '../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../src/store/slices/authSlice';
 import RoleGuard from '../../../src/components/navigation/RoleGuard';
 import EmptyState from '../../../src/components/common/EmptyState';
+import { backToDashboard } from '../../../src/utils/navigation';
 import { fetchSitesAnalytics } from '../../../src/services/api';
 
 /**
@@ -50,7 +51,7 @@ export default function SitesRoute() {
     <RoleGuard action="view:sites">
       <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={() => router.back()} testID="sites-back">
+          <TouchableOpacity onPress={backToDashboard} testID="sites-back">
             <Ionicons name="chevron-back" size={22} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Sites</Text>
