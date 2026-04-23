@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Linking,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,10 +37,8 @@ export default function MDCardRoute() {
     Linking.openURL(`tel:${sanitized}`).catch(() => {});
   };
   const onChat = () => {
-    Alert.alert(
-      'Coming in Priority 3',
-      "Supervisor\u2194MD and Customer MD\u2194MD personal chat lands in the next build (Kairox \u00A77/\u00A78)."
-    );
+    if (!md?.id) return;
+    router.push(`/chat/personal/${md.id}`);
   };
 
   return (

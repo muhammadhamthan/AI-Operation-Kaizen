@@ -57,6 +57,7 @@ export default function CustomerMDCardRoute() {
               style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
               activeOpacity={0.7}
               testID={`customermd-item-${item.id}`}
+              onPress={() => router.push(`/chat/personal/${item.id}`)}
             >
               <Avatar name={item.name} uri={item.avatar} size={44} />
               <View style={{ flex: 1, marginLeft: 12 }}>

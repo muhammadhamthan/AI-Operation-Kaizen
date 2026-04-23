@@ -51,8 +51,8 @@
 |---|-----------------------------------------------|-------------------|
 | 1 | §0, §1, §10 — Foundation + role nav + guards | **✅ done** (Apr 22) |
 | 2 | §2, §3, §5, §6, §16 — Chat, lifecycle, alerts, photo timeline | **✅ done** (Apr 22) |
-| 3 | §7, §8, §4, §14 — Personal + group chats     | ⏳ next               |
-| 4 | §9, §11, §15 — Customer MD dash + budget + diary | ⏳                 |
+| 3 | §7, §8, §4, §14 — Personal + group chats     | **✅ done** (Apr 23) |
+| 4 | §9, §11, §15 — Customer MD dash + budget + diary | ⏳ next           |
 | 5 | §12, §13, §17 — MD admin + Sheets + Gantt    | ⏳                   |
 
 ---

@@ -440,22 +440,34 @@ export default function DashboardScreen() {
 
               {/* ── Kairox v3.0 role-specific cards (Priority 1) ── */}
               {user?.role === 'supervisor' && (
-                <View style={styles.statsRow}>
-                  <DashboardCard
-                    title="Managing Director"
-                    count={null}
-                    icon="person-circle-outline"
-                    color="#3b82f6"
-                    onPress={() => router.push('/(main)/(tabs)/md-card')}
-                  />
-                  <DashboardCard
-                    title="Budget Request"
-                    count={null}
-                    icon="wallet-outline"
-                    color="#10a37f"
-                    onPress={() => router.push('/(main)/(tabs)/budget')}
-                  />
-                </View>
+                <>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Managing Director"
+                      count={null}
+                      icon="person-circle-outline"
+                      color="#3b82f6"
+                      onPress={() => router.push('/(main)/(tabs)/md-card')}
+                    />
+                    <DashboardCard
+                      title="Budget Request"
+                      count={null}
+                      icon="wallet-outline"
+                      color="#10a37f"
+                      onPress={() => router.push('/(main)/(tabs)/budget')}
+                    />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Ops Team Group"
+                      count={null}
+                      icon="people-circle-outline"
+                      color="#0ea5e9"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/chat/group/ops')}
+                    />
+                  </View>
+                </>
               )}
               {user?.role === 'manager' && (
                 <>
@@ -483,6 +495,16 @@ export default function DashboardScreen() {
                       color="#10a37f"
                       style={styles.fullWidthCard}
                       onPress={() => router.push('/(main)/(tabs)/budget')}
+                    />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Ops Team Group"
+                      count={null}
+                      icon="people-circle-outline"
+                      color="#0ea5e9"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/chat/group/ops')}
                     />
                   </View>
                 </>

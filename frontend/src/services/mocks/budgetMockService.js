@@ -140,3 +140,42 @@ export const getBudgetTotals = async (user) => {
   const rejectedCount = list.filter((b) => b.status === 'rejected').length;
   return { count: list.length, pending, approvedSum, rejectedCount };
 };
+
+/** Get a single budget by id (used by inline budget cards in chat). */
+export const getBudgetById = async (id) => {
+  warn();
+  const all = await ensureSeed();
+  return all.find((b) => b.id === id) || null;
+};
+
+/**
+ * MD / Customer MD decision on a budget request.
+ * @param {string} decision - 'approve' | 'reject' | 'escalate_to_customer_md'
+ */
+export const decideBudget = async (id, actor, decision, note) => {
+  warn();
+  // TODO(backend): POST /api/v1/budget/requests/:id/decide
+  await new Promise((r) => setTimeout(r, 240));
+  const all = await ensureSeed();
+  const idx = all.findIndex((b) => b.id === id);
+  if (idx === -1) return { success: false, error: 'Not found' };
+  const now = new Date().toISOString();
+  const updates = { updated_at: now };
+  if (decision === 'approve') {
+    updates.status = 'approved';
+    updates.md_decision_at = now;
+    updates.md_decided_by = { id: actor?.id, name: actor?.name };
+  } else if (decision === 'reject') {
+    updates.status = 'rejected';
+    updates.md_decision_at = now;
+    updates.md_decided_by = { id: actor?.id, name: actor?.name };
+    updates.rejection_note = note || '';
+  } else if (decision === 'escalate_to_customer_md') {
+    updates.status = 'escalated_customer_md';
+  } else {
+    return { success: false, error: 'Unknown decision' };
+  }
+  all[idx] = { ...all[idx], ...updates };
+  await AsyncStorage.setItem(KEY, JSON.stringify(all));
+  return { success: true, budget: all[idx] };
+};
