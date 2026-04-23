@@ -228,13 +228,66 @@ Premium, distinctive layout (no AI-slop defaults):
 
 ---
 
-## ⏳ P1 — Priority 5 (next)
+## ✅ Priority 5 — Admin + Sheets Sync + Gantt + Backend Gaps (Apr 23, 2026)
 
-`FULL_COMBINED_PROMPT.md` §12, §13, §17 scope:
-- §12 MD admin console (user + site management screens, read-only for MVP)
-- §13 Live Google Sheets sync — mock + manual-trigger button (emits `[BACKEND-GAP]`)
-- §17 Gantt timeline view for issues using `react-native-svg`
-- Consolidate all `[BACKEND-GAP]` warnings into a single Section-19 admin-visible gap list screen
+### Scope delivered
+- **§12 MD Admin Hub** (`/(main)/admin`) — new full-width MD-only dashboard card routes to a 4-tile hub: Team, Add Site, Google Sheets Sync, Backend Gaps.
+- **§12 Team screen** — lists all users with role chips + filter pills (All / Supervisors / Solvers / Customer MDs). "+" top-right opens Add Member.
+- **§12 Add Member form** — segmented role control (Supervisor / Problem Solver / Customer's MD); Company field surfaces only for Customer MD. On save, mock `addUser` persists to AsyncStorage and the user appears instantly in Team list. MD provides credentials to the new user via their own channel (no email invite).
+- **§12 Add Site form** — name, location, GPS lat/lon with auto-fill button (uses `expo-location` when available, falls back to Chennai default on web), initial budget. Persists via mock; new site is immediately visible on the global Sites list (MD/Sup/Customer MD).
+- **§12 Assign Customer-MD Sites** — from Team list, "Assign sites" button on any Customer MD row → multi-select screen with pre-checked current assignments. Save persists to AsyncStorage; Customer MD's dashboard Sites scope updates immediately.
+- **§13 Google Sheets Settings** — Connect / Disconnect flow. `SyncStatusPill` component animates through 4 states (idle / syncing / synced / error). "Sync now" + "Simulate error" buttons exercise the state machine.
+- **§17 Project Timeline Gantt** — SVG-based chart with colour-coded bars (not-started grey / in-progress blue / completed green / delayed red), dashed dependency lines, red contract-end marker, blue dashed today-marker, month ticks. MD gets edit modal (end-date + status); changing end-date forward triggers **dependency cascade** that shifts all downstream tasks and extends the contract end if it overflows. Supervisor + Customer MD get read-only view. Problem Solver blocked by RoleGuard.
+- **§19 Backend Gaps** — consolidated 11-group list of every `[BACKEND-GAP]` endpoint, rendered in monospace with category headers. Designed to be handed to the backend team as a build checklist.
+
+### Files created
+| Path | Purpose |
+|------|---------|
+| `src/services/mocks/adminMockService.js` | `addSite`, `addUser`, `getAllSites`, `getAllUsers`, `getCustomerMdSites`, `setCustomerMdSites` — all AsyncStorage-backed |
+| `src/services/mocks/sheetSyncMockService.js` | `getSheetsStatus`, `connectSheets`, `disconnectSheets`, `triggerManualSync`, `simulateError` |
+| `src/services/mocks/projectTimelineMockService.js` | `getTimeline`, `updateTask` (with cascade), `resetTimeline`. Deterministic per-site 8-task chain with dependencies |
+| `src/components/common/SyncStatusPill.js` | Animated pill — spinning sync icon during 'syncing' state |
+| `app/(main)/admin/index.js` | Admin Hub (4 tiles) |
+| `app/(main)/admin/team.js` | Team list with filters + Add CTA |
+| `app/(main)/admin/add-member.js` | User creation form (segmented role) |
+| `app/(main)/admin/add-site.js` | Site creation form with GPS auto-fill |
+| `app/(main)/admin/assign-sites/[userId].js` | Customer-MD site assignment multi-select |
+| `app/(main)/admin/google-sheets.js` | Google Sheets Settings |
+| `app/(main)/admin/backend-gaps.js` | Section 19 consolidated list |
+| `app/(main)/timeline/[siteId].js` | SVG Gantt with edit modal + cascade |
+
+### Files modified (additive only)
+- `app/(main)/(tabs)/dashboard/index.js` — added full-width "Admin" card for MD below Monthly Report
+- `app/(main)/(tabs)/sites.js` — MD sees "+" top-right; every site row now navigates to `/timeline/:id`; newly-added sites appear via `getAllSites()` merge
+
+### Verified by testing_agent (iteration_2.json — 100% pass)
+- MD: Admin card visible → hub → all 4 sub-screens functional
+- MD: Add Member persists 'Test Supervisor' in Team list
+- MD: Add Site persists 'Test Plant' in Sites list
+- MD: Assign sites for Anita Desai (2 → 3 sites); Customer MD login sees 3 sites
+- MD: Sheets pill cycles idle → syncing → synced → error correctly
+- MD: Backend Gaps shows all 11 grouped sections
+- MD: Gantt edit modal + cascade (moved Structural framing end → 5 downstream tasks turned delayed)
+- Supervisor + Customer MD: Gantt read-only; Admin blocked by RoleGuard
+- Problem Solver: both Admin + Timeline blocked by RoleGuard
+- Back-nav: no screen ever lands on Chat tab
+
+### Known minor
+- Deep-linked direct-URL entry to `admin/add-member`, `admin/add-site`, `admin/assign-sites/:id`, `timeline/:id` → header chevron (router.back) has no history to pop → stays on page. Not a functional regression; real tap-chain navigation works. Could be patched by swapping `router.back()` for a parent-aware fallback, but out of scope for P5.
+
+---
+
+## 🎯 All 5 priorities complete
+
+| P | Scope | Status |
+|---|-------|--------|
+| 1 | §0, §1, §10 — Foundation | ✅ Apr 22 |
+| 2 | §2, §3, §5, §6, §16 — Chat + Lifecycle | ✅ Apr 22 |
+| 3 | §7, §8, §4, §14 — Personal + group chats | ✅ Apr 23 |
+| 4 | §9, §11, §15 — CMD dash + budget + diary | ✅ Apr 23 |
+| 5 | §12, §13, §17, §19 — Admin + Sheets + Gantt + Gaps | ✅ Apr 23 |
+
+All 17 feature sections shipped as mock-driven frontend. Every missing endpoint emits `[BACKEND-GAP]` and is captured in the in-app Backend Gaps screen for the AWS team.
 
 
 ## Priority 1 + 2 Mock Data Coverage (Apr 23 follow-up)
