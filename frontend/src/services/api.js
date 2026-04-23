@@ -85,6 +85,8 @@ api.interceptors.response.use(
 // Every mock-backed call emits a [BACKEND-GAP] warn on first invocation.
 import { users as mockUsers } from '../mocks/users';
 import { issues as mockIssues } from '../mocks/issues';
+import { sites as mockSites } from '../mocks/sites';
+import { complaints as mockComplaints } from '../mocks/complaints';
 
 let _mockLoginWarned = false;
 
@@ -396,78 +398,111 @@ export const fetchIssueTimeline = async (issueId) => {
  * Fetch dashboard statistics
  */
 export const fetchDashboardStats = async () => {
-  try {
-    const response = await api.get('/api/v1/dashboard');
-    const data = response?.data || {};
+  // Kairox v3.0: mock-only
+  // eslint-disable-next-line no-console
+  console.warn('[BACKEND-GAP] dashboard/stats: using mock aggregates');
+  // TODO(backend): restore GET /api/v1/dashboard when AWS endpoint is live.
+  await new Promise((r) => setTimeout(r, 180));
 
-    // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
-   if (data.active_assignments) {
-      return {
-        success: true,
-        data: {
-          isSolverView: true,
-          stats: {
-            totalIssues: (data.total_active || 0) + (data.total_completed || 0),
-            notFixedIssues: data.total_active || 0,
-            fixedIssues: data.total_completed || 0,
-            complaints: data.complaints_against || 0
-          },
-          recentIssues: data.active_assignments.map(a => ({
-            id: a.issue_id,
-            title: a.issue_title,
-            site_name: a.site_name,
-            priority: a.priority,
-            status: a.status || "ASSIGNED", 
-            // ✅ FIXED: Map to actual created_at for the time-series chart
-            created_at: a.due_date || a.created_at 
-          }))
-        }
-      };
-    }
-      
-    // 👔 MANAGER / SUPERVISOR PAYLOAD
-    const summary = data.summary || {};
+  const storedUserRaw = await AsyncStorage.getItem(USER_KEY);
+  const user = storedUserRaw ? JSON.parse(storedUserRaw) : null;
+  const role = user?.role;
+
+  const countByStatus = (list, arr) =>
+    list.filter((i) => arr.includes(i.status)).length;
+
+  // Solver view
+  if (role === 'problem_solver') {
+    // Filter issues assigned to this user (mock: all open issues "belong" to them for demo)
+    const assigned = mockIssues.slice(0, 6);
+    const active = countByStatus(assigned, [
+      'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'ESCALATED',
+    ]);
+    const done = countByStatus(assigned, ['COMPLETED']);
+    return {
+      success: true,
+      data: {
+        isSolverView: true,
+        stats: {
+          totalIssues: assigned.length,
+          notFixedIssues: active,
+          fixedIssues: done,
+          complaints: mockComplaints.filter((c) => c.target_solver_id === user?.id).length,
+        },
+        recentIssues: assigned.slice(0, 5).map((a) => ({
+          id: a.id,
+          title: a.title,
+          site_name: mockSites.find((s) => s.id === a.site_id)?.name || '—',
+          priority: a.priority,
+          status: a.status,
+          created_at: a.deadline_at || a.created_at,
+        })),
+      },
+    };
+  }
+
+  // Customer MD — scope to their sites
+  if (role === 'customer_md') {
+    const siteIds = user?.sites || [];
+    const issues = mockIssues.filter((i) => siteIds.includes(i.site_id));
+    const complaints = mockComplaints.filter((c) => {
+      const issue = mockIssues.find((i) => i.id === c.issue_id);
+      return issue && siteIds.includes(issue.site_id);
+    });
     return {
       success: true,
       data: {
         isSolverView: false,
         stats: {
-          totalIssues: summary.total_issues || 0,
-          notFixedIssues: 
-            (summary.open_issues || 0) + 
-            (summary.assigned_issues || 0) + 
-            (summary.in_progress_issues || 0) + 
-            (summary.reopened_issues || 0) + 
-            (summary.escalated_issues || 0),
-          fixedIssues: summary.completed_issues || 0,
-          complaints: 0
+          totalIssues: issues.length,
+          notFixedIssues: countByStatus(issues, [
+            'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'ESCALATED',
+          ]),
+          fixedIssues: countByStatus(issues, ['COMPLETED']),
+          complaints: complaints.length,
         },
-        rawSummary: summary,
-        alerts: {
-          // ✅ FIXED: Mapping to exact keys from your Manager JSON
-          escalations: data.active_escalations || 0,
-          deadlines: data.overdue_issues || 0,
-          pendingReviews: summary.resolved_pending_review || 0
-        },
-        recentIssues: data.recent_issues || [],
-        mySites: data.my_sites || []
-      }
-    };
-
-  } catch (error) {
-    console.error('Fetch dashboard error:', error.response?.data || error.message);
-    return {
-      success: true, // Fallback
-      data: {
-        isSolverView: false,
-        stats: { totalIssues: 0, notFixedIssues: 0, fixedIssues: 0, complaints: 0 },
         rawSummary: {},
-        alerts: { escalations: 0, deadlines: 0, pendingReviews: 0 },
-        recentIssues: [],
-        mySites: []
-      }
+        alerts: {
+          escalations: countByStatus(issues, ['ESCALATED']),
+          deadlines: 0,
+          pendingReviews: 0,
+        },
+        recentIssues: issues.slice(0, 5),
+        mySites: mockSites.filter((s) => siteIds.includes(s.id)),
+      },
     };
   }
+
+  // Supervisor / Manager — full view
+  const totalIssues = mockIssues.length;
+  return {
+    success: true,
+    data: {
+      isSolverView: false,
+      stats: {
+        totalIssues,
+        notFixedIssues: countByStatus(mockIssues, [
+          'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'ESCALATED',
+        ]),
+        fixedIssues: countByStatus(mockIssues, ['COMPLETED']),
+        complaints: mockComplaints.length,
+      },
+      rawSummary: {
+        total_issues: totalIssues,
+        completed_issues: countByStatus(mockIssues, ['COMPLETED']),
+      },
+      alerts: {
+        escalations: countByStatus(mockIssues, ['ESCALATED']),
+        deadlines: mockIssues.filter(
+          (i) => new Date(i.deadline_at) < new Date() &&
+          !['COMPLETED'].includes(i.status)
+        ).length,
+        pendingReviews: 3,
+      },
+      recentIssues: mockIssues.slice(0, 5),
+      mySites: mockSites,
+    },
+  };
 };
 
 // ==================== COMPLAINTS API ====================
@@ -477,55 +512,53 @@ export const fetchDashboardStats = async () => {
  */
 
 export const fetchComplaints = async ({ cursor = null, limit = 20 } = {}) => {
-  try {
-    const queryParams = { limit };
-    
-    // 📍 THE FIX: Translate Redux cursor to Backend 'skip'
-    const currentSkip = cursor ? parseInt(cursor, 10) : 0;
-    queryParams.skip = currentSkip;
+  // eslint-disable-next-line no-console
+  console.warn('[BACKEND-GAP] complaints/list: using mock complaints');
+  // TODO(backend): restore GET /api/v1/complaints with cursor pagination.
+  await new Promise((r) => setTimeout(r, 140));
 
-    const response = await api.get('/api/v1/complaints', { params: queryParams });
-    const data = response.data || {};
-    
-    const rawItems = data.complaints || data.items || [];
-    const totalItems = data.total || 0;
-
-    // 📍 Calculate Next Cursor for Redux
-    const nextSkip = currentSkip + limit;
-    const hasMore = nextSkip < totalItems;
-    const nextCursor = hasMore ? nextSkip.toString() : null;
-
-    // Return the whole object exactly as backend sent it
-    const complaintsData = response.data || {};
-    console.log(complaintsData)
-    
+  const currentSkip = cursor ? parseInt(cursor, 10) : 0;
+  const slice = mockComplaints.slice(currentSkip, currentSkip + limit);
+  const enriched = slice.map((c) => {
+    const issue = mockIssues.find((i) => i.id === c.issue_id);
+    const supervisor = mockUsers.find((u) => u.id === c.raised_by_supervisor_id);
+    const solver = c.target_solver_id
+      ? mockUsers.find((u) => u.id === c.target_solver_id)
+      : null;
     return {
-      success: true,
-      complaints: { 
-        items: rawItems, 
-        next_cursor: nextCursor, 
-        has_more: hasMore 
-      },
+      ...c,
+      issue_title: issue?.title || 'Unknown issue',
+      site_name: issue
+        ? mockSites.find((s) => s.id === issue.site_id)?.name
+        : null,
+      raised_by_name: supervisor?.name,
+      target_solver_name: solver?.name,
     };
-
-  } catch (error) {
-    console.error("❌ Fetch complaints error:", error.response?.data || error.message);
-    return {
-      success: false,
-      complaints: { items: [], next_cursor: null, has_more: false },
-    };
-  }
+  });
+  const nextSkip = currentSkip + limit;
+  const hasMore = nextSkip < mockComplaints.length;
+  return {
+    success: true,
+    complaints: {
+      items: enriched,
+      next_cursor: hasMore ? nextSkip.toString() : null,
+      has_more: hasMore,
+    },
+  };
 };
 
 export const fetchComplaintById = async (id) => {
-  try {
-    const response = await api.get(`/api/v1/complaints/${id}`);
-    // 📍 EXACT DATA: Return the raw object exactly as backend sent it
-    // No more mapping raisedBy or status="OPEN"
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  // eslint-disable-next-line no-console
+  console.warn(`[BACKEND-GAP] complaints/detail: using mock complaint id=${id}`);
+  await new Promise((r) => setTimeout(r, 120));
+  const c = mockComplaints.find((x) => String(x.id) === String(id));
+  if (!c) throw new Error('Complaint not found');
+  const issue = mockIssues.find((i) => i.id === c.issue_id);
+  return {
+    ...c,
+    issue_title: issue?.title,
+    site_name: issue ? mockSites.find((s) => s.id === issue.site_id)?.name : null,
+  };
 };
 // ==================== SITES API ====================
 
@@ -533,60 +566,58 @@ export const fetchComplaintById = async (id) => {
  * Fetch all sites
  */
 export const fetchSites = async () => {
-  try {
-    const response = await api.get('/api/v1/sites/analytics');
+  // eslint-disable-next-line no-console
+  console.warn('[BACKEND-GAP] sites/list: using mock sites');
+  await new Promise((r) => setTimeout(r, 140));
+  const enriched = mockSites.map((s) => {
+    const siteIssues = mockIssues.filter((i) => i.site_id === s.id);
+    const active = siteIssues.filter((i) =>
+      ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'ESCALATED'].includes(i.status)
+    ).length;
     return {
-      success: true,
-      sites: response.data,
+      ...s,
+      issues_count: siteIssues.length,
+      active_issues: active,
     };
-  } catch (error) {
-    console.error('Fetch sites error:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch sites',
-      sites: [],
-    };
-  }
+  });
+  return { success: true, sites: enriched };
 };
 
-//it have to be analytic with site id based
 export const fetchSitesAnalytics = async () => {
- try {
-    const response = await api.get('/api/v1/sites/analytics');
-
-    return {
-      success: true,
-      sites: response.data.sites,
-    };
-
-  } catch (error) {
-    console.error("Fetch sites error:", error.response?.data || error.message);
-
-    return {
-      success: false,
-      sites: [],
-      error: error.response?.data?.detail || "Failed to fetch sites",
-    };
-  }
+  // eslint-disable-next-line no-console
+  console.warn('[BACKEND-GAP] sites/analytics: using mock sites analytics');
+  await new Promise((r) => setTimeout(r, 140));
+  const { sites } = await fetchSites();
+  return { success: true, sites };
 };
 
-// we have to add another function to fetch solvers performance based on solver id
 export const fetchSolversPerformanceAPI = async () => {
-  try {
-    const response = await api.get('/api/v1/solvers');
+  // eslint-disable-next-line no-console
+  console.warn('[BACKEND-GAP] solvers/performance: using mock solver list');
+  await new Promise((r) => setTimeout(r, 140));
 
-    return {
-      success: true,
-      solvers: response.data.solvers,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      solvers: [],
-      error: error.response?.data?.detail || "Failed to fetch solvers",
-    };
-  }
+  const solvers = mockUsers
+    .filter((u) => u.role === 'problem_solver')
+    .map((u) => {
+      const assigned = mockIssues.filter(
+        (i) => i.id % mockUsers.length === u.id % mockUsers.length
+      ); // deterministic pseudo-assignment for demo
+      const completed = assigned.filter((i) => i.status === 'COMPLETED').length;
+      const pending = assigned.length - completed;
+      return {
+        id: u.id,
+        name: u.name,
+        phone: u.phone,
+        email: u.email,
+        avatar_url: u.avatar,
+        skill: u.skill,
+        total_assigned: assigned.length,
+        completed,
+        pending,
+        rating: (4 + ((u.id * 13) % 10) / 10).toFixed(1), // 4.0-4.9
+      };
+    });
+  return { success: true, solvers };
 };
 
 // ==================== CHATBOT API ====================

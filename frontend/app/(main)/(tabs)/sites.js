@@ -1,25 +1,95 @@
-import React from 'react';
-import { View, StyleSheet, Platform, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Platform,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useSelector } from 'react-redux';
+
 import { useTheme } from '../../../src/theme/ThemeContext';
+import { selectCurrentUser } from '../../../src/store/slices/authSlice';
 import RoleGuard from '../../../src/components/navigation/RoleGuard';
 import EmptyState from '../../../src/components/common/EmptyState';
+import { fetchSitesAnalytics } from '../../../src/services/api';
 
-export default function SitesTab() {
+/**
+ * Sites destination screen (reached from Dashboard → Sites card).
+ * Lists sites with issue counts. Customer's MD sees only their assigned sites.
+ */
+export default function SitesRoute() {
   const { theme } = useTheme();
+  const router = useRouter();
+  const user = useSelector(selectCurrentUser);
+  const [sites, setSites] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const res = await fetchSitesAnalytics();
+      if (!mounted) return;
+      let list = res.sites || [];
+      if (user?.role === 'customer_md') {
+        const ids = user?.sites || [];
+        list = list.filter((s) => ids.includes(s.id));
+      }
+      setSites(list);
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [user]);
+
   return (
     <RoleGuard action="view:sites">
-      <SafeAreaView
-        edges={['top']}
-        style={[styles.safe, { backgroundColor: theme.background }]}
-      >
-        <ScrollView contentContainerStyle={styles.content} testID="sites-tab-placeholder">
-          <EmptyState
-            icon="construct-outline"
-            title="Sites"
-            message="Enhanced Site Management arrives in Priority 2. For now, open a site from the Dashboard → Sites card."
+      <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity onPress={() => router.back()} testID="sites-back">
+            <Ionicons name="chevron-back" size={22} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Sites</Text>
+          <View style={{ width: 22 }} />
+        </View>
+        {loading ? (
+          <View style={styles.center}><ActivityIndicator color={theme.textSecondary} /></View>
+        ) : sites.length === 0 ? (
+          <EmptyState icon="business-outline" title="No sites" message="No sites assigned yet." />
+        ) : (
+          <FlatList
+            data={sites}
+            keyExtractor={(s) => String(s.id)}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
+                activeOpacity={0.7}
+                testID={`site-item-${item.id}`}
+              >
+                <View style={[styles.iconBox, { backgroundColor: theme.primaryLight }]}>
+                  <Ionicons name="business" size={18} color={theme.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.sub, { color: theme.textSecondary }]} numberOfLines={1}>
+                    {item.location}
+                  </Text>
+                  <View style={styles.metaRow}>
+                    <Text style={[styles.metaText, { color: theme.textSecondary }]}>
+                      {item.issues_count || 0} issues · {item.active_issues || 0} active
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
+            )}
           />
-        </ScrollView>
+        )}
       </SafeAreaView>
     </RoleGuard>
   );
@@ -27,5 +97,21 @@ export default function SitesTab() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  content: { flexGrow: 1, paddingTop: Platform.OS === 'web' ? 32 : 0 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  list: { paddingVertical: 12, paddingHorizontal: 16, gap: 10, paddingBottom: 80 },
+  card: {
+    flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1, gap: 12,
+  },
+  iconBox: {
+    width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center',
+  },
+  title: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
+  sub: { fontSize: 12, marginTop: 2 },
+  metaRow: { flexDirection: 'row', marginTop: 6 },
+  metaText: { fontSize: 11, fontWeight: '600' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });

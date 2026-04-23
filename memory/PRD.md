@@ -189,4 +189,40 @@ Full gap list in `FULL_COMBINED_PROMPT.md` §19.
 
 ---
 
-*Last updated: Apr 22, 2026 — Priority 1 complete (revised per user feedback: tab bar reduced to 3 tabs, role sections moved into dashboard cards, mock-only auth).*
+*Last updated: Apr 23, 2026 — Priority 1 + 2 complete, all cards + destination screens wired to mock data.*
+
+## Priority 1 + 2 Mock Data Coverage (Apr 23 follow-up)
+
+Per user directive "use mock data on all cards and screens till priority 2",
+the entire dashboard + every role-scoped destination screen is now driven
+by AsyncStorage-backed mock data. No call reaches the AWS backend.
+
+### Dashboard card data (per role)
+
+| Role         | Action cards                        | Main cards + counts (typical)                                   |
+|--------------|-------------------------------------|-----------------------------------------------------------------|
+| Supervisor   | Escalated: 3 · Pending Review: 3   | Pending 19 · Resolved 8 · Complaints 8 · Sites 5 · Solvers 5 · **MD** · **Budget Request** |
+| MD (manager) | Escalated · Pending Review         | Pending · Resolved · Complaints · Sites · **Supervisors 3** · **Customer MD 2** · **Budget ₹ total** |
+| Customer MD  | Escalated (scoped) · Pending Review | Pending · Resolved · Sites (scoped) · **MD** · **Budget (escalated only)** |
+| Problem Solver | none                              | My Pending · My Completed · Complaints against me              |
+
+### Destination screens (reached from dashboard cards)
+
+| Screen (route)           | Role access          | Data shown                                                                              |
+|--------------------------|----------------------|-----------------------------------------------------------------------------------------|
+| `/sites` (hidden tab)    | Sup / MD / CustMD    | Site name, location, issue total + active count; Customer MD scoped to assigned sites. |
+| `/solvers`               | Sup / MD             | Solver name, skill, phone, ✓ completed chip, ⏳ pending chip, ★ rating.                 |
+| `/md-card`               | Sup / CustMD         | MD profile card (avatar, name, email, phone, username) + Call + Message MD buttons.     |
+| `/supervisors-card`      | MD                   | Supervisor directory, avatar, site list, active/closed chips, chat icon.                |
+| `/customer-md-card`      | MD                   | Customer MD directory, avatar, company, assigned-sites list, chat icon.                 |
+| `/budget`                | Sup / MD / CustMD    | Totals row (total / pending / ₹approved / rejected) + per-request list with status pill. Role-scoped: Supervisor sees own; MD sees all; Customer MD sees escalated-to-them only. |
+| `/dashboard/complaints`  | existing MVP screen  | Now mock-backed via `fetchComplaints`; 8 seeded entries with issue + site names.        |
+| `/dashboard/issue-detail`| existing MVP screen  | Now mock-backed via `fetchIssueById`; shows Kairox labels + AlertStatusBanner + PhotoTimeline + (Sup) Escalate button. |
+
+### Mock layer touched
+- `src/services/api.js` — 6 more endpoints mocked (`fetchDashboardStats`, `fetchComplaints`, `fetchComplaintById`, `fetchSites`, `fetchSitesAnalytics`, `fetchSolversPerformanceAPI`). All emit `[BACKEND-GAP]` on first call.
+- `src/services/mocks/budgetMockService.js` — **NEW**, 5 seed requests, role-scoped filtering, `getBudgetRequests()` + `getBudgetTotals()`.
+- Screens `sites.js`, `solvers.js`, `md-card.js`, `supervisors-card.js`, `customer-md-card.js`, `budget.js` — all filled with list/detail UIs wired to mocks.
+
+Every mock call path has a `// TODO(backend): <endpoint>` comment, so the
+real backend team can search-and-replace when the AWS endpoints land.
