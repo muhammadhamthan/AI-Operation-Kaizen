@@ -1,0 +1,14 @@
+{
+  "rewrites": [
+    { "source": "!(**/*.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "**/*.docx",
+      "headers": [
+        { "key": "Content-Type", "value": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+        { "key": "Content-Disposition", "value": "attachment; filename=Kairox_Backend_Build_Checklist_v3.docx" }
+      ]
+    }
+  ]
+}
