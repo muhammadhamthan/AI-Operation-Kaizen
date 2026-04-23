@@ -20,6 +20,7 @@ import EmptyState from '../../../src/components/common/EmptyState';
 import {
   getBudgetRequests,
   getBudgetTotals,
+  getSiteBurnRates,
 } from '../../../src/services/mocks/budgetMockService';
 
 const STATUS_META = {
@@ -40,18 +41,21 @@ export default function BudgetRoute() {
   const user = useSelector(selectCurrentUser);
   const [list, setList] = useState([]);
   const [totals, setTotals] = useState(null);
+  const [burnRates, setBurnRates] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const [l, t] = await Promise.all([
+      const [l, t, br] = await Promise.all([
         getBudgetRequests(user),
         getBudgetTotals(user),
+        getSiteBurnRates(user),
       ]);
       if (!mounted) return;
       setList(l);
       setTotals(t);
+      setBurnRates(br);
       setLoading(false);
     })();
     return () => { mounted = false; };
@@ -97,6 +101,58 @@ export default function BudgetRoute() {
                 <TotalCard theme={theme} label="Pending" value={totals.pending} icon="hourglass-outline" color={theme.warning} bg={theme.warningLight} />
                 <TotalCard theme={theme} label="Approved" value={fmtCurrency(totals.approvedSum)} icon="checkmark-done-outline" color={theme.success} bg={theme.successLight} wide />
                 <TotalCard theme={theme} label="Rejected" value={totals.rejectedCount} icon="close-circle-outline" color={theme.danger} bg={theme.dangerLight} />
+              </View>
+            )}
+
+            {user?.role === 'supervisor' && (
+              <TouchableOpacity
+                onPress={() => router.push('/budget/new')}
+                style={[styles.raiseBtn, { backgroundColor: theme.primary }]}
+                testID="budget-new-request"
+                activeOpacity={0.85}
+              >
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={styles.raiseText}>Raise New Budget Request</Text>
+              </TouchableOpacity>
+            )}
+
+            {burnRates.length > 0 && (user?.role === 'manager' || user?.role === 'supervisor') && (
+              <View style={styles.burnSection}>
+                <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
+                  This month{'\u2019'}s burn rate
+                </Text>
+                {burnRates.map((br) => {
+                  const pct = Math.min(br.ratio, 1.1);
+                  const over = br.ratio > 0.9;
+                  const barColor = over ? theme.danger : br.ratio > 0.7 ? theme.warning : theme.success;
+                  return (
+                    <View
+                      key={br.site_id}
+                      style={[styles.burnCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                      testID={`burn-${br.site_id}`}
+                    >
+                      <View style={styles.burnRow}>
+                        <Text style={[styles.burnSite, { color: theme.text }]} numberOfLines={1}>
+                          {br.site_name}
+                        </Text>
+                        <Text style={[styles.burnAmt, { color: theme.text }]}>
+                          {fmtCurrency(br.spent)} / {fmtCurrency(br.ceiling)}
+                        </Text>
+                      </View>
+                      <View style={[styles.burnTrack, { backgroundColor: theme.border }]}>
+                        <View
+                          style={[
+                            styles.burnFill,
+                            { width: `${Math.round(pct * 100)}%`, backgroundColor: barColor },
+                          ]}
+                        />
+                      </View>
+                      <Text style={[styles.burnPct, { color: barColor }]}>
+                        {Math.round(br.ratio * 100)}% used
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
@@ -187,4 +243,18 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 11, fontWeight: '600', flex: 1 },
   statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   statusText: { fontSize: 11, fontWeight: '700' },
+  raiseBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    marginHorizontal: 16, paddingVertical: 12, borderRadius: 12, marginBottom: 10,
+  },
+  raiseText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  burnSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 18, gap: 8 },
+  sectionHeader: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  burnCard: { padding: 12, borderRadius: 12, borderWidth: 1, gap: 6 },
+  burnRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  burnSite: { fontSize: 13, fontWeight: '700', flex: 1 },
+  burnAmt: { fontSize: 12, fontWeight: '600' },
+  burnTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  burnFill: { height: 6, borderRadius: 3 },
+  burnPct: { fontSize: 11, fontWeight: '700' },
 });

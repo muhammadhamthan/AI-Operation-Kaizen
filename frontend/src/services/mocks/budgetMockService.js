@@ -6,6 +6,36 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/**
+ * Per-site monthly budget ceilings (for Kairox §11 burn-rate).
+ * Realistic demo numbers — one per mock site id.
+ * TODO(backend): GET /api/v1/sites/:id/budget/ceiling
+ */
+export const SITE_MONTHLY_CEILING = {
+  1: 500000,   // Vepery
+  2: 1000000,  // Ambattur
+  3: 300000,   // Guindy
+  4: 250000,   // Perungudi
+  5: 400000,   // Taramani
+};
+
+/**
+ * Kairox §11 approval thresholds:
+ *   <= 10,000            → auto-approved (per Ops pinned decision)
+ *   10,001 - 100,000     → MD decides
+ *   > 100,000            → MD + Customer MD double-approval (MD escalates)
+ */
+export const APPROVAL_THRESHOLDS = {
+  AUTO_LIMIT: 10000,
+  MD_LIMIT: 100000,
+};
+
+export const classifyBudget = (amount) => {
+  if (amount <= APPROVAL_THRESHOLDS.AUTO_LIMIT) return 'auto_approve';
+  if (amount <= APPROVAL_THRESHOLDS.MD_LIMIT) return 'md_only';
+  return 'md_plus_customer_md';
+};
+
 const KEY = 'kairox:mock:budgets:v1';
 let _warned = false;
 const warn = () => {
@@ -139,6 +169,75 @@ export const getBudgetTotals = async (user) => {
     .reduce((acc, b) => acc + (b.amount || 0), 0);
   const rejectedCount = list.filter((b) => b.status === 'rejected').length;
   return { count: list.length, pending, approvedSum, rejectedCount };
+};
+
+/**
+ * Site burn-rate — approved spend for the current month vs. monthly ceiling.
+ * Returns a per-site array the Budget screen renders as progress bars.
+ */
+export const getSiteBurnRates = async (user) => {
+  warn();
+  // TODO(backend): GET /api/v1/budget/burn-rate?scope=<role>&month=YYYY-MM
+  const list = await getBudgetRequests(user);
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const bySite = {};
+  for (const b of list) {
+    if (b.status !== 'approved') continue;
+    const month = (b.md_decision_at || b.updated_at || '').slice(0, 7);
+    if (month !== thisMonth) continue;
+    const key = b.site_id;
+    if (!bySite[key]) {
+      bySite[key] = {
+        site_id: b.site_id,
+        site_name: b.site_name,
+        spent: 0,
+        ceiling: SITE_MONTHLY_CEILING[b.site_id] || 200000,
+      };
+    }
+    bySite[key].spent += b.amount || 0;
+  }
+  return Object.values(bySite)
+    .map((s) => ({ ...s, ratio: s.ceiling > 0 ? s.spent / s.ceiling : 0 }))
+    .sort((a, b) => b.ratio - a.ratio);
+};
+
+/**
+ * Create a new budget request (Supervisor-only).
+ * Applies §11 thresholds: auto-approve <= 10k, else pending_md.
+ */
+export const createBudgetRequest = async (actor, payload) => {
+  warn();
+  // TODO(backend): POST /api/v1/budget/requests
+  if (actor?.role !== 'supervisor') {
+    return { success: false, error: 'Only Supervisors can raise budget requests' };
+  }
+  if (!payload?.title?.trim() || !payload?.amount || !payload?.reason?.trim()) {
+    return { success: false, error: 'Title, amount, and reason required' };
+  }
+  await new Promise((r) => setTimeout(r, 250));
+  const all = await ensureSeed();
+  const classification = classifyBudget(payload.amount);
+  const auto = classification === 'auto_approve';
+  const record = {
+    id: `bud-${Date.now()}`,
+    title: payload.title.trim(),
+    site_id: payload.site_id,
+    site_name: payload.site_name || `Site ${payload.site_id}`,
+    raised_by: { id: actor.id, name: actor.name, role: actor.role },
+    amount: payload.amount,
+    currency: 'INR',
+    reason: payload.reason.trim(),
+    status: auto ? 'approved' : 'pending_md',
+    auto_approved: auto || undefined,
+    md_decision_at: auto ? new Date().toISOString() : undefined,
+    md_decided_by: auto ? { id: 0, name: 'System (auto-approval ≤ ₹10k)' } : undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  all.unshift(record);
+  await AsyncStorage.setItem(KEY, JSON.stringify(all));
+  return { success: true, budget: record, auto_approved: auto };
 };
 
 /** Get a single budget by id (used by inline budget cards in chat). */

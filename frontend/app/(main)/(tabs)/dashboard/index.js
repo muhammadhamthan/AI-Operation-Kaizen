@@ -417,6 +417,16 @@ export default function DashboardScreen() {
                   onPress={() => router.push('/(main)/(tabs)/dashboard/complaints')}
                 />
               </View>
+              <View style={styles.statsRow}>
+                <DashboardCard
+                  title="Site Diary"
+                  count={null}
+                  icon="book-outline"
+                  color="#0ea5e9"
+                  style={styles.fullWidthCard}
+                  onPress={() => router.push('/(main)/diary')}
+                />
+              </View>
             </>
           ) : (
             <>
@@ -463,8 +473,14 @@ export default function DashboardScreen() {
                       count={null}
                       icon="people-circle-outline"
                       color="#0ea5e9"
-                      style={styles.fullWidthCard}
                       onPress={() => router.push('/(main)/chat/group/ops')}
+                    />
+                    <DashboardCard
+                      title="Site Diary"
+                      count={null}
+                      icon="book-outline"
+                      color="#8b5cf6"
+                      onPress={() => router.push('/(main)/diary')}
                     />
                   </View>
                 </>
@@ -503,29 +519,53 @@ export default function DashboardScreen() {
                       count={null}
                       icon="people-circle-outline"
                       color="#0ea5e9"
-                      style={styles.fullWidthCard}
                       onPress={() => router.push('/(main)/chat/group/ops')}
+                    />
+                    <DashboardCard
+                      title="Site Diary"
+                      count={null}
+                      icon="book-outline"
+                      color="#8b5cf6"
+                      onPress={() => router.push('/(main)/diary')}
                     />
                   </View>
                 </>
               )}
               {user?.role === 'customer_md' && (
-                <View style={styles.statsRow}>
-                  <DashboardCard
-                    title="Managing Director"
-                    count={null}
-                    icon="person-circle-outline"
-                    color="#3b82f6"
-                    onPress={() => router.push('/(main)/(tabs)/md-card')}
-                  />
-                  <DashboardCard
-                    title="Budget"
-                    count={null}
-                    icon="wallet-outline"
-                    color="#10a37f"
-                    onPress={() => router.push('/(main)/(tabs)/budget')}
-                  />
-                </View>
+                <>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Managing Director"
+                      count={null}
+                      icon="person-circle-outline"
+                      color="#3b82f6"
+                      onPress={() => router.push('/(main)/(tabs)/md-card')}
+                    />
+                    <DashboardCard
+                      title="Budget"
+                      count={null}
+                      icon="wallet-outline"
+                      color="#10a37f"
+                      onPress={() => router.push('/(main)/(tabs)/budget')}
+                    />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Site Diary"
+                      count={null}
+                      icon="book-outline"
+                      color="#0ea5e9"
+                      onPress={() => router.push('/(main)/diary')}
+                    />
+                    <DashboardCard
+                      title="Monthly Report"
+                      count={null}
+                      icon="document-text-outline"
+                      color="#db2777"
+                      onPress={() => router.push('/(main)/diary')}
+                    />
+                  </View>
+                </>
               )}
             </>
           )}
