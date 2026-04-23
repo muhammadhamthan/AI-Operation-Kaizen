@@ -191,6 +191,52 @@ Full gap list in `FULL_COMBINED_PROMPT.md` §19.
 
 *Last updated: Apr 23, 2026 — Priority 1 + 2 complete, all cards + destination screens wired to mock data.*
 
+## ✅ P0 follow-up — Nav back-stack fix + Monthly Report (Apr 23, 2026)
+
+### Scope delivered
+- **Navigation back-stack bug fixed** — `src/utils/navigation.js` exposes `backToDashboard()` which calls `router.replace('/(main)/(tabs)/dashboard')` (with `router.back()` fallback). All 6 hidden routes (Budget, Sites, Solvers, MD card, Supervisors, Customer MDs) plus Site Diary and Monthly Report now use this helper in their header chevrons. Users no longer land on the Chat tab when backing out of a dashboard card.
+- **Site Diary ↔ Monthly Report separation (Customer MD)** — previously both cards routed to `/diary`. Monthly Report now has its own screen at `/(main)/monthly-report.js` with a distinct layout (structured analytical KPIs) vs. Site Diary (raw daily logs with work-done / issues-noted / safety).
+- **Monthly Report card added to Supervisor + Manager dashboards** — full-width card below the Ops Team Group + Site Diary row for both roles. All 3 non-solver roles now see the card; Solver dashboard remains untouched.
+
+### Monthly Report screen (design highlights)
+Premium, distinctive layout (no AI-slop defaults):
+- Deep-navy hero tile with role-specific hero metric ("Closure rate" for Manager, "Issues closed" for Supervisor, "On-time delivery" for Customer MD), month pill + scope pill, thin blue accent bar.
+- KPI grid with MoM delta pills (↑/↓ icons, green = good / red = bad, with `invertSentiment` support for "Escalated" / "Complaints").
+- Blue "Kairox AI Highlights" info card — role-specific narrative paragraph.
+- Trophy-badged "Top Supervisor / Best-performing site / Best solver" standout card.
+- Per-site performance cards with on-time % chip, Raised/Closed/Open mini-stats, and colour-coded budget burn bars (green <70% / amber 70-90% / red >90%).
+- Budget summary mini-stat row (Approved ₹ sum, Requests, Rejected, Escalated).
+- "Top 5 issues" list with rank badges + status pills.
+- Footer with safety-incident count + scope/month caption.
+
+### Files created / modified
+| Path | Change |
+|------|--------|
+| `src/utils/navigation.js` | **Rewritten** — exports `backToDashboard()` |
+| `app/(main)/monthly-report.js` | **NEW** — full Monthly Report screen consuming `monthlyReportMockService` |
+| `src/services/mocks/monthlyReportMockService.js` | Existing (unchanged) — already builds role-scoped report |
+| `app/(main)/(tabs)/dashboard/index.js` | Customer MD Monthly Report now routes to `/monthly-report` (was `/diary`); added new Monthly Report cards for Supervisor + Manager |
+| `app/(main)/(tabs)/budget.js`, `sites.js`, `solvers.js`, `md-card.js`, `supervisors-card.js`, `customer-md-card.js` | Header chevron now uses `backToDashboard` |
+| `app/(main)/diary/index.js` | Header chevron now uses `backToDashboard` |
+
+### Verified via testing agent (iteration_1.json — 100% pass)
+- Manager: Monthly Report card visible · MR screen hero "Closure rate 30%" · scope "All 5 sites · 3 supervisors" · back → /dashboard ✓
+- Supervisor: MR hero "Issues closed" · scope "Rajesh Kumar · Vepery, Ambattur" · back → /dashboard ✓
+- Customer MD: Site Diary AND Monthly Report render DIFFERENT screens · MR scope "Desai Holdings · 2 sites" · "Your sites" section ✓
+- Solver: no Monthly Report card (correct) ✓
+- 6/6 manager hidden-route back buttons land on /dashboard (never /chat) ✓
+
+---
+
+## ⏳ P1 — Priority 5 (next)
+
+`FULL_COMBINED_PROMPT.md` §12, §13, §17 scope:
+- §12 MD admin console (user + site management screens, read-only for MVP)
+- §13 Live Google Sheets sync — mock + manual-trigger button (emits `[BACKEND-GAP]`)
+- §17 Gantt timeline view for issues using `react-native-svg`
+- Consolidate all `[BACKEND-GAP]` warnings into a single Section-19 admin-visible gap list screen
+
+
 ## Priority 1 + 2 Mock Data Coverage (Apr 23 follow-up)
 
 Per user directive "use mock data on all cards and screens till priority 2",
