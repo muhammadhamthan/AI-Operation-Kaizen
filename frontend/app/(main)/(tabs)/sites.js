@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,10 +19,13 @@ import RoleGuard from '../../../src/components/navigation/RoleGuard';
 import EmptyState from '../../../src/components/common/EmptyState';
 import { backToDashboard } from '../../../src/utils/navigation';
 import { fetchSitesAnalytics } from '../../../src/services/api';
+import { getAllSites } from '../../../src/services/mocks/adminMockService';
 
 /**
  * Sites destination screen (reached from Dashboard → Sites card).
  * Lists sites with issue counts. Customer's MD sees only their assigned sites.
+ * MD can tap "+" to add a new site; any role can tap a site to view its
+ * project timeline (Gantt, §17).
  */
 export default function SitesRoute() {
   const { theme } = useTheme();
@@ -31,21 +34,34 @@ export default function SitesRoute() {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const load = useCallback(async () => {
+    // Merge analytics (issue counts) with admin-added sites so newly-added
+    // sites show up immediately even though they have 0 analytics.
+    const [analyticsRes, allSites] = await Promise.all([
+      fetchSitesAnalytics(),
+      getAllSites(),
+    ]);
+    const analytics = analyticsRes.sites || [];
+    const byId = new Map(analytics.map((s) => [s.id, s]));
+    let merged = allSites.map((s) => ({ ...s, ...(byId.get(s.id) || {}) }));
+    if (user?.role === 'customer_md') {
+      const ids = user?.sites || [];
+      merged = merged.filter((s) => ids.includes(s.id));
+    }
+    setSites(merged);
+    setLoading(false);
+  }, [user]);
+
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const res = await fetchSitesAnalytics();
+      await load();
       if (!mounted) return;
-      let list = res.sites || [];
-      if (user?.role === 'customer_md') {
-        const ids = user?.sites || [];
-        list = list.filter((s) => ids.includes(s.id));
-      }
-      setSites(list);
-      setLoading(false);
     })();
-    return () => { mounted = false; };
-  }, [user]);
+    return () => {
+      mounted = false;
+    };
+  }, [load]);
 
   return (
     <RoleGuard action="view:sites">
@@ -55,7 +71,17 @@ export default function SitesRoute() {
             <Ionicons name="chevron-back" size={22} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Sites</Text>
-          <View style={{ width: 22 }} />
+          {user?.role === 'manager' ? (
+            <TouchableOpacity
+              onPress={() => router.push('/(main)/admin/add-site')}
+              testID="add-site-cta"
+              hitSlop={10}
+            >
+              <Ionicons name="add-circle-outline" size={22} color={theme.primary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 22 }} />
+          )}
         </View>
         {loading ? (
           <View style={styles.center}><ActivityIndicator color={theme.textSecondary} /></View>
@@ -71,6 +97,7 @@ export default function SitesRoute() {
                 style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
                 activeOpacity={0.7}
                 testID={`site-item-${item.id}`}
+                onPress={() => router.push(`/(main)/timeline/${item.id}`)}
               >
                 <View style={[styles.iconBox, { backgroundColor: theme.primaryLight }]}>
                   <Ionicons name="business" size={18} color={theme.primary} />
@@ -84,6 +111,10 @@ export default function SitesRoute() {
                     <Text style={[styles.metaText, { color: theme.textSecondary }]}>
                       {item.issues_count || 0} issues · {item.active_issues || 0} active
                     </Text>
+                    <View style={[styles.timelineTag, { backgroundColor: theme.primaryLight }]}>
+                      <Ionicons name="calendar-outline" size={10} color={theme.primary} />
+                      <Text style={[styles.timelineText, { color: theme.primary }]}>Timeline</Text>
+                    </View>
                   </View>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
@@ -112,7 +143,12 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
   sub: { fontSize: 12, marginTop: 2 },
-  metaRow: { flexDirection: 'row', marginTop: 6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8, flexWrap: 'wrap' },
   metaText: { fontSize: 11, fontWeight: '600' },
+  timelineTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+  },
+  timelineText: { fontSize: 10, fontWeight: '700' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });

@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend E2E validation of Kairox AI OpEx Priority 5 (§12 MD Admin, §13 Google Sheets Sync, §17 Project Timeline Gantt, §19 Backend Gaps) across all 4 roles at viewport 430x900 against the preview URL. Every acceptance criterion in the review request passes. No blocking issues found; one minor cosmetic observation about router.back() on deep-link entry is documented below but does not affect natural user flow or the P0 chat-tab regression.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Pre-existing /api/v1/chat/sessions fetch on login",
+        "issue": "CORS errors to https://api.kairoxaitech.com/api/v1/chat/sessions on every login (pre-existing from iteration_1, not a P5 regression). No user-facing impact because all P5 flows are mocked via AsyncStorage.",
+        "affected_selectors": []
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "timeline/[siteId].js line 60 guards with `canEdit = me?.role === 'manager'` and gates both `onTaskPress` (line 98) and the row TouchableOpacity `disabled` prop (line 338) — verified read-only works for supervisor/customer_md.",
+    "admin/add-member.js correctly conditionally renders the Company Field only when role==='customer_md' (line 97). Save uses Alert.alert with a callback-based OK that triggers router.back(); on RN-web the alert renders as a modal and the navigation only fires after user confirmation (expected behaviour).",
+    "admin/assign-sites/[userId].js pre-checks existing assignments, dynamically updates the Save button label to 'Save (N sites)', and persists via adminMockService.setCustomerMdSites — verified by toggling site 3 on for Anita Desai (id=11) and label updated 2 → 3.",
+    "On deep-link entry (direct URL paste), router.back() on add-member-back / add-site-back / assign-back / timeline-back has no history to pop, so URL stays on the same page. In the natural tap-chain (Dashboard → Admin → Team → + → Add Member → back) the back-nav works correctly and lands on the prior screen. Not a regression vs iteration_1; just a browser deep-link edge case.",
+    "sheetSyncMockService transitions (not_connected → syncing → synced → error) propagate correctly to the SyncStatusPill animation; record count and last-synced timestamp display after connect."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "100%"},
+  "test_credentials": "manager1/manager123, supervisor1/super123, customer1/cust123, solver1/solver123 — all mock logins verified",
+  "seed_data_creation": "None — all data served from existing mock services (adminMockService, sheetSyncMockService, projectTimelineMockService). Dynamic test data (Test Supervisor user, Test Plant site, +1 site assignment for Anita Desai) was added via the UI and verified to persist across navigation within the session.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "P5 verified end-to-end at 430x900 against https://57d9061e-1694-4d64-b55f-7a29cafd5e40.preview.emergentagent.com. Key validations: (1) MD Dashboard shows Admin card at bottom → navigates to /admin hub with 4 tiles (Team, Add Site, Google Sheets Sync, Backend Gaps) — all testids present. (2) Team lists all 12 users with role badges; filter-all/supervisor/problem_solver/customer_md chips present; 'Assign sites' button on both Customer MDs only. (3) Add Member: role segment (role-supervisor / role-problem_solver / role-customer_md); field-company appears only when customer_md selected; save-member persists — 'Test Supervisor' appeared in Team list after save. (4) Add Site: save-site persisted 'Test Plant' to /sites list; MD sees + button on Sites. (5) assign-sites/11 pre-checks sites 1 & 2 for Anita Desai, toggling site 3 updates label to 'Save (3 sites)'. (6) Google Sheets: sync-status-pill correctly cycles 'Sheets not connected' → 'Sheets · Synced · just now' → 'Sheets · Sync failed' on simulate-error; disconnect-sheets testid present. (7) Backend Gaps renders all 11 grouped sections (Auth & Roles, Supervisors & Customer MDs, Personal & Group Chat, Budget, Communications, MD Admin, Customer's MD, Google Sheets, Site Diary, Photos, Project Timeline). (8) MD Gantt timeline/1: SVG with 8 tasks, summary counts (6 ON TRACK / 0 DELAYED / 2 COMPLETED initially), Start 2026-03-09 / End 2026-08-06 markers, legend, task list with date ranges; tapping task-row-3 (Structural framing) opens edit modal with end-date input (YYYY-MM-DD), status chips, edit-save/edit-cancel; changing end to 2026-12-31 and saving triggers cascade (counts changed to 1 ON TRACK / 5 DELAYED / 2 COMPLETED). (9) Supervisor Gantt: renders but edit-save NOT shown on row-tap (canEdit=false); no Admin card on dashboard; /admin shows RoleGuard 'MD-only'. (10) Customer MD Gantt: read-only (no edit-save); /sites scoped to 2 assigned sites (Vepery, Ambattur). (11) Problem Solver: /timeline/1 shows RoleGuard 'Access Restricted'; /admin shows 'MD-only' guard. (12) Back-nav regression safe: admin-back→/dashboard, team-back→/dashboard, sheets-back→/dashboard, gaps-back→/dashboard, timeline-back→/sites (natural chain); no screen ever lands on /chat. Sites row 'Vepery Industrial Complex' is tappable and navigates to /timeline/1.",
+  "rca of the issue": "No bugs observed. Minor deep-link edge case: add-member-back, add-site-back, assign-back, timeline-back use router.back() which on direct URL paste has no history to pop and stays on the same page. Mitigation (if desired) would be to replace router.back() with the existing backToDashboard() helper or a role-aware 'smart back' that falls back to the parent admin screen when history is empty. Not a functional regression — real users always reach these screens via tap-chain where router.back() works correctly, and they never land on /chat."
+}

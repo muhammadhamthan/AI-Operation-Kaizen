@@ -549,6 +549,16 @@ export default function DashboardScreen() {
                       onPress={() => router.push('/(main)/monthly-report')}
                     />
                   </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="Admin"
+                      count={null}
+                      icon="settings-outline"
+                      color="#f59e0b"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/admin')}
+                    />
+                  </View>
                 </>
               )}
               {user?.role === 'customer_md' && (
