@@ -1424,7 +1424,7 @@ RULE 5 — PARTIAL ARGS IN MESSAGE:
 # MASTER AGENT (INDENT-AWARE)
 # ==================================================
 
-async def master_agent(session_id: str, user_input: str, indent: str):
+async def master_agent(session_id: str, user_input: str, intent: str):
 
     # ✅ Greeting check — before anything else
     if is_greeting(user_input):
@@ -1457,7 +1457,7 @@ async def master_agent(session_id: str, user_input: str, indent: str):
 
     print("---session_id---", session_id)
     print("---user_input---", user_input)
-    print("---indent---",     indent)
+    print("---intent---",     intent)
 
     # ✅ Load Redis memory
     memory = load_memory(session_id)
@@ -1492,10 +1492,10 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         role = "User" if msg.type == "human" else "AI"
         history_text += f"{role}: {msg.content}\n"
 
-    # ✅ Build indent hint and inject at TOP of system prompt
+    # ✅ Build intent hint and inject at TOP of system prompt
     system_content = SYSTEM_PROMPT \
         .replace("{chat_history}", history_text) \
-        .replace("{indent}", indent.strip() if indent else "not selected")
+        .replace("{intent}", intent.strip() if intent else "not selected")
 
     messages = [{"role": "system", "content": system_content}]
 
@@ -1558,9 +1558,9 @@ async def master_agent(session_id: str, user_input: str, indent: str):
         all_calls      = []
         clarifications = []
 
-        # ── indent override: if a locked function is set, enforce it ──
-        normalized_indent = indent.strip().lower() if indent else ""
-        locked_fn         = INDENT_TO_FUNCTION.get(normalized_indent)
+        # ── intent override: if a locked function is set, enforce it ──
+        normalized_intent = intent.strip().lower() if intent else ""
+        locked_fn         = INDENT_TO_FUNCTION.get(normalized_intent)
 
         for tool_call in msg.tool_calls:
             name = tool_call.function.name

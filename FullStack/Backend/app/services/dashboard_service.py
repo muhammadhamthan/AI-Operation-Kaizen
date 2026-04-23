@@ -1,22 +1,24 @@
 """
-dashboard_service.py  —  OPTIMIZED
-Key fixes vs original:
-  1. get_manager_dashboard(): was N*4 queries (total/done/reopen/complaints per solver).
-     Now 2 queries total using conditional aggregation (SQL CASE/SUM).
-  2. get_solver_dashboard(): was loading all assignments then doing Python loops.
-     Now uses single aggregate queries.
-  3. _build_summary(): was 8 separate COUNT queries.
-     Now 1 conditional aggregation query.
-  4. get_supervisor_dashboard(): reuses _build_summary() improvement.
-  5. All async/await correct (original was mixing sync Session with async patterns).
+dashboard_service.py
+
+Existing optimizations (pre-Wave B):
+  1. get_manager_dashboard: 2 queries total using conditional aggregation
+  2. get_solver_dashboard: single aggregate queries
+  3. _build_summary: 1 conditional aggregation query
+  4. get_supervisor_dashboard: reuses _build_summary
+
+WAVE B CHANGES:
+  - get_supervisor_dashboard's "recent_issues" query now eagerly loads
+    Issue.site via selectinload. Previously it relied on the model-level
+    selectin default which Wave B removed (Issue.site is now lazy="raise").
 """
-import time
 import logging
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select, case
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.issue import Issue
@@ -48,7 +50,6 @@ class DashboardService:
     # ══════════════════════════════════════════════════════════
 
     async def get_supervisor_dashboard(self, user: User) -> SupervisorDashboard:
-        # Supervisor's site IDs
         site_result = await self.db.execute(
             select(SupervisorSite.c.site_id).where(
                 SupervisorSite.c.supervisor_id == user.id
@@ -56,7 +57,6 @@ class DashboardService:
         )
         site_ids = site_result.scalars().all()
 
-        # All stats in one query
         summary = await self._build_summary(site_ids)
 
         now = datetime.now(timezone.utc)
@@ -70,9 +70,11 @@ class DashboardService:
         )
         pending = pending_result.scalar() or 0
 
-        # 10 most recent issues
+        # WAVE B: explicit selectinload(Issue.site) — was implicit via selectin default.
+        # Only 10 rows max, so the cost of eager loading is trivial.
         recent_result = await self.db.execute(
             select(Issue)
+            .options(selectinload(Issue.site))
             .where(Issue.site_id.in_(site_ids))
             .order_by(Issue.created_at.desc())
             .limit(10)
@@ -87,7 +89,6 @@ class DashboardService:
                 Escalation.resolved == False,
             )
         )
-        
         escalated = escalated_result.scalar() or 0
 
         # Issues approaching deadline in next 24 hours
@@ -95,21 +96,27 @@ class DashboardService:
             select(func.count()).select_from(Issue).where(
                 Issue.site_id.in_(site_ids),
                 Issue.deadline_at < now + timedelta(hours=24),
-                Issue.status.notin_([IssueStatus.COMPLETED, IssueStatus.ESCALATED, IssueStatus.REOPENED]),
+                Issue.status.notin_([
+                    IssueStatus.COMPLETED,
+                    IssueStatus.ESCALATED,
+                    IssueStatus.REOPENED,
+                ]),
             )
         )
         approaching = approaching_result.scalar() or 0
 
-        # Site names
+        # WAVE B speed-up: we only need site names. Narrow the SELECT
+        # (was `select(Site)` which materialises the full row including
+        # lat/lng + JSON). For 10s of sites this saves a few KB.
         sites_result = await self.db.execute(
-            select(Site).where(Site.id.in_(site_ids))
+            select(Site.name).where(Site.id.in_(site_ids))
         )
-        sites = sites_result.scalars().all()
+        site_names = sites_result.scalars().all()
 
         return SupervisorDashboard(
             summary=summary,
             pending_reviews=pending,
-            my_sites=[s.name for s in sites],
+            my_sites=list(site_names),
             recent_issues=[
                 RecentIssue(
                     id=i.id,
@@ -127,14 +134,12 @@ class DashboardService:
 
     # ══════════════════════════════════════════════════════════
     # MANAGER DASHBOARD
-    # Was: N*4 DB queries (one per solver per metric).
-    # Now: 2 queries total (assignments agg + complaints agg).
+    # 2 queries total (assignments agg + complaints agg).
     # ══════════════════════════════════════════════════════════
 
     async def get_manager_dashboard(self, user: User) -> ManagerDashboard:
         summary = await self._build_summary()
 
-        # Active unresolved escalations
         esc_result = await self.db.execute(
             select(func.count()).select_from(Escalation).where(
                 Escalation.resolved == False
@@ -144,7 +149,6 @@ class DashboardService:
 
         now = datetime.now(timezone.utc)
 
-        # Overdue issues
         overdue_result = await self.db.execute(
             select(func.count()).select_from(Issue).where(
                 Issue.deadline_at < now,
@@ -153,15 +157,24 @@ class DashboardService:
         )
         overdue = overdue_result.scalar() or 0
 
-        # All active solvers in one query
+        # WAVE B speed-up: narrow solver fetch to (id, name) — was `select(User)`
+        # (whole row). For 100 solvers this noticeably reduces payload size.
         solvers_result = await self.db.execute(
-            select(User).where(
+            select(User.id, User.name).where(
                 User.role == UserRole.PROBLEMSOLVER,
                 User.is_active == True,
             )
         )
-        solvers = solvers_result.scalars().all()
+        solvers = solvers_result.all()# list of (id, name) rows
         solver_ids = [s.id for s in solvers]
+
+        if not solver_ids:
+            return ManagerDashboard(
+                summary=summary,
+                active_escalations=escalated,
+                overdue_issues=overdue,
+                solver_performance=[],
+            )
 
         # ── Assignment counts — ONE query with conditional aggregation ──
         asgn_result = await self.db.execute(
@@ -215,8 +228,7 @@ class DashboardService:
     # ══════════════════════════════════════════════════════════
 
     async def get_solver_dashboard(self, user: User) -> SolverDashboard:
-        # Active assignments
-        # 1️⃣ Total active count
+        # 1. Total active count
         count_result = await self.db.execute(
             select(func.count())
             .select_from(IssueAssignment)
@@ -229,8 +241,7 @@ class DashboardService:
         )
         total_active = count_result.scalar() or 0
 
-
-        # 2️⃣ Get only 10 assignments for dashboard
+        # 2. Get only 10 assignments for dashboard — JOINed, so no relationships needed
         assign_result = await self.db.execute(
             select(
                 IssueAssignment.id.label("assignment_id"),
@@ -251,10 +262,8 @@ class DashboardService:
             .order_by(IssueAssignment.due_date.asc())
             .limit(10)
         )
-
         assignments = assign_result.all()
 
-        # Completed count
         completed_result = await self.db.execute(
             select(func.count()).select_from(IssueAssignment).where(
                 IssueAssignment.assigned_to_solver_id == user.id,
@@ -263,7 +272,6 @@ class DashboardService:
         )
         completed = completed_result.scalar() or 0
 
-        # Complaints against solver
         comp_result = await self.db.execute(
             select(func.count()).select_from(Complaint).where(
                 Complaint.target_solver_id == user.id
@@ -290,8 +298,7 @@ class DashboardService:
 
     # ══════════════════════════════════════════════════════════
     # SHARED: Build summary stats
-    # Was: 8 separate COUNT queries.
-    # Now: 1 conditional aggregation query.
+    # 1 conditional aggregation query.
     # ══════════════════════════════════════════════════════════
 
     async def _build_summary(self, site_ids: Optional[list] = None) -> DashboardSummary:

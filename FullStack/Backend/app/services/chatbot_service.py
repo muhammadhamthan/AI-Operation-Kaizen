@@ -2,7 +2,7 @@
 chatbot_service.py  —  OPTIMIZED
 Key fixes vs original:
   1. get_sessions(): was N+1 queries (2 per session). Now 3 queries total for any session count.
-  2. process_message(): indentation was broken (for loop outside try block). Fixed.
+  2. process_message(): intentation was broken (for loop outside try block). Fixed.
   3. process_message(): clarification path was returning BEFORE logging AI reply. Fixed.
   4. rename_session() / delete_session(): were using sync self.db.commit(). Now await.
   5. get_history(): was calling await on a non-awaitable scalar(). Fixed.
@@ -54,7 +54,7 @@ class ChatbotService:
         image_url: Optional[str] = None,
         issue_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        indent : Optional[str] = None
+        intent : Optional[str] = None
     ) -> ChatResponse:
 # ── 1. Get or create session ──────────────────────────
         session = await self._get_or_create_session(
@@ -83,7 +83,7 @@ class ChatbotService:
         from app.schemas.chatbot_schema import ChatResponse
 
         
-        if indent == "sql_query":
+        if intent == "sql_query":
             result_text = await run_sql_agent(str(user.id), message)
             response = ChatResponse(
                 session_id=session.id,
@@ -94,7 +94,7 @@ class ChatbotService:
             
         else:
             # Issue / approval / workflow actions
-            agent_response = await master_agent(user.id, message, indent)
+            agent_response = await master_agent(user.id, message, intent)#indent = request.intent` was a typo kept in the service as `indent`.
             logger.info("Agent decision: %s", agent_response.get("intent"))
 
             intent = agent_response.get("intent")

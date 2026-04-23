@@ -40,53 +40,38 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────
-# SYNC ENGINE — psycopg2 driver (NOT asyncpg)
-# Created fresh per Celery worker process, not shared with FastAPI
+# Module-level SYNC engine for score refresh work
+#
+# WAVE A FIX: was creating a new engine per _make_sync_session() call.
+# Now created once per Celery worker process and reused.
 # ─────────────────────────────────────────────────────────────────
-
-def _make_sync_url() -> str:
-    """
-    Builds a psycopg2-compatible URL from the configured DATABASE_URL.
-
-    Handles two common cases:
-      postgresql+asyncpg://... → postgresql+psycopg2://...
-      postgresql://...         → postgresql+psycopg2://...
-
-    Also strips ?ssl=require and replaces with sslmode=require
-    which is the psycopg2 syntax (not asyncpg syntax).
-    """
-    url = settings.DATABASE_URL
-
-    # Remove async driver suffix
+ 
+def _build_sync_url() -> str:
+    url = settings.SYNC_DATABASE_URL or settings.DATABASE_URL
     url = url.replace("+asyncpg", "")
-    url = url.replace("postgresql://", "postgresql+psycopg2://")
-
-    # Fix SSL parameter format: asyncpg uses ?ssl=require
-    # psycopg2 uses ?sslmode=require
-    if "ssl=" in url and "sslmode=" not in url:
+    if "sslmode=" not in url and "ssl=" in url:
         url = url.replace("ssl=", "sslmode=")
-    elif "sslmode=" not in url and "?" in url:
-        url = url + "&sslmode=require"
     elif "sslmode=" not in url:
-        url = url + "?sslmode=require"
-
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}sslmode=require"
+    if not url.startswith("postgresql+psycopg2://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://")
     return url
-
-
-def _make_sync_session() -> Session:
-    """
-    Creates a fresh sync SQLAlchemy session.
-    Called once per Celery task — each task gets its own session.
-    """
-    engine = create_engine(
-        _make_sync_url(),
-        pool_pre_ping=True,
-        pool_size=2,       # small pool — Celery tasks are short-lived
-        max_overflow=2,
-    )
-    factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    return factory()
-
+ 
+ 
+_score_engine = create_engine(
+    _build_sync_url(),
+    pool_pre_ping=True,
+    pool_size=int(getattr(settings, "SCORE_DB_POOL_SIZE", 2)),
+    max_overflow=int(getattr(settings, "SCORE_DB_MAX_OVERFLOW", 2)),
+    pool_recycle=1800,
+)
+ 
+_ScoreSession = sessionmaker(
+    bind=_score_engine,
+    autocommit=False,
+    autoflush=False,
+)
 
 # ─────────────────────────────────────────────────────────────────
 # SCORE FORMULA — shared constants
@@ -131,7 +116,7 @@ class ScoreRefreshServiceSync:
 
     def _get_db(self) -> Session:
         if self._db is None:
-            self._db = _make_sync_session()
+            self._db = _ScoreSession()
         return self._db
 
     def _close(self) -> None:

@@ -68,7 +68,7 @@ async def send_chat_message(
         image_url=request.image_url,
         issue_id=request.issue_id,
         metadata=request.metadata,
-        indent = request.intent
+        intent = request.intent
     )
 
     return response

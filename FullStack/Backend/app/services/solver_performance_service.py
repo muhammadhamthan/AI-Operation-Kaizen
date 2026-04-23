@@ -40,7 +40,7 @@ from app.schemas.solver_performance_schema import (
 logger = logging.getLogger(__name__)
 
 # Cache is considered stale after 30 minutes — triggers live recompute fallback
-CACHE_STALE_MINUTES = 10
+CACHE_STALE_MINUTES = 15
 
 
 class SolverPerformanceService:
@@ -117,7 +117,7 @@ class SolverPerformanceService:
                 LEFT JOIN score_cache sc
                     ON sc.entity_type = 'solver' AND sc.entity_id = u.id
                 WHERE u.id = :solver_id
-                  AND u.role = 'problemsolver'
+                  AND u.role = 'PROBLEMSOLVER'
             """),
             {"solver_id": solver_id},
         )).first()
@@ -142,7 +142,7 @@ class SolverPerformanceService:
             except Exception:
                 pass
                 
-            # Re-fetch after refresh
+            #Used for fallback computation if cache is empty — compute on the fly (same logic as score_task)
             row = (await self.db.execute(
                 text("""
                     SELECT

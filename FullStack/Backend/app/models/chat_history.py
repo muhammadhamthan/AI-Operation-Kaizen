@@ -74,14 +74,14 @@ class ChatHistory(Base):
     user = relationship(
         "User",
         back_populates="chat_messages",
-        lazy="selectin",
+        lazy="raise",
     )
     issue = relationship(
         "Issue",
         back_populates="chat_messages",
-        lazy="selectin",
+        lazy="raise",
     )
-    session = relationship("ChatSession", back_populates="messages", lazy="selectin")
+    session = relationship("ChatSession", back_populates="messages", lazy="raise")
 
     # ── Indexes ──────────────────────────────────────────
     __table_args__ = (

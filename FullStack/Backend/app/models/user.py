@@ -75,7 +75,7 @@ class User(Base):
         "Site",
         secondary="supervisor_sites",
         back_populates="supervisors",
-        lazy="selectin",
+        lazy="raise",
     )
 
     # Issues raised by this supervisor
@@ -136,7 +136,7 @@ class User(Base):
     skills = relationship(
         "ProblemSolverSkill",
         back_populates="solver",
-        lazy="selectin",
+        lazy="raise",
     )
 
     # Chat messages sent by this user

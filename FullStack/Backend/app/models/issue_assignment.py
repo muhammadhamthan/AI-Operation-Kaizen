@@ -39,20 +39,20 @@ class IssueAssignment(Base):
     )
 
     # ── Relationships ────────────────────────────────────
-    issue = relationship("Issue", back_populates="assignments", lazy="selectin")
+    issue = relationship("Issue", back_populates="assignments", lazy="raise")
 
     assigned_solver = relationship(
         "User", back_populates="solver_assignments",
-        foreign_keys=[assigned_to_solver_id], lazy="selectin",
+        foreign_keys=[assigned_to_solver_id], lazy="raise",
     )
 
     assigned_by_supervisor = relationship(
         "User", back_populates="created_assignments",
-        foreign_keys=[assigned_by_supervisor_id], lazy="selectin",
+        foreign_keys=[assigned_by_supervisor_id], lazy="raise",
     )
 
     call_logs = relationship(
-        "CallLog", back_populates="assignment", lazy="selectin",
+        "CallLog", back_populates="assignment", lazy="raise",
         order_by="CallLog.attempt_number",
     )
 

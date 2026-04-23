@@ -15,7 +15,7 @@ celery_app = Celery(
     "facility_mgmt",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.workers.call_tasks","app.workers.score_task"],
+    include=["app.workers.call_tasks","app.workers.score_task","app.workers.notification_tasks"],
 )
 
 # ADD THESE LINES
@@ -48,6 +48,7 @@ celery_app.conf.update(
     task_routes={
         "call_tasks.*": {"queue": "calls"},
         "score_tasks.*": {"queue": "scores"},
+        "notification_tasks.*": {"queue": "notifications"},
     },
     
     beat_schedule={

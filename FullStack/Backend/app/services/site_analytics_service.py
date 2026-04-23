@@ -29,7 +29,7 @@ from app.schemas.site_analytics_schema import (
 
 logger = logging.getLogger(__name__)
 
-CACHE_STALE_MINUTES = 10
+CACHE_STALE_MINUTES = 15
 
 
 class SiteAnalyticsService:
@@ -115,6 +115,7 @@ class SiteAnalyticsService:
                 trigger_site_score_refresh.delay(site_id)
             except Exception:
                 pass
+            #Fallback computation if cache is empty — compute on the fly (same logic as score_task)
             row = (await self.db.execute(
                 text("""
                     SELECT

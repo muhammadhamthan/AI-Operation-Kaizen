@@ -1,9 +1,17 @@
 """
 app/workers/call_tasks.py
+
+  - `db.get(IssueAssignment, ...)` replaced with `select().options(selectinload(...))`
+    because IssueAssignment.assigned_solver and IssueAssignment.issue (and Issue.site)
+    are now lazy="raise". The old db.get() code relied on the implicit selectin.
+    
 """
 
+from json import load
 import logging
 from datetime import datetime, timezone, timedelta
+from typing import Optional
+from sqlalchemy import func as sql_func
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, Session
@@ -21,18 +29,50 @@ RETRY_DELAY: dict[str, int] = {
 DEFAULT_RETRY_DELAY = 10 * 60
 
 
-def _sync_db() -> Session:
-    url = settings.DATABASE_URL.replace("+asyncpg", "")
-    if "ssl=" in url and "sslmode=" not in url:
+# ══════════════════════════════════════════════════════════════
+# Module-level sync engine + session factory
+#
+# WAVE A FIX: previously `_db_session()` built a brand-new engine on
+# every task invocation. At 1000+ users this exhausts Supabase's
+# connection pool very quickly. Now we create ONE engine per
+# Celery worker process and reuse it for every task.
+# ══════════════════════════════════════════════════════════════
+ 
+def _build_sync_url() -> str:
+    url = settings.SYNC_DATABASE_URL or settings.DATABASE_URL
+    url = url.replace("+asyncpg", "")
+    if "sslmode=" not in url and "ssl=" in url:
         url = url.replace("ssl=", "sslmode=")
     elif "sslmode=" not in url:
         sep = "&" if "?" in url else "?"
         url = f"{url}{sep}sslmode=require"
-    engine = create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=2)
-    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
+    if not url.startswith("postgresql+psycopg2://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://")
+    return url
+ 
+ 
+_sync_engine = create_engine(
+    _build_sync_url(),
+    pool_pre_ping=True,
+    pool_size=int(getattr(settings, "CELERY_DB_POOL_SIZE", 4)),
+    max_overflow=int(getattr(settings, "CELERY_DB_MAX_OVERFLOW", 4)),
+    pool_recycle=1800,
+    pool_timeout=30,
+)
+ 
+_SyncSession = sessionmaker(
+    bind=_sync_engine,
+    autocommit=False,
+    autoflush=False,
+)
+ 
+ 
+def _db_session() -> Session:
+    """Returns a fresh sync Session bound to the shared engine."""
+    return _SyncSession()
 
 
-def _build_twiml(solver_name: str, issue_title: str, site_name: str, issue_id: int) -> str:
+def _build_twiml(solver_name: str, issue_title: str, site_name: str, issue_id: Optional[int] = None) -> str:
     return (
         "<Response>"
         "<Say voice='alice' language='en-IN'>"
@@ -43,6 +83,21 @@ def _build_twiml(solver_name: str, issue_title: str, site_name: str, issue_id: i
         "</Say>"
         "</Response>"
     )
+    
+#helper: load an assignment with all relationships we'll need
+def _load_assignment_full(db: Session, assignment_id: int):
+    from app.models.issue_assignment import IssueAssignment
+    from app.models.issue import Issue
+    from sqlalchemy.orm import selectinload
+ 
+    return db.execute(
+        select(IssueAssignment)
+        .where(IssueAssignment.id == assignment_id)
+        .options(
+            selectinload(IssueAssignment.assigned_solver),
+            selectinload(IssueAssignment.issue).selectinload(Issue.site),
+        )
+    ).scalar_one_or_none()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -50,7 +105,7 @@ def _build_twiml(solver_name: str, issue_title: str, site_name: str, issue_id: i
 # ══════════════════════════════════════════════════════════════
 
 @celery_app.task(name="call_tasks.schedule_solver_call", max_retries=0)
-def schedule_solver_call(assignment_id: int, issue_id: int = None) -> None:
+def schedule_solver_call(assignment_id: int, issue_id: int) -> None:
     logger.info("[schedule_solver_call] assignment #%s", assignment_id)
     place_solver_call.delay(assignment_id , issue_id=issue_id)  # issue_id is optional for backward compatibility
 
@@ -65,15 +120,15 @@ def schedule_solver_call(assignment_id: int, issue_id: int = None) -> None:
     max_retries=3,
     default_retry_delay=30,
 )
-def place_solver_call(self, assignment_id: int, round_start: str = None, issue_id: int = None) -> None:
+def place_solver_call(self, assignment_id: int, round_start: Optional[str]=None, issue_id: Optional[int]=None) -> None:
     from app.models.issue_assignment import IssueAssignment
     from app.models.call_log import CallLog
     from app.models.escalation import Escalation
     from app.core.enums import CallStatus, AssignmentStatus
 
-    db = _sync_db()
+    db = _db_session()
     try:
-        assignment = db.get(IssueAssignment, assignment_id)
+        assignment = _load_assignment_full(db, assignment_id)
         if not assignment:
             logger.error("[place_solver_call] assignment #%s not found", assignment_id)
             return
@@ -137,25 +192,34 @@ def place_solver_call(self, assignment_id: int, round_start: str = None, issue_i
                 "[place_solver_call] Twilio error — assignment #%s attempt #%s",
                 assignment_id, attempt_number,
             )
+            # WAVE A FIX: do NOT write a MISSED CallLog here.
+            # Reasons:
+            #   - the retry will re-enter this function and add a new
+            #     INITIATED log, making attempt_number count the failed
+            #     Twilio API attempt as a genuine missed call, which
+            #     accelerated escalations spuriously.
+            #   - a Twilio API failure is NOT the same as a missed call.
+            # Just retry; if all retries exhaust, Celery raises.
+            
+            # db.add(CallLog(
+            #     assignment_id=assignment_id,
+            #     solver_id=solver.id,
+            #     attempt_number=attempt_number,
+            #     initiated_at=now,
+            #     status=CallStatus.MISSED,
+            # ))
+            # db.commit()
+            # raise self.retry(exc=exc, countdown=30)
+
             db.add(CallLog(
                 assignment_id=assignment_id,
                 solver_id=solver.id,
                 attempt_number=attempt_number,
                 initiated_at=now,
-                status=CallStatus.MISSED,
+                status=CallStatus.INITIATED,
+                call_sid=call.sid,
             ))
             db.commit()
-            raise self.retry(exc=exc, countdown=30)
-
-        db.add(CallLog(
-            assignment_id=assignment_id,
-            solver_id=solver.id,
-            attempt_number=attempt_number,
-            initiated_at=now,
-            status=CallStatus.INITIATED,
-            call_sid=call.sid,
-        ))
-        db.commit()
 
         logger.info(
             "[place_solver_call] placed — assignment #%s attempt #%s SID=%s",
@@ -166,7 +230,7 @@ def place_solver_call(self, assignment_id: int, round_start: str = None, issue_i
         eta   = now + timedelta(seconds=delay)
 
         retry_solver_call.apply_async(
-            args=[assignment_id, call.sid, round_start],
+            args=[assignment_id, call.sid, round_start, issue_id],
             eta=eta,
         )
 
@@ -187,7 +251,8 @@ def retry_solver_call(
     self,
     assignment_id: int,
     call_sid: str,
-    round_start: str,
+    round_start: Optional[str] = None,
+    issue_id: Optional[int] = None,
 ) -> None:
     from app.models.issue_assignment import IssueAssignment
     from app.models.call_log import CallLog
@@ -195,9 +260,9 @@ def retry_solver_call(
     from app.models.escalation import Escalation
     from app.core.enums import CallStatus, AssignmentStatus
 
-    db = _sync_db()
+    db = _db_session()
     try:
-        assignment = db.get(IssueAssignment, assignment_id)
+        assignment = _load_assignment_full(db, assignment_id)
         if not assignment:
             return
 
@@ -276,14 +341,14 @@ def retry_solver_call(
         # ── MISSED: count this round and decide next action ───
         round_start_dt = datetime.fromisoformat(round_start)
 
-        missed_logs = db.execute(
-            select(CallLog).where(
+        # WAVE B speed-up: COUNT instead of fetching all rows
+        missed_count = db.execute(
+            select(sql_func.count(CallLog.id)).where(
                 CallLog.assignment_id == assignment_id,
                 CallLog.status == CallStatus.MISSED,
                 CallLog.initiated_at >= round_start_dt,
             )
-        ).scalars().all()
-        missed_count = len(missed_logs)
+        ).scalar() or 0
 
         issue = assignment.issue
         rule = db.execute(
@@ -303,7 +368,8 @@ def retry_solver_call(
             return
 
         # Under threshold — place the next call
-        place_solver_call.delay(assignment_id, round_start)
+        issue_id=issue_id if issue_id is not None else (issue.id if issue else None)
+        place_solver_call.delay(assignment_id, round_start, issue_id=issue_id)
 
     finally:
         db.close()
@@ -366,7 +432,7 @@ def _do_escalate_sync(db: Session, assignment, missed_count: int, rule) -> None:
     )
 
     try:
-        from app.services.notification_service import NotificationService
-        NotificationService(db).send_escalation_email(esc)
+        from app.workers.notification_tasks import send_escalation_email
+        send_escalation_email.delay(esc.id)
     except Exception:
         logger.exception("Escalation email failed for escalation #%s", esc.id)

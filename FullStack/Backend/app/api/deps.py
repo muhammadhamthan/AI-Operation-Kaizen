@@ -52,13 +52,6 @@ from app.models.user import User
 from app.core.security import get_current_user  # JWT-based
 from app.core.enums import UserRole
 
-
-# ── Re-export for convenience ────────────────────────────
-# Other modules do: from app.api.deps import get_db, get_current_user
-get_db = get_db
-get_current_user = get_current_user
-
-
 # ── Role-based access factory ────────────────────────────
 def require_role(allowed_roles: List[UserRole]):
     """

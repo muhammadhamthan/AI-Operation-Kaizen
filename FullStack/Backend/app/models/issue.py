@@ -46,20 +46,20 @@ class Issue(Base):
     )
 
     # ── Relationships ────────────────────────────────────
-    site = relationship("Site", back_populates="issues", lazy="selectin")
+    site = relationship("Site", back_populates="issues", lazy="raise")
 
     raised_by_supervisor = relationship(
         "User", back_populates="raised_issues",
-        foreign_keys=[raised_by_supervisor_id], lazy="selectin",
+        foreign_keys=[raised_by_supervisor_id], lazy="raise",
     )
 
     assignments = relationship(
-        "IssueAssignment", back_populates="issue", lazy="selectin",
+        "IssueAssignment", back_populates="issue", lazy="raise",
         order_by="IssueAssignment.created_at.desc()",
     )
 
     images = relationship(
-        "IssueImage", back_populates="issue", lazy="selectin",
+        "IssueImage", back_populates="issue", lazy="raise",
         order_by="IssueImage.created_at",
     )
 
@@ -87,7 +87,6 @@ class Issue(Base):
         # Composite indexes (VERY IMPORTANT) - these are critical for performance of common queries but it might slow down the inserts/updates a bit, so we need to be careful and only add the ones that are really needed 
         Index("idx_issues_site_status_created", "site_id", "status", "created_at"),
         Index("idx_issues_supervisor_status", "raised_by_supervisor_id", "status"),
-        Index("idx_issues_site_status", "site_id", "status"),
         Index("idx_issues_status_deadline_at", "status", "deadline_at"),  
     )
 
