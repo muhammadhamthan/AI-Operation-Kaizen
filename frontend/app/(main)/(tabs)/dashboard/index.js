@@ -485,6 +485,16 @@ export default function DashboardScreen() {
                   </View>
                   <View style={styles.statsRow}>
                     <DashboardCard
+                      title="ProjectFlow Intelligence"
+                      count={null}
+                      icon="git-network-outline"
+                      color="#3b82f6"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/projectflow')}
+                    />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
                       title="Monthly Report"
                       count={null}
                       icon="document-text-outline"
@@ -537,6 +547,16 @@ export default function DashboardScreen() {
                       icon="book-outline"
                       color="#8b5cf6"
                       onPress={() => router.push('/(main)/diary')}
+                    />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <DashboardCard
+                      title="ProjectFlow Intelligence"
+                      count={null}
+                      icon="git-network-outline"
+                      color="#3b82f6"
+                      style={styles.fullWidthCard}
+                      onPress={() => router.push('/(main)/projectflow')}
                     />
                   </View>
                   <View style={styles.statsRow}>
