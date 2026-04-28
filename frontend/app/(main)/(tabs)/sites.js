@@ -97,7 +97,13 @@ export default function SitesRoute() {
                 style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
                 activeOpacity={0.7}
                 testID={`site-item-${item.id}`}
-                onPress={() => router.push(`/(main)/timeline/${item.id}`)}
+                onPress={() => {
+                  // ProjectFlow Intelligence is MD + Supervisor only.
+                  // Customer MDs tap sites only for context (no navigation in v3.0).
+                  if (user?.role === 'manager' || user?.role === 'supervisor') {
+                    router.push(`/(main)/projectflow/${item.id}`);
+                  }
+                }}
               >
                 <View style={[styles.iconBox, { backgroundColor: theme.primaryLight }]}>
                   <Ionicons name="business" size={18} color={theme.primary} />
@@ -111,10 +117,12 @@ export default function SitesRoute() {
                     <Text style={[styles.metaText, { color: theme.textSecondary }]}>
                       {item.issues_count || 0} issues · {item.active_issues || 0} active
                     </Text>
-                    <View style={[styles.timelineTag, { backgroundColor: theme.primaryLight }]}>
-                      <Ionicons name="calendar-outline" size={10} color={theme.primary} />
-                      <Text style={[styles.timelineText, { color: theme.primary }]}>Timeline</Text>
-                    </View>
+                    {(user?.role === 'manager' || user?.role === 'supervisor') && (
+                      <View style={[styles.timelineTag, { backgroundColor: theme.primaryLight }]}>
+                        <Ionicons name="git-network-outline" size={10} color={theme.primary} />
+                        <Text style={[styles.timelineText, { color: theme.primary }]}>ProjectFlow</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />

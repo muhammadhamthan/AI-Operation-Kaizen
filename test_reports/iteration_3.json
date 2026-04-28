@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend E2E validation of ProjectFlow Intelligence (per-site execution coordination module that REPLACES the old Gantt /timeline/[siteId] route) at viewport 430x900 against preview URL. All 17 acceptance criteria pass for MD/Supervisor/CMD/Problem Solver. Sites list shows ProjectFlow tag (5 rows), no Timeline tag (0). Site 1 ProjectFlow renders header, tagline, EXECUTION HEALTH hero (54/100 Delayed, contract 2026-03-14 → 2026-08-11), no weather card (Vepery=Clear skies). 5 tabs all present: Timeline, Flow Map, Materials (12 items), Vendors (4 cards), Alerts (1 initial + dismissable). Edit modal opens via stage row tap (testID pf-stage-t{site}-{n}); changing end-date forward to 2026-12-31 saves successfully, cascades downstream tasks (contract end advanced to 2027-03-24), and inserts 'Timeline drift corrected automatically' alert(s) in Alerts tab. Recalibrate button works (alerts +1). Site 2 (Ambattur) shows weather card. Backend Gaps replaced 'Project Timeline' with 'ProjectFlow Intelligence (per-site)'. Old /timeline/1 route returns 'Unmatched Route' 404. Role isolation perfect: Supervisor has no recalibrate (0), no follow-up buttons (0), edit modal does NOT open on stage tap (0); CMD shows no ProjectFlow tag on /sites and direct deep-link → 'Restricted module — ProjectFlow Intelligence is available to MD and Supervisors only.' RoleGuard; Problem Solver deep-link also blocked by same RoleGuard.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Pre-existing /api/v1/chat/sessions fetch on every login",
+        "issue": "CORS error to https://api.kairoxaitech.com/api/v1/chat/sessions (carried over from iteration_1/iteration_2). No user-facing impact — all ProjectFlow data is mocked locally.",
+        "affected_selectors": []
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/frontend/app/(main)/projectflow/[siteId].js is 1149 lines — exceeds the 700-line guideline. Recommend splitting into per-tab subcomponents (TimelineTab.js, FlowMapTab.js, MaterialsTab.js, VendorsTab.js, AlertsTab.js, EditStageModal.js, NodeDetailSheet.js) for maintainability. Functionality is correct; this is a maintainability improvement only.",
+    "Stage row testID format is `pf-stage-${task.id}` and IDs are `t{siteId}-{n}` (e.g. pf-stage-t1-3 for Vepery / Structural framing). The review-request example wrote `pf-stage-{id}` generically; future testers should be aware IDs are not bare integers.",
+    "Edit modal save flow uses RN `Alert.alert('Execution timeline recalibrated', …)` which on RN-web renders as a styled in-app modal rather than a browser-native window.confirm — Playwright's `dialog` event therefore does not fire. This is expected RN-web behaviour, not a bug. The cascade itself is fully verified by (a) the new alert(s) appearing in the Alerts tab and (b) the contract end-date in the EXECUTION HEALTH hero advancing from 2026-08-11 to 2027-03-24 after the save.",
+    "RoleGuard wrapper around ProjectFlow correctly returns 'Restricted module' for both customer_md and problem_solver roles (verified for solver1 and customer1). CMD also has its sites rows non-interactive (no ProjectFlow tag rendered, tap is a no-op), so users do not even reach the deep-link path naturally.",
+    "Old /timeline/[siteId] route is fully removed — direct navigation returns the Expo Router 'Unmatched Route — Page could not be found' page. /app/frontend/app/(main)/timeline/ directory does not exist. No regression."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "100%"},
+  "test_credentials": "manager1/manager123, supervisor1/super123, customer1/cust123, solver1/solver123 — all verified",
+  "seed_data_creation": "None — all ProjectFlow data served from existing mock services (projectFlowMockService + projectTimelineMockService + AsyncStorage). The cascade-edit test (Structural framing end_date 2026-05-18 → 2026-12-31 on site 1) does mutate AsyncStorage; main agent may want to clear localStorage on next test run if a clean slate is desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "ProjectFlow Intelligence (Priority 6) verified end-to-end at 430x900 against https://57d9061e-1694-4d64-b55f-7a29cafd5e40.preview.emergentagent.com. Login chain: open / → click 'Login' top-right → fill 2 inputs → click 'Continue' → lands on /chat. All ProjectFlow tests deep-link via /projectflow/{siteId}. Stage testIDs use task.id format pf-stage-t{siteId}-{n} (e.g. pf-stage-t1-3). Edit modal selectors confirmed working: pf-edit-end (TextInput), pf-edit-save, pf-edit-cancel, pf-status-{not_started|in_progress|completed|delayed}. Cascade: editing Structural framing end-date to 2026-12-31 advanced contract end from 2026-08-11 to 2027-03-24 and added 2 'Timeline drift corrected' alerts. Site 1 (Vepery) intentionally has no weather card (clear skies); Site 2 (Ambattur) has pf-weather visible. Backend Gaps shows 'ProjectFlow Intelligence (per-site)' group, no longer 'Project Timeline'. Old /timeline/1 → Unmatched Route 404. Role gating: manager (full edit + recalibrate + follow-up), supervisor (read-only, no recalibrate, no follow-up, no edit modal on tap), customer_md (sites rows non-interactive + RoleGuard on deep-link), problem_solver (RoleGuard on deep-link). The pre-existing api.kairoxaitech.com CORS error on /chat/sessions is benign and unrelated.",
+  "rca of the issue": "No bugs to RCA. ProjectFlow Intelligence module is functioning as specified across all 4 roles, all 5 tabs, and all interactive flows (stage edit cascade, vendor follow-up, alert dismiss, manual recalibrate, weather conditional render, RoleGuard isolation, /timeline removal)."
+}
