@@ -277,17 +277,44 @@ Premium, distinctive layout (no AI-slop defaults):
 
 ---
 
-## 🎯 All 5 priorities complete
+## ✅ Priority 6 — ProjectFlow Intelligence (Apr 28, 2026)
 
-| P | Scope | Status |
-|---|-------|--------|
-| 1 | §0, §1, §10 — Foundation | ✅ Apr 22 |
-| 2 | §2, §3, §5, §6, §16 — Chat + Lifecycle | ✅ Apr 22 |
-| 3 | §7, §8, §4, §14 — Personal + group chats | ✅ Apr 23 |
-| 4 | §9, §11, §15 — CMD dash + budget + diary | ✅ Apr 23 |
-| 5 | §12, §13, §17, §19 — Admin + Sheets + Gantt + Gaps | ✅ Apr 23 |
+### Scope delivered
+**ProjectFlow Intelligence** — premium per-site execution coordination module that REPLACES the older raw Gantt timeline. Visible to MD + Supervisor only (CMD blocked, PS blocked). Accessed by tapping any row in the Sites list.
 
-All 17 feature sections shipped as mock-driven frontend. Every missing endpoint emits `[BACKEND-GAP]` and is captured in the in-app Backend Gaps screen for the AWS team.
+### Module structure (single screen, 5 segmented tabs)
+- **Header strip**: deep-navy "EXECUTION HEALTH" hero with score X/100, status pill (On track / At risk / Delayed), recalibration timestamp, contract date range. Italic tagline below header summarising the module.
+- **Conditional Weather/Environmental card**: appears only when scenario.recalibrated=true; reads "Execution adjusted based on environmental conditions" with forecast + impact line.
+- **Tab 1 — Timeline**: SVG Gantt with stage bars, dashed dependency curves, material-arrival pin dots above the chart, blue today marker, red contract-end marker, full stage list with assigned supervisor names. MD-only edit modal triggers cascade.
+- **Tab 2 — Flow Map**: 4-lane node-edge SVG (Approvals → Vendors → Materials → Stages) with curved bezier edges and 3-state color (blue=aligned, amber=at_risk, red=delayed). Tap-to-detail bottom sheet.
+- **Tab 3 — Materials**: synthesis banner ("synchronized with execution plan" or "N items need attention"), per-item cards with vendor + linked stage + ETA + status pill + recalibration trigger flag.
+- **Tab 4 — Vendors**: 4 vendor cards with status, dispatch ETA, goods chips, delay slip indicator, follow-up automation badge, MD-only "Send follow-up" button.
+- **Tab 5 — Alerts**: execution intelligence feed (info/warning/critical) with 5 alert kinds: material_dependency, vendor_delay, environmental, timeline_drift_corrected, continuity_restored. Per-alert dismiss.
+- **Top-right Recalibrate button** (MD only): inserts a new "Execution timeline recalibrated" alert and refreshes the bundle.
+
+### Data model
+- New mock service `src/services/mocks/projectFlowMockService.js` wraps existing `projectTimelineMockService` and adds materials (8 phase-mapped types), vendors (4-vendor pool), flow_map nodes/edges, weather scenarios (3 deterministic per site_id), 4 starter alerts + auto-cascade alerts.
+- `updateStage()` calls cascade engine then auto-inserts a `timeline_drift_corrected` alert with the count of recalibrated tasks.
+- Health score = aligned_count / total_count (stages completed/in_progress + materials arrived/on_time + vendors confirmed).
+
+### Files created/changed
+| Path | Change |
+|------|--------|
+| `src/services/mocks/projectFlowMockService.js` | **NEW** — getProjectFlow, updateStage (cascade + alert), sendVendorFollowUp, dismissAlert, recalibrateProjectFlow |
+| `app/(main)/projectflow/[siteId].js` | **NEW** — main screen with 5 tabs, edit modal, node-detail sheet |
+| `app/(main)/(tabs)/sites.js` | Routes to `/projectflow/:id` for MD+Sup; CMD rows non-interactive; tag changed from "Timeline" to "ProjectFlow" |
+| `app/(main)/admin/backend-gaps.js` | Replaced "Project Timeline" group with "ProjectFlow Intelligence (per-site)" — 17 endpoints/tables incl. site_materials, site_vendors, vendor_followups, site_flow_alerts, site_flow_recalibrations |
+| `app/(main)/timeline/[siteId].js` | **DELETED** — replaced entirely by ProjectFlow |
+
+### Verified (iteration_3.json — 100% pass)
+- MD: full edit + recalibrate + vendor follow-up; cascade edit on Structural framing end → 2026-12-31 advanced contract end from 2026-08-11 to 2027-03-24, added 2 "Timeline drift corrected" alerts ✓
+- Supervisor: read-only (no recalibrate, no follow-up, no edit modal on tap) ✓
+- Customer MD: site rows non-interactive + RoleGuard "Restricted module" on deep-link ✓
+- Problem Solver: RoleGuard blocks deep-link ✓
+- Old `/timeline/[siteId]` route fully removed → returns Unmatched Route 404 ✓
+
+### Known minor (non-blocking)
+- ProjectFlow screen is 1149 lines — testing agent flagged maintainability. Functional, but a future refactor could split per-tab into separate files (TimelineTab.js, FlowMapTab.js, etc.). Not P0.
 
 
 ## Priority 1 + 2 Mock Data Coverage (Apr 23 follow-up)
