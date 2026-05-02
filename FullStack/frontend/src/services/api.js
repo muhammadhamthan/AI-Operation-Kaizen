@@ -30,7 +30,7 @@ import  { uploadImageToImageKit } from './imagekitService';
 //   return 'http://localhost:8001/api';//https://api.kairoxaitech.com
 // };
 
-const backendUrl = 'https://api.kairoxaitech.com';
+const backendUrl = 'http://localhost:8000';
 
 
 const API_BASE_URL = backendUrl;
@@ -615,6 +615,8 @@ export const sendChatWithImage = async ({
     // 📍 CRITICAL CHECK: Extract the issue ID
     const rawData = chatRes.data || {};
     const issueId = rawData.issue_id || rawData.data?.issue_id || currentIssueId;
+    const chatId = chatRes.data.chat_id;
+    console.log('chat id is', chatId)
     
     console.log('\n▶️ STEP 1.5: Extracted Issue ID for Image Upload:', issueId);
 
@@ -643,8 +645,17 @@ export const sendChatWithImage = async ({
       const dbPayload = {
         image_url: imageUrl,
         issue_id: issueId,
-        image_type: imageType
+        image_type: imageType,
       };
+
+      if (chatId !== undefined && chatId !== null) {
+        dbPayload.chat_id = chatId;
+        console.log(`📌 Including chat_id ${chatId} in DB payload for potential attachment update.`);
+      }
+      else {
+        console.warn('⚠️ WARNING: chat_id is missing. Backend will save image without linking to chat attachments.');
+      }
+      
 
       try {
         const dbRes = await api.post('/api/v1/images/save', dbPayload);

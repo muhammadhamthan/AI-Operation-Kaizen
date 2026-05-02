@@ -330,6 +330,15 @@ class ChatResponse(BaseModel):
             [],
         ],
     )
+    chat_id: Optional[int] = Field(
+        None,
+        description=(
+            "Unique ID of this chat message in ChatHistory table. "
+            "Used to update attachments later (e.g., replace local image URL "
+            "with ImageKit CDN URL after upload)."
+        ),
+        examples=[101, 205, 999],
+    )
     data: Optional[Dict[str, Any]] = Field(
         None,
         description=(

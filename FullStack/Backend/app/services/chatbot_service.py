@@ -66,7 +66,7 @@ class ChatbotService:
         
 
         # ── 2. Log USER message ───────────────────────────────
-        await self._log_chat(
+        chat_id = await self._log_chat(
             session_id=session.id,
             user_id=user.id,
             issue_id=issue_id,
@@ -74,6 +74,8 @@ class ChatbotService:
             message=message,
             attachments=[image_url] if image_url else [],
         )
+        print(f"User message logged with chat_id {chat_id} and attachments {[image_url] if image_url else []}")
+        logger.info('-----------1111111111111111111-----------chat id after logging user message is %s and attachments are %s', chat_id, [image_url] if image_url else [])
 
         # ── 3. Call AI agent ──────────────────────────────────
         from app.services.ai_service import master_agent,run_sql_agent
@@ -232,6 +234,7 @@ class ChatbotService:
                     complaint_id=primary.complaint_id if primary else None,
                     actions_taken=[c["function"] for c in calls],
                     data=primary.data if primary else None,
+                    chat_id=chat_id,  # for potential attachment updates later
                 )
 
             else:
@@ -242,6 +245,7 @@ class ChatbotService:
                     message=ai_msg,
                     intent=intent or "unknown",
                     actions_taken=[],
+                    chat_id=chat_id,  # for potential attachment updates later
                 )
 
         # ── 5. Log AI reply — runs for EVERY intent path ──────
@@ -582,7 +586,7 @@ class ChatbotService:
         role: ChatRole,
         message: str,
         attachments: list,
-    ) -> None:
+    ) -> int:
         entry = ChatHistory(
             session_id=session_id,
             user_id=user_id,
@@ -593,3 +597,5 @@ class ChatbotService:
         )
         self.db.add(entry)
         await self.db.flush()
+
+        return entry.id   # 🔥 IMPORTANT
