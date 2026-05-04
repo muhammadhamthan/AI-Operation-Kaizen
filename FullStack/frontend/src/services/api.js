@@ -30,7 +30,7 @@ import  { uploadImageToImageKit } from './imagekitService';
 //   return 'http://localhost:8001/api';//https://api.kairoxaitech.com
 // };
 
-const backendUrl = 'http://localhost:8000';
+const backendUrl = 'https://api.kairoxaitech.com';
 
 
 const API_BASE_URL = backendUrl;
