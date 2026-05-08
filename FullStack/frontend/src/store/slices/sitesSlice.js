@@ -11,8 +11,9 @@ export const fetchSitesWithAnalytics = createAsyncThunk(
         return rejectWithValue(res.error);
       }
 
-      // Return the array of sites directly from the backend
-      return res.sites;
+      // Defensive: guarantee we always return an array
+      const sites = res.sites;
+      return Array.isArray(sites) ? sites : [];
     } catch (e) {
       return rejectWithValue(e.message);
     }
@@ -31,7 +32,7 @@ const sitesSlice = createSlice({
       })
       .addCase(fetchSitesWithAnalytics.fulfilled, (state, action) => {
         state.loading = false;
-        state.items = action.payload || [];
+        state.items = Array.isArray(action.payload) ? action.payload : [];
       })
       .addCase(fetchSitesWithAnalytics.rejected, (state, action) => {
         state.loading = false;
@@ -41,7 +42,10 @@ const sitesSlice = createSlice({
 });
 
 export default sitesSlice.reducer;
-export const selectSitesState = state => state.sites;
-export const selectAllSites = createSelector(selectSitesState, s => s.items);
-export const selectSitesLoading = createSelector(selectSitesState, s => s.loading);
-export const selectSiteById = (state, id) => state.sites.items.find(s => s.id === id) || null;
+export const selectSitesState = state => state.sites || { items: [], loading: false };
+export const selectAllSites = createSelector(selectSitesState, s => Array.isArray(s?.items) ? s.items : []);
+export const selectSitesLoading = createSelector(selectSitesState, s => s?.loading || false);
+export const selectSiteById = (state, id) => {
+  const items = state.sites?.items;
+  return Array.isArray(items) ? items.find(s => s.id === id) || null : null;
+};

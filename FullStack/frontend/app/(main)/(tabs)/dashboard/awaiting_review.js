@@ -6,9 +6,11 @@ import {
   FlatList, 
   TextInput, 
   TouchableOpacity, 
+  Image, 
   RefreshControl,
   Platform,
-  ActivityIndicator // 📍 ADDED
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,6 +18,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
+import Avatar from '../../../../src/components/common/Avatar';
+import Loader from '../../../../src/components/common/Loader';
+import EmptyState from '../../../../src/components/common/EmptyState';
+import Toast from '../../../../src/components/common/Toast';
+import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 // 📍 IMPORT NEW SELECTORS AND THUNK
 import { 
@@ -27,13 +35,6 @@ import {
   selectHasMoreIssues,
   selectIssuesNextCursor
 } from '../../../../src/store/slices/issuesSlice';
-
-import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
-import IssueCard from '../../../../src/components/issue/IssueCard';
-import Loader from '../../../../src/components/common/Loader';
-import EmptyState from '../../../../src/components/common/EmptyState';
-import Toast from '../../../../src/components/common/Toast';
-import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function AwaitingReviewScreen() {
   const { theme, isDark } = useTheme(); 
@@ -113,41 +114,122 @@ export default function AwaitingReviewScreen() {
     );
   });
 
+  // Helper to format time as "2h ago" (or fallback)
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return '2h ago';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHrs < 1) return 'Just now';
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    return `${Math.floor(diffHrs / 24)}d ago`;
+  };
+
+  const getStatusColor = (status) => {
+    const s = String(status).toUpperCase();
+    if (s.includes('REVIEW') || s.includes('PENDING')) return { bg: isDark ? 'rgba(249, 115, 22, 0.15)' : '#fff7ed', text: '#f97316' };
+    return { bg: isDark ? '#333' : '#f8fafc', text: theme.textSecondary };
+  };
+
+  // Premium Palette
+  const bgColor = isDark ? '#111111' : '#ffffff';
+  const surfaceColor = isDark ? '#1a1a1a' : '#ffffff';
+  const borderColor = isDark ? '#333333' : '#f0f0f0';
+  const primaryBlue = '#3b82f6';
+  const cardBgColor = isDark ? '#1c1c1c' : '#ffffff';
+  const cardBorderColor = isDark ? '#2a2a2a' : '#f1f5f9';
+
+  const renderItem = ({ item }) => {
+    const statusColor = getStatusColor(item.status);
+    
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        style={[
+          styles.card, 
+          { 
+            backgroundColor: cardBgColor, 
+            borderColor: cardBorderColor,
+          }
+        ]}
+        onPress={() => handleIssuePress(item)}
+      >
+        <View style={[styles.healthBar, { backgroundColor: '#f97316' }]} />
+
+        {/* Top Row: ID & Time */}
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardId, { color: theme.textSecondary }]}>IS-{item.id}</Text>
+          <View style={styles.timeWrap}>
+            <Ionicons name="time-outline" size={14} color={theme.textSecondary} />
+            <Text style={[styles.cardDate, { color: theme.textSecondary }]}>
+              {formatTimeAgo(item.created_at)}
+            </Text>
+          </View>
+        </View>
+        
+        {/* Title */}
+        <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>
+          {item.title || 'Untitled Issue'}
+        </Text>
+        
+        {/* User Info & Status */}
+        <View style={styles.userRow}>
+          <View style={styles.userInfo}>
+            <Avatar name={item.supervisor_name || 'System User'} uri={item.supervisor_name ? `https://i.pravatar.cc/150?u=${item.id}` : null} size="small" />
+            <View style={styles.userText}>
+              <Text style={[styles.userName, { color: theme.text }]} numberOfLines={1}>
+                {item.supervisor_name || 'System User'}
+              </Text>
+              <Text style={styles.userRole}>Field Worker</Text>
+            </View>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
+            <Text style={[styles.statusText, { color: statusColor.text }]}>REVIEW</Text>
+          </View>
+        </View>
+        
+        <View style={[styles.cardDivider, { backgroundColor: cardBorderColor }]} />
+        
+        {/* Location & Details */}
+        <View style={styles.locationRow}>
+          <View style={styles.locationLeft}>
+            <Ionicons name="location-outline" size={16} color={primaryBlue} />
+            <Text style={styles.locationText} numberOfLines={1}>{item.site_name || 'Tech Park South'}</Text>
+          </View>
+          <Text style={styles.detailsText}>DETAILS {'>'}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   if (loading && issues.length === 0 && !refreshing) {
     return <Loader message="Loading review queue..." />;
   }
-
-  // ── PREMIUM MONOCHROME PALETTE ──
-  const bgColor = isDark ? '#212121' : '#f9f9f9';
-  const borderColor = isDark ? '#333333' : '#e5e5e5';
-  const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
-  const reviewAccent = '#f97316'; // Orange accent for pending review
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       
       {/* ── HEADER ── */}
-      <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
+      <View style={[styles.header, { backgroundColor: surfaceColor, borderBottomColor: borderColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Awaiting Review</Text>
-        
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Awaiting Review</Text>
         <View style={styles.headerRight}>
-          {Platform.OS === 'web' ? (
-            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
-              <Ionicons name="sync" size={22} color={refreshing ? reviewAccent : theme.textSecondary} />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.placeholder} />
-          )}
+          <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7} style={{ marginRight: 12 }}>
+            <Avatar uri={user?.avatar} name={user?.name} size="small" />
+          </TouchableOpacity>
+          {/* <TouchableOpacity style={styles.bellButton}>
+            <Ionicons name="notifications-outline" size={22} color={theme.text} />
+          </TouchableOpacity> */}
         </View>
       </View>
 
       {/* ── SEARCH BAR ── */}
       <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
-        <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
-          <Ionicons name="search" size={18} color={theme.textSecondary} />
+        <View style={[styles.searchInput, { backgroundColor: surfaceColor, borderColor }]}>
+          <Ionicons name="search" size={20} color={theme.textSecondary} style={{ opacity: 0.7 }} />
           <TextInput
             style={[styles.searchTextInput, { color: theme.text }]}
             placeholder="Search review queue..."
@@ -155,18 +237,16 @@ export default function AwaitingReviewScreen() {
             value={searchText}
             onChangeText={setSearchText}
           />
-          {searchText !== '' && (
-            <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.filterIconWrap}>
+            <Ionicons name="options-outline" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* ── RESULTS COUNT ── */}
+      {/* ── RESULTS HEADER ── */}
       <View style={styles.resultsHeader}>
         <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
-          {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''} found
+          PENDING REVIEW ({filteredIssues.length})
         </Text>
       </View>
 
@@ -174,7 +254,7 @@ export default function AwaitingReviewScreen() {
       <FlatList
         data={filteredIssues}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => <IssueCard issue={item} onPress={() => handleIssuePress(item)} />}
+        renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <EmptyState 
@@ -189,24 +269,27 @@ export default function AwaitingReviewScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[reviewAccent]}
-              tintColor={reviewAccent}
+              colors={[primaryBlue]}
+              tintColor={primaryBlue}
             />
           )
         }
-        // 📍 NEW INFINITE SCROLL PROPS
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
           isFetchingNextPage ? (
             <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color={reviewAccent} />
+              <ActivityIndicator size="small" color={primaryBlue} />
+            </View>
+          ) : filteredIssues.length > 0 ? (
+            <View style={styles.endFooter}>
+              <Text style={styles.endFooterText}>END OF OPERATIONAL RECORDS</Text>
             </View>
           ) : null
         }
       />
 
-      <FullScreenSpinner visible={refreshing} message="Updating Queue..." color={reviewAccent} />
+      <FullScreenSpinner visible={refreshing} message="Updating Queue..." color={primaryBlue} />
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -219,29 +302,79 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: 16, 
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3 },
+      android: { elevation: 2 },
+    }),
   },
   backButton: { padding: 4, marginLeft: -4 },
-  headerTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  headerTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
   headerRight: { width: 32, alignItems: 'flex-end' },
-  placeholder: { width: 32 },
-  webRefreshButton: { padding: 4 },
-  searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  bellButton: { padding: 4 },
+  
+  searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
   searchInput: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    paddingHorizontal: 14, 
-    height: 44, 
-    borderRadius: 12, 
+    paddingHorizontal: 16, 
+    height: 50, 
+    borderRadius: 25, 
     borderWidth: 1,
-    gap: 8 
+    gap: 10 
   },
   searchTextInput: { flex: 1, fontSize: 15 },
-  resultsHeader: { paddingHorizontal: 20, paddingBottom: 12 },
-  resultsCount: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  filterIconWrap: { padding: 4 },
   
-  // 📍 Spacer for the loading spinner
+  resultsHeader: { paddingHorizontal: 20, paddingBottom: 14 },
+  resultsCount: { fontSize: 11, fontWeight: '700', letterSpacing: 1.0 },
+  
+  listContent: { paddingHorizontal: 16, paddingBottom: 30, gap: 14 },
+  
   footerLoader: { paddingVertical: 20, alignItems: 'center' },
+  endFooter: { paddingVertical: 24, alignItems: 'center' },
+  endFooterText: { fontSize: 10, fontWeight: '600', color: '#9ca3af', letterSpacing: 0.5 },
+  
+  card: { 
+    padding: 16,
+    paddingLeft: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  healthBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 6,
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardId: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
+  timeWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cardDate: { fontSize: 11 },
+  
+  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 16, letterSpacing: -0.2 },
+  
+  userRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  userText: { justifyContent: 'center' },
+  userName: { fontSize: 13, fontWeight: '700' },
+  userRole: { fontSize: 11, color: '#9ca3af' },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  statusText: { fontSize: 10, fontWeight: '700' },
+  
+  cardDivider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
+  
+  locationRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  locationLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  locationText: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
+  detailsText: { fontSize: 11, fontWeight: '700', color: '#3b82f6', letterSpacing: 0.5 },
 });

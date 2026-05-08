@@ -11,34 +11,30 @@ const DashboardCard = ({ title, count, icon, color, onPress, style }) => {
       style={[
         styles.card,
         { 
-          backgroundColor: isDark ? '#2f2f2f' : '#ffffff', 
-          borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' 
+          backgroundColor: isDark ? '#171717' : '#ffffff', 
+          borderColor: isDark ? '#2a2a2a' : '#e2e8f0',
         },
         style
       ]}
       onPress={onPress}
-      activeOpacity={0.6}
+      activeOpacity={0.7}
     >
-      <View style={styles.content}>
-        {/* Top Row: Icon and Title */}
-        <View style={styles.header}>
-          <View style={[styles.iconWrapper, { backgroundColor: `${color}15` }]}>
-            <Ionicons name={icon} size={18} color={color} />
-          </View>
-          <Text style={[styles.title, { color: theme.textSecondary }]} numberOfLines={1}>
-            {title}
-          </Text>
+      <View style={styles.header}>
+        <View style={[styles.iconWrapper, { backgroundColor: isDark ? '#262626' : '#ffffff', borderColor: isDark ? '#2a2a2a' : '#e2e8f0', borderWidth: 1 }]}>
+          <Ionicons name={icon} size={18} color={color} />
         </View>
+        <Ionicons name="arrow-forward" size={16} color={isDark ? '#475569' : '#94a3b8'} />
+      </View>
 
-        {/* Bottom Row: Large Count and Trend (Visual only) */}
-        <View style={styles.statsRow}>
-          <Text style={[styles.count, { color: theme.text }]}>{count}</Text>
-          <Ionicons 
-            name="arrow-forward-circle-outline" 
-            size={20} 
-            color={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'} 
-          />
-        </View>
+      <View style={styles.body}>
+        {count !== null && count !== undefined && (
+          <Text style={[styles.count, { color: theme.text }]}>
+            {count.toString().padStart(2, '0')}
+          </Text>
+        )}
+        <Text style={[styles.title, { color: theme.textSecondary }]} numberOfLines={1}>
+          {title}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -47,54 +43,48 @@ const DashboardCard = ({ title, count, icon, color, onPress, style }) => {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    margin: 6,
-    // Modern ChatGPT shadow
+    padding: 16,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.04,
-        shadowRadius: 10,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 2,
+        elevation: 1,
       },
     }),
   },
-  content: {
-    padding: 16,
-  },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20, // Spacious look
-    gap: 10,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   iconWrapper: {
     width: 32,
     height: 32,
-    borderRadius: 8, // Modern rounded square instead of circle
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  title: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-    flex: 1,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+  body: {
+    gap: 4,
   },
   count: {
     fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -1, // Tight tracking for modern look
+    fontWeight: '800',
+    letterSpacing: -1,
     lineHeight: 36,
+  },
+  title: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });
 

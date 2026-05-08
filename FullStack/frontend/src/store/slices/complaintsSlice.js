@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import {
   fetchComplaints as fetchComplaintsApi,
   fetchComplaintById as fetchComplaintByIdApi,
@@ -21,11 +21,11 @@ const initialState = {
 
 export const fetchComplaints = createAsyncThunk(
   'complaints/fetchAll',
-  // 📍 CHANGED: Accept an object so we can pass user and cursor
-  async ({ user, cursor = null } = {}, { rejectWithValue }) => {
+  // 📍 CHANGED: Accept an object so we can pass user, cursor, and filters
+  async ({ user, cursor = null, issue_id = null, solver_id = null } = {}, { rejectWithValue }) => {
     try {
-      // 📍 Pass the cursor to your API
-      const result = await fetchComplaintsApi({ cursor });    // ✅ pass user/cursor
+      // 📍 Pass filters to your API
+      const result = await fetchComplaintsApi({ cursor, issue_id, solver_id });
       if (!result.success) {
         return rejectWithValue(result.error);
       }
@@ -42,7 +42,8 @@ export const fetchComplaintById = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       const result = await fetchComplaintByIdApi(id);
-      return result;
+      if (!result.success) return rejectWithValue(result.error);
+      return result.complaint; // ✅ Extract the complaint object
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to fetch complaint');
     }
@@ -121,8 +122,10 @@ const complaintsSlice = createSlice({
 
 export const { setFilters, clearFilters, clearCurrentComplaint } = complaintsSlice.actions;
 
+const EMPTY_ARRAY = [];
+
 // Selectors
-export const selectAllComplaints = (state) => state.complaints.complaints;
+export const selectAllComplaints = (state) => state.complaints?.complaints || EMPTY_ARRAY;
 export const selectCurrentComplaint = (state) => state.complaints.currentComplaint;  // ✅ ADD
 export const selectComplaintsLoading = (state) => state.complaints.loading;
 export const selectComplaintsError = (state) => state.complaints.error;
@@ -131,27 +134,43 @@ export const selectFilters = (state) => state.complaints.filters;
 // 📍 ADDED: Pagination Selectors
 export const selectIsFetchingNextPage = (state) => state.complaints.isFetchingNextPage;
 export const selectHasMoreComplaints = (state) => state.complaints.hasMore;
-export const selectComplaintsNextCursor = (state) => state.complaints.nextCursor;
+export const selectComplaintsNextCursor = (state) => state.complaints?.nextCursor || null;
 
-export const selectFilteredComplaints = (state) => {
-  const { complaints, filters } = state.complaints;
-  
-  // 📍 CHANGED: Safety check to prevent "not iterable" crashes
-  if (!Array.isArray(complaints)) return [];
 
-  let filtered = [...complaints];
-  
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    filtered = filtered.filter(complaint =>
-      // 📍 Match exact backend keys for searching
-      complaint.issue_title?.toLowerCase().includes(searchLower) ||
-      complaint.complaint_details?.toLowerCase().includes(searchLower) ||
-      complaint.id?.toString().includes(searchLower) ||
-      complaint.issue_id?.toString().includes(searchLower)
-    );
+export const selectFilteredComplaints = createSelector(
+  [selectAllComplaints, selectFilters],
+  (complaints, filters) => {
+    if (!Array.isArray(complaints)) return [];
+
+    let filtered = complaints;
+
+    // Filter out resolved/closed complaints by default for "Active" view
+    filtered = filtered.filter((complaint) => {
+      const mockStatuses = ['Pending', 'Investigating', 'Resolved', 'Closed'];
+      const status = (complaint.status || mockStatuses[complaint.id % 4]).toLowerCase();
+      return status !== 'resolved' && status !== 'closed';
+    });
+
+    if (filters.status) {
+      const statusLower = filters.status.toLowerCase();
+      filtered = filtered.filter((complaint) => {
+        const mockStatuses = ['Pending', 'Investigating', 'Resolved', 'Closed'];
+        const status = (complaint.status || mockStatuses[complaint.id % 4]).toLowerCase();
+        return status === statusLower;
+      });
+    }
+
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(complaint =>
+        complaint.issue_title?.toLowerCase().includes(searchLower) ||
+        complaint.complaint_details?.toLowerCase().includes(searchLower) ||
+        complaint.id?.toString().includes(searchLower) ||
+        complaint.issue_id?.toString().includes(searchLower)
+      );
+    }
+
+    return filtered;
   }
-  
-  return filtered;
-};
+);
 export default complaintsSlice.reducer;

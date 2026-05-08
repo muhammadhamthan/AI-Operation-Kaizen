@@ -22,14 +22,14 @@ import * as Location from 'expo-location';
 
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { 
-  fetchIssueById, 
+import {
+  fetchIssueById,
   fetchIssueTimeline,
-  selectCurrentIssue, 
-  selectIssuesLoading, 
-  clearCurrentIssue 
+  selectCurrentIssue,
+  selectIssuesLoading,
+  clearCurrentIssue
 } from '../../../../src/store/slices/issuesSlice';
-import { formatDate, formatDateTime } from '../../../../src/utils/formatters'; 
+import { formatDate, formatDateTime } from '../../../../src/utils/formatters';
 import { calculateOverdueDays } from '../../../../src/utils/overdue';
 import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
@@ -38,15 +38,20 @@ import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
 import ImageGallery from '../../../../src/components/issue/ImageGallery';
 import CallHistorySection from '../../../../src/components/issue/CallHistorySection';
 import Loader from '../../../../src/components/common/Loader';
+// ── Kairox v3.0 additions (Priority 2) ──
+import AlertStatusBanner from '../../../../src/components/issue/AlertStatusBanner';
+import PhotoTimeline from '../../../../src/components/issue/PhotoTimeline';
+import EscalationReportModal from '../../../../src/components/issue/EscalationReportModal';
+import { getStatusLabel, getStatusMeta } from '../../../../src/config/issueStatuses';
 
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function IssueDetailScreen() {
-  const { theme, isDark } = useTheme(); 
+  const { theme, isDark } = useTheme();
   const router = useRouter();
-  
+
   const { id, fromNotification, highlighted } = useLocalSearchParams();
 
   const handleSmartBack = useCallback(() => {
@@ -54,7 +59,7 @@ export default function IssueDetailScreen() {
       router.replace('/(main)/(tabs)/dashboard');
       setTimeout(() => {
         router.navigate('/(main)/(tabs)/chat');
-      }, 100); 
+      }, 100);
     } else {
       if (router.canGoBack()) {
         router.back();
@@ -81,6 +86,8 @@ export default function IssueDetailScreen() {
   const [capturedLocation, setCapturedLocation] = useState(null);
 
   const [highlightAnim] = useState(new Animated.Value(highlighted === 'true' ? 1 : 0));
+  // ── Kairox v3.0: escalation modal visibility (Supervisor only) ──
+  const [escalationOpen, setEscalationOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -110,7 +117,7 @@ export default function IssueDetailScreen() {
       return;
     }
     if (!id) return;
-    
+
     setRefreshing(true);
     try {
       await Promise.allSettled([
@@ -125,7 +132,7 @@ export default function IssueDetailScreen() {
   // 📍 BULLETPROOF WEB/NATIVE CAMERA HANDLER
   const handleTakePhoto = async () => {
     console.log("\n[DEBUG] --- STARTING PHOTO CAPTURE FLOW ---");
-    setIsCapturingLocation(true); 
+    setIsCapturingLocation(true);
 
     try {
       let loc = null;
@@ -139,7 +146,7 @@ export default function IssueDetailScreen() {
             const position = await Promise.race([locationPromise, timeoutPromise]);
             loc = { latitude: position.coords.latitude, longitude: position.coords.longitude };
           }
-        } catch(e) {
+        } catch (e) {
           console.log("[DEBUG] Native location fetch failed:", e.message);
         }
       }
@@ -149,7 +156,7 @@ export default function IssueDetailScreen() {
       } else if (Platform.OS !== 'web') {
         Alert.alert("Location Required", "We need your location to verify the fix.");
         setIsCapturingLocation(false);
-        return; 
+        return;
       }
 
       let result;
@@ -180,12 +187,12 @@ export default function IssueDetailScreen() {
         setSelectedImage(result.assets[0].uri);
         setCapturedLocation(loc);
       } else {
-        setCapturedLocation(null); 
+        setCapturedLocation(null);
       }
     } catch (error) {
       if (Platform.OS === 'web') alert("Error opening file picker.");
     } finally {
-      setIsCapturingLocation(false); 
+      setIsCapturingLocation(false);
     }
   };
 
@@ -199,7 +206,7 @@ export default function IssueDetailScreen() {
 
     setSelectedImage(null);
     setCapturedLocation(null);
-    
+
     if (Platform.OS === 'web') {
       alert("Sent Successfully! Fix photo uploaded for review.");
     } else {
@@ -241,8 +248,8 @@ export default function IssueDetailScreen() {
   if (loading && !refreshing && !issue) return <Loader message="Loading issue details..." />;
   if (!issue) return <Loader message="Loading issue details..." />;
 
-  const currentAssignment = issue.assignments && issue.assignments.length > 0 
-    ? issue.assignments[0] 
+  const currentAssignment = issue.assignments && issue.assignments.length > 0
+    ? issue.assignments[0]
     : null;
 
   const overdueDays = calculateOverdueDays(issue.deadline_at);
@@ -253,11 +260,11 @@ export default function IssueDetailScreen() {
   const borderColor = isDark ? '#333333' : '#e5e5e5';
   const iconBg = isDark ? 'rgba(255,255,255,0.05)' : '#f4f4f4';
   const successAccent = '#10a37f';
-  
+
   // ── ROLE + STATUS DERIVED FLAGS ──
   const isProblemSolver = user?.role === 'problemsolver' || user?.role === 'problem_solver';
-  const isSupervisor    = user?.role === 'supervisor';
-  const isManager       = user?.role === 'manager';
+  const isSupervisor = user?.role === 'supervisor';
+  const isManager = user?.role === 'manager';
 
   const showMarkDoneBtn = isProblemSolver && (issue.status?.toUpperCase() === 'IN_PROGRESS' || issue.status?.toUpperCase() === 'ASSIGNED');
 
@@ -268,14 +275,14 @@ export default function IssueDetailScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
-      
+
       {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
         <TouchableOpacity onPress={handleSmartBack} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
-        
+
         <View style={styles.headerRight}>
           {Platform.OS === 'web' ? (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
@@ -287,8 +294,8 @@ export default function IssueDetailScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
           Platform.OS === 'web' ? undefined : (
@@ -296,11 +303,11 @@ export default function IssueDetailScreen() {
           )
         }
       >
-        
+
         {/* ── ISSUE IDENTITY ── */}
         <Animated.View style={[styles.card, styles.flatCard, { backgroundColor: highlightColor, borderColor }]}>
           <View style={styles.badgeRow}>
-            <StatusBadge status={issue.status} size="small" />
+            <StatusBadge label={getStatusLabel(issue.status)} status={issue.status} size="small" />
             <StatusBadge status={issue.priority} type="priority" size="small" />
             {isOverdue && <StatusBadge label={`${overdueDays}d overdue`} color="#ef4444" />}
           </View>
@@ -310,10 +317,18 @@ export default function IssueDetailScreen() {
           </Text>
         </Animated.View>
 
+        {/* ── Kairox §5/§6: DUAL-CHANNEL ALERT STATUS ── */}
+        <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+          <AlertStatusBanner
+            issueId={issue.id}
+            canResend={user?.role === 'supervisor' || user?.role === 'manager'}
+          />
+        </View>
+
         {/* ── DETAILS ROW ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Details</Text>
-          
+
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
               <Ionicons name="location-outline" size={18} color={theme.textSecondary} />
@@ -347,7 +362,7 @@ export default function IssueDetailScreen() {
               </View>
             </View>
           )}
-          
+
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
               <Ionicons name="construct-outline" size={18} color={theme.textSecondary} />
@@ -372,7 +387,7 @@ export default function IssueDetailScreen() {
                 <Text style={[styles.personRole, { color: theme.textSecondary }]}>Raised By</Text>
               </View>
             </View>
-            
+
             {currentAssignment && (
               <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
                 <Avatar name={currentAssignment.solver_name} size="medium" />
@@ -383,9 +398,9 @@ export default function IssueDetailScreen() {
                   <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
                 </View>
                 {currentAssignment.solver_phone && (
-                   <Text style={[styles.personRole, { color: theme.textSecondary, marginTop: 4 }]}>
-                     {currentAssignment.solver_phone}
-                   </Text>
+                  <Text style={[styles.personRole, { color: theme.textSecondary, marginTop: 4 }]}>
+                    {currentAssignment.solver_phone}
+                  </Text>
                 )}
               </View>
             )}
@@ -415,7 +430,7 @@ export default function IssueDetailScreen() {
               </View>
             </View>
           )}
-          
+
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="add-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -423,7 +438,7 @@ export default function IssueDetailScreen() {
               <Text style={[styles.infoValue, { color: theme.text }]}>{formatDateTime(issue.created_at)}</Text>
             </View>
           </View>
-          
+
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="refresh-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -433,10 +448,14 @@ export default function IssueDetailScreen() {
           </View>
         </View>
 
-        {/* ── PHOTOS ── */}
+        {/* ── PHOTOS (Kairox §16 Photo Timeline — replaces plain ImageGallery) ── */}
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Photos</Text>
-          <ImageGallery images={issue.images || []} />
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Photo Timeline</Text>
+          <PhotoTimeline
+            issueId={issue.id}
+            role={user?.role}
+            canUpload={user?.role === 'supervisor' || user?.role === 'problem_solver'}
+          />
         </View>
 
         {/* ── CALL HISTORY (Solver Only) ── */}
@@ -448,6 +467,23 @@ export default function IssueDetailScreen() {
 
         {/* ── ACTIONS ── */}
         <View style={styles.actions}>
+
+          {/* ── Kairox §3: SUPERVISOR ESCALATION ACTION ── */}
+          {user?.role === 'supervisor' &&
+            !['closed', 'completed', 'escalated'].includes(String(issue.status || '').toLowerCase()) && (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[
+                  styles.primaryActionBtn,
+                  { backgroundColor: theme.danger, marginBottom: 12 },
+                ]}
+                onPress={() => setEscalationOpen(true)}
+                testID="issue-escalate-btn"
+              >
+                <Ionicons name="arrow-up-circle" size={18} color="#fff" />
+                <Text style={styles.primaryActionText}>Escalate to Managing Director</Text>
+              </TouchableOpacity>
+            )}
 
           {/* ── PROBLEM SOLVER ACTIONS ── */}
           {isProblemSolver && (
@@ -495,19 +531,19 @@ export default function IssueDetailScreen() {
           {/* ── SUPERVISOR & MANAGER ACTIONS ── */}
           {(isSupervisor || isManager) && issue.status?.toUpperCase() === 'RESOLVED_PENDING_REVIEW' && (
             <View style={{ gap: 12 }}>
-              <Button 
-                title="Approve & Close" 
-                variant="success" 
-                icon="checkmark-done-circle-outline" 
-                onPress={() => handleReviewAction('APPROVE')} 
-                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }} 
+              <Button
+                title="Approve & Close"
+                variant="success"
+                icon="checkmark-done-circle-outline"
+                onPress={() => handleReviewAction('APPROVE')}
+                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }}
               />
-              <Button 
-                title="Reject Fix" 
-                variant="danger" 
-                icon="close-circle-outline" 
-                onPress={() => handleReviewAction('REJECT')} 
-                style={{ borderRadius: 10 }} 
+              <Button
+                title="Reject Fix"
+                variant="danger"
+                icon="close-circle-outline"
+                onPress={() => handleReviewAction('REJECT')}
+                style={{ borderRadius: 10 }}
               />
             </View>
           )}
@@ -520,17 +556,26 @@ export default function IssueDetailScreen() {
       <FullScreenSpinner visible={refreshing} message="Updating Issue Details..." color={theme.primary} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
+
+      {/* ── Kairox §3: ESCALATION MODAL ── */}
+      <EscalationReportModal
+        visible={escalationOpen}
+        onClose={() => setEscalationOpen(false)}
+        onSubmitted={() => setToastMessage('Escalation sent to Managing Director')}
+        issueId={issue.id}
+        currentUser={user}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -539,13 +584,13 @@ const styles = StyleSheet.create({
   headerRight: { width: 32, alignItems: 'flex-end' },
   placeholder: { width: 32 },
   webRefreshButton: { padding: 4 },
-  
+
   content: { flex: 1 },
-  
-  card: { 
-    marginHorizontal: 16, 
-    marginTop: 16, 
-    padding: 20 
+
+  card: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 20
   },
   flatCard: {
     borderRadius: 16,
@@ -561,7 +606,7 @@ const styles = StyleSheet.create({
   description: { fontSize: 15, lineHeight: 24, letterSpacing: -0.1 },
 
   sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
-  
+
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 14 },
   iconWrapper: {
     width: 36,
@@ -575,16 +620,16 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
 
   peopleGrid: { flexDirection: 'column' },
-  personRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 12, 
-    paddingBottom: 12 
+  personRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 12
   },
   personInfo: { flex: 1, justifyContent: 'center' },
   personName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, marginBottom: 2 },
   personRole: { fontSize: 13 },
-  
+
   // ── ACTIONS ──
   actions: { marginHorizontal: 16, marginTop: 32 },
   buttonMargin: { marginTop: 12 },
@@ -601,7 +646,7 @@ const styles = StyleSheet.create({
   },
   primaryActionBtnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   primaryActionBtnText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
-  
+
   previewContainer: {
     borderRadius: 16,
     borderWidth: 1,

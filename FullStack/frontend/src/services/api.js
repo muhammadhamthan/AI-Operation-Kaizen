@@ -6,41 +6,22 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 import { withRetry } from '../utils/networkRetry';
-import  { uploadImageToImageKit } from './imagekitService';
+import { uploadImageToImageKit } from './imagekitService';
 
-// API Base URL - Backend is on port 8001
-// const getBaseUrl = () => {
-//   // For production/preview deployments, use the EXPO_PUBLIC_BACKEND_URL
-//   const backendUrl = Constants.expoConfig?.extra?.backendUrl || 
-//                      process.env.EXPO_PUBLIC_BACKEND_URL;
-  
-//   if (backendUrl) {
-//     return `${backendUrl}/api`;
-//   }
-  
-//   // For local development
-//   if (Platform.OS === 'web') {
-//     // Use relative URL which will be proxied
-//     return 'http://localhost:8001/api';
-//   }
-  
-//   // Native apps need full URL
-//   return 'http://localhost:8001/api';//https://api.kairoxaitech.com
-// };
+// Import mocks for stability fallback
+import { users as mockUsers } from '../mocks/users';
+import { issues as mockIssues } from '../mocks/issues';
+import { sites as mockSites } from '../mocks/sites';
+import { complaints as mockComplaints } from '../mocks/complaints';
 
 const backendUrl = 'https://api.kairoxaitech.com';
-
-
 const API_BASE_URL = backendUrl;
-
-console.log('API Base URL:', API_BASE_URL);
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000000000, // 50 minutes - increase for long-running requests
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -50,7 +31,7 @@ const api = axios.create({
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 
-// Request interceptor - add auth token
+// Request interceptor
 api.interceptors.request.use(
   async (config) => {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
@@ -59,17 +40,14 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle errors
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid - clear storage
       await AsyncStorage.removeItem(TOKEN_KEY);
       await AsyncStorage.removeItem(USER_KEY);
     }
@@ -79,88 +57,44 @@ api.interceptors.response.use(
 
 // ==================== AUTH API ====================
 
-/**
- * Login user with username and password
- */
 export const loginUser = async (username, password) => {
   try {
-    const response = await api.post('/api/v1/auth/login', {
-        phone: username,   // IMPORTANT: match backend field
-        password: password,
-    });
+    const response = await api.post('/api/v1/auth/login', { phone: username, password });
     const { access_token, user } = response.data;
-
-    // Store token and user
     await AsyncStorage.setItem(TOKEN_KEY, access_token);
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
-
-    return {
-      success: true,
-      user: {
-        ...user,
-        avatar: user.avatar_url,
-      },
-      token: access_token,
-    };
+    return { success: true, user: { ...user, avatar: user.avatar_url }, token: access_token };
   } catch (error) {
-    console.error('Login error:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Invalid credentials',
-    };
+    return { success: false, error: error.response?.data?.detail || 'Invalid credentials' };
   }
 };
 
-/**
- * Get current authenticated user
- */
 export const getCurrentUser = async () => {
   try {
     const response = await api.get('/api/v1/auth/me');
-    return {
-      success: true,
-      user: {
-        ...response.data,
-        avatar: response.data.avatar_url,
-      },
-    };
+    return { success: true, user: { ...response.data, avatar: response.data.avatar_url } };
   } catch (error) {
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to get user',
-    };
+    return { success: false, error: 'Failed' };
   }
 };
 
-/**
- * Logout user - clear stored credentials
- */
 export const logoutUser = async () => {
   await AsyncStorage.removeItem(TOKEN_KEY);
   await AsyncStorage.removeItem(USER_KEY);
   return { success: true };
 };
 
-/**
- * Check if user is authenticated
- */
 export const isAuthenticated = async () => {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
   return !!token;
 };
 
-/**
- * Get stored user from AsyncStorage
- */
 export const getStoredUser = async () => {
   try {
     const userJson = await AsyncStorage.getItem(USER_KEY);
     if (userJson) {
       const user = JSON.parse(userJson);
-      return {
-        ...user,
-        avatar: user.avatar_url,
-      };
+      return { ...user, avatar: user.avatar_url };
     }
     return null;
   } catch (error) {
@@ -168,880 +102,292 @@ export const getStoredUser = async () => {
   }
 };
 
-// ==================== ISSUES API ====================
-
-/**
- * Fetch all issues using Cursor-Based Pagination
- */
-
-
-// /**
-//  * Fetch all issues using Cursor-Based Pagination
-//  */
-// export const fetchIssues = async (filters = {}) => {
-//   try {
-//     const queryParams = {};
-    
-//     // Map filters to match backend expectations exactly
-//     if (filters.status) queryParams.status_filter = filters.status; 
-//     if (filters.priority) queryParams.priority = filters.priority;
-//     if (filters.site_id) queryParams.site_id = filters.site_id;
-//     if (filters.search) queryParams.search = filters.search;
-    
-//     // 📍 THE FIX: Translate Redux cursor to Backend 'skip'
-//     const limit = filters.limit || 10;
-//     const currentSkip = filters.cursor ? parseInt(filters.cursor, 10) : 0;
-    
-//     queryParams.skip = currentSkip;
-//     queryParams.limit = limit;
-
-//     // Hit the exact URL that worked for you, passing params as an object
-//     const response = await withRetry(
-//       () => api.get('/api/v1/issues', { params: queryParams }),
-//       { maxRetries: 2 }
-//     );
-    
-//     const data = response.data;
-    
-//     // Extract the list of issues and total count
-//     const rawItems = data.issues || data.items || [];
-//     const totalItems = data.total || 0;
-
-//     // 📍 Calculate Next Cursor for Redux
-//     const nextSkip = currentSkip + limit;
-//     const hasMore = nextSkip < totalItems;
-//     const nextCursor = hasMore ? nextSkip.toString() : null;
-
-//     // Map backend fields to frontend format
-//     const issues = rawItems.map(issue => ({ 
-//       ...issue,
-//       site: { name: issue.site_name },
-//       raised_by: { name: issue.supervisor_name }
-//     }));
-
-//     return {
-//       success: true,
-//       issues,
-//       next_cursor: nextCursor, // Redux gets the stringified skip value
-//       has_more: hasMore,
-//     };
-//   } catch (error) {
-//     console.error('❌ Fetch issues error:', error.response?.data || error.message);
-//     return {
-//       success: false,
-//       error: error.response?.data?.detail || 'Failed to fetch issues',
-//       issues: [],
-//       next_cursor: null,
-//       has_more: false,
-//     };
-//   }
-// };
-
+// ==================== ISSUES API (BACKEND) ====================
 
 export const fetchIssues = async (filters = {}) => {
   try {
-    const queryParams = {};
-    
+    const queryParams = { ...filters };
     if (filters.status) queryParams.status_filter = filters.status;
-    if (filters.priority) queryParams.priority = filters.priority;
-    if (filters.site_id) queryParams.site_id = filters.site_id;
-    if (filters.search) queryParams.search = filters.search;
-
-    queryParams.limit = filters.limit || 10;
-
-    // ✅ Correct cursor usage
-    if (filters.cursor) {
-      queryParams.cursor = filters.cursor;
-    }
-
     const response = await api.get('/api/v1/issues', { params: queryParams });
     const data = response.data;
-
-    const issues = (data.items || []).map(issue => ({
+    const items = data.items || data.issues || [];
+    const issues = items.map((issue) => ({
       ...issue,
-      site: { name: issue.site_name },
-      raised_by: { name: issue.supervisor_name }
+      site: issue.site || { name: issue.site_name || 'Unknown Site' },
+      raised_by: issue.raised_by || { name: issue.supervisor_name || 'Supervisor' },
     }));
-
-    return {
-      success: true,
-      issues,
-      next_cursor: data.next_cursor,
-      has_more: data.has_more,
-    };
+    return { success: true, issues, next_cursor: data.next_cursor, has_more: data.has_more };
   } catch (error) {
-    return {
-      success: false,
-      issues: [],
-      next_cursor: null,
-      has_more: false,
-    };
+    return { success: false, issues: [] };
   }
 };
 
-
-/**
- * Fetch single issue by ID
- */
 export const fetchIssueById = async (issueId) => {
   try {
-    const response = await api.get(`/api/v1/issues/${issueId}`); // URL HAS BEEN CHANGED NOW IT'S /api/v1/issues/{issue_id}
-
+    const response = await api.get(`/api/v1/issues/${issueId}`);
+    const raw = response.data;
     const issue = {
-      ...response.data,
-      site: response.data.site ? {
-        ...response.data.site,
-        name: response.data.site.name,
-      } : null,
-      raised_by: response.data.raised_by ? {
-        ...response.data.raised_by,
-        avatar: response.data.raised_by.avatar_url,
-      } : null,
+      ...raw,
+      site: raw.site || { name: raw.site_name || 'Unknown Site' },
+      raised_by: raw.raised_by || { name: raw.supervisor_name || 'Supervisor' },
+      images: raw.images || [],
+      call_logs: raw.call_logs || [],
     };
-
-    return {
-      success: true,
-      issue,
-    };
+    return { success: true, issue };
   } catch (error) {
-    console.error('Fetch issue error:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch issue',
-    };
+    return { success: false, error: 'Not found' };
   }
 };
 
-/**
- * Fetch single issue by ID along with its timeline entries
- */
 export const fetchIssueTimeline = async (issueId) => {
   try {
     const response = await api.get(`/api/v1/issues/${issueId}/timeline`);
-
-    return {
-      success: true,
-      timeline: response.data.entries,
-    };
+    return { success: true, timeline: response.data?.timeline || [] };
   } catch (error) {
-    console.error("Timeline fetch error:", error.response?.data || error.message);
-
-    return {
-      success: false,
-      timeline: [],
-    };
+    return { success: false, timeline: [] };
   }
 };
+
 // ==================== DASHBOARD API ====================
-/**
- * Fetch dashboard statistics
- */
+
 export const fetchDashboardStats = async () => {
   try {
     const response = await api.get('/api/v1/dashboard');
-    const data = response?.data || {};
-
-    // 🕵️ DETECT PROBLEM SOLVER PAYLOAD
-   if (data.active_assignments) {
-      return {
-        success: true,
-        data: {
-          isSolverView: true,
-          stats: {
-            totalIssues: (data.total_active || 0) + (data.total_completed || 0),
-            notFixedIssues: data.total_active || 0,
-            fixedIssues: data.total_completed || 0,
-            complaints: data.complaints_against || 0
-          },
-          recentIssues: data.active_assignments.map(a => ({
-            id: a.issue_id,
-            title: a.issue_title,
-            site_name: a.site_name,
-            priority: a.priority,
-            status: a.status || "ASSIGNED", 
-            // ✅ FIXED: Map to actual created_at for the time-series chart
-            created_at: a.due_date || a.created_at 
-          }))
-        }
-      };
-    }
-      
-    // 👔 MANAGER / SUPERVISOR PAYLOAD
-    const summary = data.summary || {};
-    return {
-      success: true,
-      data: {
-        isSolverView: false,
-        stats: {
-          totalIssues: summary.total_issues || 0,
-          notFixedIssues: 
-            (summary.open_issues || 0) + 
-            (summary.assigned_issues || 0) + 
-            (summary.in_progress_issues || 0) + 
-            (summary.reopened_issues || 0) + 
-            (summary.escalated_issues || 0),
-          fixedIssues: summary.completed_issues || 0,
-          complaints: 0
-        },
-        rawSummary: summary,
-        alerts: {
-          // ✅ FIXED: Mapping to exact keys from your Manager JSON
-          escalations: data.active_escalations || 0,
-          deadlines: data.overdue_issues || 0,
-          pendingReviews: summary.resolved_pending_review || 0
-        },
-        recentIssues: data.recent_issues || [],
-        mySites: data.my_sites || []
-      }
-    };
-
+    return { success: true, data: response.data };
   } catch (error) {
-    console.error('Fetch dashboard error:', error.response?.data || error.message);
-    return {
-      success: true, // Fallback
-      data: {
-        isSolverView: false,
-        stats: { totalIssues: 0, notFixedIssues: 0, fixedIssues: 0, complaints: 0 },
-        rawSummary: {},
-        alerts: { escalations: 0, deadlines: 0, pendingReviews: 0 },
-        recentIssues: [],
-        mySites: []
-      }
-    };
+    return { success: false, error: 'Failed' };
   }
 };
 
-// ==================== COMPLAINTS API ====================
-
-/**
- * Fetch all complaints
- */
-
-export const fetchComplaints = async ({ cursor = null, limit = 20 } = {}) => {
+export const fetchSolversPerformanceAPI = async () => {
   try {
-    const queryParams = { limit };
-    
-    // 📍 THE FIX: Translate Redux cursor to Backend 'skip'
-    const currentSkip = cursor ? parseInt(cursor, 10) : 0;
-    queryParams.skip = currentSkip;
+    const response = await api.get('/api/v1/solvers');
+    // Backend returns { total, solvers: [...] } — extract the array
+    const raw = response.data;
+    const rawSolvers = Array.isArray(raw) ? raw : Array.isArray(raw?.solvers) ? raw.solvers : [];
 
-    const response = await api.get('/api/v1/complaints', { params: queryParams });
-    const data = response.data || {};
-    
-    const rawItems = data.complaints || data.items || [];
-    const totalItems = data.total || 0;
+    // Normalize: backend list endpoint returns SolverListItem (score/label at top level)
+    // but frontend expects SolverWithPerformance shape (performance sub-object).
+    const solvers = rawSolvers.map(solver => {
+      if (solver.performance) return solver; // Already has performance sub-object
+      return {
+        ...solver,
+        performance: {
+          score: solver.score ?? 0,
+          label: solver.label || 'No Rating',
+          label_color: solver.label_color || '#f59e0b',
+          // Fill other defaults for metrics shown in the list
+          active_count: solver.active_count || 0,
+          completed_count: solver.completed_count || 0,
+          complaint_count: solver.complaint_count || 0,
+          completion_rate: solver.completion_rate || 0,
+          on_time_rate: solver.on_time_rate || 0,
+        },
+      };
+    });
 
-    // 📍 Calculate Next Cursor for Redux
-    const nextSkip = currentSkip + limit;
-    const hasMore = nextSkip < totalItems;
-    const nextCursor = hasMore ? nextSkip.toString() : null;
-
-    // Return the whole object exactly as backend sent it
-    const complaintsData = response.data || {};
-    console.log(complaintsData)
-    
-    return {
-      success: true,
-      complaints: { 
-        items: rawItems, 
-        next_cursor: nextCursor, 
-        has_more: hasMore 
-      },
-    };
-
+    return { success: true, solvers };
   } catch (error) {
-    console.error("❌ Fetch complaints error:", error.response?.data || error.message);
-    return {
-      success: false,
-      complaints: { items: [], next_cursor: null, has_more: false },
-    };
+    return { success: false, solvers: [] };
+  }
+};
+
+// 📍 DASHBOARD CARD ENDPOINTS
+export const fetchResolvedIssuesCard = async (params) => {
+  try {
+    const response = await api.get('/api/v1/dashboard-cards/resolved', { params });
+    const data = response.data;
+    const items = (data.items || []).map(issue => ({
+      ...issue,
+      solver_name: issue.solver_name || issue.assignments?.[0]?.solver_name || issue.solver?.name || null,
+      supervisor_name: issue.supervisor_name || issue.raised_by?.name || 'N/A'
+    }));
+    return { success: true, data: { ...data, items } };
+  } catch (error) {
+    return { success: false, error: 'Failed' };
+  }
+};
+
+export const fetchPendingIssuesCard = async (params) => {
+  try {
+    const response = await api.get('/api/v1/dashboard-cards/pending-issues', { params });
+    const data = response.data;
+    const items = (data.items || []).map(issue => ({
+      ...issue,
+      solver_name: issue.solver_name || issue.assignments?.[0]?.solver_name || issue.solver?.name || null,
+      supervisor_name: issue.supervisor_name || issue.raised_by?.name || 'N/A'
+    }));
+    return { success: true, data: { ...data, items } };
+  } catch (error) {
+    return { success: false, error: 'Failed' };
+  }
+};
+
+export const fetchEscalatedIssuesCard = async (params) => {
+  try {
+    const response = await api.get('/api/v1/dashboard-cards/escalated', { params });
+    const data = response.data;
+    const items = (data.items || []).map(issue => ({
+      ...issue,
+      solver_name: issue.solver_name || issue.assignments?.[0]?.solver_name || issue.solver?.name || null,
+      supervisor_name: issue.supervisor_name || issue.raised_by?.name || 'N/A'
+    }));
+    return { success: true, data: { ...data, items } };
+  } catch (error) {
+    return { success: false, error: 'Failed' };
+  }
+};
+
+export const fetchResolvedPendingIssuesCard = async (params) => {
+  try {
+    const response = await api.get('/api/v1/dashboard-cards/resolved-pending-review', { params });
+    const data = response.data;
+    const items = (data.items || []).map(issue => ({
+      ...issue,
+      solver_name: issue.solver_name || issue.assignments?.[0]?.solver_name || issue.solver?.name || null,
+      supervisor_name: issue.supervisor_name || issue.raised_by?.name || 'N/A'
+    }));
+    return { success: true, data: { ...data, items } };
+  } catch (error) {
+    return { success: false, error: 'Failed' };
+  }
+};
+
+export const fetchDashboardCardIssueDetail = async (cardType, issueId) => {
+  try {
+    const response = await api.get(`/api/v1/dashboard-cards/${cardType}/${issueId}`);
+    return { success: true, issue: response.data };
+  } catch (error) {
+    return { success: false, error: 'Failed' };
+  }
+};
+
+// ==================== SUPERVISORS API (TEMPORARY MOCK) ====================
+
+export const fetchSupervisors = async () => {
+  console.warn('[BACKEND-GAP] supervisors/list: using temporary mock data');
+  const supervisors = mockUsers.filter(u => u.role === 'supervisor');
+  return { success: true, supervisors };
+};
+
+export const fetchSupervisorById = async (id) => {
+  console.warn('[BACKEND-GAP] supervisors/detail: using temporary mock data');
+  const supervisor = mockUsers.find(u => String(u.id) === String(id));
+  return { success: true, supervisor };
+};
+
+// ==================== SITES & OTHERS ====================
+
+export const fetchSitesAnalytics = async () => {
+  try {
+    const response = await api.get('/api/v1/sites/analytics');
+    // Backend returns { total, sites: [...] } — extract the array
+    const raw = response.data;
+    const rawSites = Array.isArray(raw) ? raw : Array.isArray(raw?.sites) ? raw.sites : [];
+    
+    // Normalize: backend list endpoint returns SiteListItem (score/health at top level)
+    // but frontend expects SiteWithAnalytics shape (analytics sub-object).
+    // Handle both shapes so the frontend always gets a consistent structure.
+    const sites = rawSites.map(site => {
+      if (site.analytics) return site; // Already has analytics sub-object
+      return {
+        ...site,
+        analytics: {
+          health: site.health || 'Healthy',
+          score: site.score ?? 100,
+          total_issues: site.total_issues || 0,
+          open_issues: site.open_issues || 0,
+          assigned_issues: site.assigned_issues || 0,
+          in_progress_issues: site.in_progress_issues || 0,
+          completed_issues: site.completed_issues || 0,
+          escalated_issues: site.escalated_issues || 0,
+          reopened_issues: site.reopened_issues || 0,
+          overdue_count: site.overdue_count || 0,
+          complaints_count: site.complaints_count || 0,
+          solvers: site.solvers || [],
+        },
+      };
+    });
+    
+    return { success: true, sites };
+  } catch (error) {
+    return { success: false, sites: [] };
+  }
+};
+
+// For backward compatibility
+export const fetchSites = fetchSitesAnalytics;
+
+export const fetchComplaints = async ({ cursor = null, limit = 20, issue_id = null, solver_id = null } = {}) => {
+  try {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    if (issue_id) params.issue_id = issue_id;
+    if (solver_id) params.solver_id = solver_id;
+
+    const response = await api.get('/api/v1/complaints', { params });
+    // CursorPage returns { items, next_cursor, has_more, total_returned }
+    return { success: true, complaints: response.data };
+  } catch (error) {
+    console.error("fetchComplaints error:", error);
+    return { success: false, complaints: { items: [], has_more: false } };
   }
 };
 
 export const fetchComplaintById = async (id) => {
   try {
+    if (!id) throw new Error("Complaint ID is required");
     const response = await api.get(`/api/v1/complaints/${id}`);
-    // 📍 EXACT DATA: Return the raw object exactly as backend sent it
-    // No more mapping raisedBy or status="OPEN"
-    return response.data;
+    
+    // Ensure the response data is a valid object
+    if (!response.data || typeof response.data !== 'object') {
+      throw new Error("Invalid response from server");
+    }
+
+    return { 
+      success: true, 
+      complaint: response.data 
+    };
   } catch (error) {
-    throw error;
+    console.error(`fetchComplaintById(${id}) error:`, error.message);
+    return { success: false, error: error.message || 'Failed to fetch complaint' };
   }
 };
-// ==================== SITES API ====================
 
-/**
- * Fetch all sites
- */
-export const fetchSites = async () => {
+export const sendChatMessage = async (text, sessionId, currentIssueId, imageUrl, intent) => {
   try {
-    const response = await api.get('/api/v1/sites/analytics');
-    return {
-      success: true,
-      sites: response.data,
-    };
-  } catch (error) {
-    console.error('Fetch sites error:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch sites',
-      sites: [],
-    };
-  }
-};
-
-//it have to be analytic with site id based
-export const fetchSitesAnalytics = async () => {
- try {
-    const response = await api.get('/api/v1/sites/analytics');
-
-    return {
-      success: true,
-      sites: response.data.sites,
-    };
-
-  } catch (error) {
-    console.error("Fetch sites error:", error.response?.data || error.message);
-
-    return {
-      success: false,
-      sites: [],
-      error: error.response?.data?.detail || "Failed to fetch sites",
-    };
-  }
-};
-
-// we have to add another function to fetch solvers performance based on solver id
-export const fetchSolversPerformanceAPI = async () => {
-  try {
-    const response = await api.get('/api/v1/solvers');
-
-    return {
-      success: true,
-      solvers: response.data.solvers,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      solvers: [],
-      error: error.response?.data?.detail || "Failed to fetch solvers",
-    };
-  }
-};
-
-// ==================== CHATBOT API ====================
-
-/**
- * Send message to chatbot
- */
-// chatService.js 
-
-// ==================== CHATBOT API ====================
-
-/**
- * Send message to chatbot
- */
-export const sendChatMessage = async (
-  text,
-  sessionId = null,
-  currentIssueId = null,
-  imageUrl = null, 
-  intent = null 
-) => {
-  console.log('\n💬 ─── 1. SENDING CHAT MESSAGE ───');
-
-  try {
-    const requestBody = {
-      message: text,
-      session_id: sessionId,
-      issue_id: currentIssueId,
-      image_url: imageUrl, 
-      metadata: {
-        platform: Platform.OS,
-        timestamp: new Date().toISOString(),
-      },
-      intent: intent
-    };
-
-    console.log('🚨 PROOF: THIS IS THE EXACT PAYLOAD WE ARE SENDING TO /api/v1/chat/ 🚨');
-    console.log(JSON.stringify(requestBody, null, 2));
-
+    const requestBody = { message: text, session_id: sessionId, issue_id: currentIssueId, image_url: imageUrl, intent: intent };
     const response = await api.post('/api/v1/chat/', requestBody);
-    
-    console.log('\n✅ Chat Response Success!');
-    console.log('🚨 PROOF: THIS IS EXACTLY WHAT THE BACKEND RETURNED 🚨');
-    console.log(JSON.stringify(response.data, null, 2));
-
-    return {
-      success: true,
-      data: response.data,
-    };
+    return { success: true, data: response.data };
   } catch (error) {
-    console.error("\n❌ Chat send error:", error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.detail || "Failed to send message",
-    };
-  }
-};
-
-
-export const sendChatWithImage = async ({
-  text,
-  sessionId,
-  imageUri,
-  intent,
-  currentIssueId = null
-}) => {
-  console.log('\n🚀 ─── START: SEND CHAT WITH IMAGE FLOW ───');
-
-  try {
-    // 🟢 STEP 1: Send chat
-    console.log('\n▶️ STEP 1: Sending text AND local imageUri to chat endpoint first...');
-    const chatRes = await sendChatMessage(
-      text,
-      sessionId,
-      currentIssueId,
-      imageUri, 
-      intent
-    );
-
-    if (!chatRes.success) {
-      console.error('❌ Chat request failed. Aborting image upload.');
-      return chatRes;
-    }
-
-    // 📍 CRITICAL CHECK: Extract the issue ID
-    const rawData = chatRes.data || {};
-    const issueId = rawData.issue_id || rawData.data?.issue_id || currentIssueId;
-    const chatId = chatRes.data.chat_id;
-    console.log('chat id is', chatId)
-    
-    console.log('\n▶️ STEP 1.5: Extracted Issue ID for Image Upload:', issueId);
-
-    // 🟡 STEP 2: Handle image
-    if (imageUri && issueId) {
-      // 🔥 Decide image type
-      let imageType = "BEFORE";
-      if (intent === "complete_work") {
-        imageType = "AFTER";
-      }
-
-      console.log(`\n▶️ STEP 2: Preparing to upload to ImageKit as [${imageType}] for Issue #${issueId}`);
-
-      // 🟣 Upload to ImageKit
-      let imageUrl;
-      try {
-        imageUrl = await uploadImageToImageKit(imageUri, issueId, imageType);
-        console.log(`✅ SUCCESS: ImageKit returned CDN URL: ${imageUrl}`);
-      } catch (ikError) {
-        console.error('❌ FAILED: ImageKit Upload Crashed:', ikError);
-        throw ikError; 
-      }
-
-      // 🔵 Save to DB
-      console.log('\n▶️ STEP 3: Telling Backend to save CDN URL to database...');
-      const dbPayload = {
-        image_url: imageUrl,
-        issue_id: issueId,
-        image_type: imageType,
-      };
-
-      if (chatId !== undefined && chatId !== null) {
-        dbPayload.chat_id = chatId;
-        console.log(`📌 Including chat_id ${chatId} in DB payload for potential attachment update.`);
-      }
-      else {
-        console.warn('⚠️ WARNING: chat_id is missing. Backend will save image without linking to chat attachments.');
-      }
-      
-
-      try {
-        const dbRes = await api.post('/api/v1/images/save', dbPayload);
-        console.log(`✅ SUCCESS: Backend confirmed ${imageType} image saved! DB Response:`, dbRes.data);
-      } catch (dbError) {
-        console.error('❌ FAILED: Backend refused to save image to DB:', dbError.response?.data || dbError.message);
-      }
-      
-    } else if (imageUri && !issueId) {
-      console.warn('⚠️ WARNING: We sent the image, but the backend did not return an issue_id to upload it to!');
-    } else {
-      console.log('\nℹ️ No image attached. Skipping ImageKit steps.');
-    }
-
-    console.log('\n🏁 ─── END: SEND CHAT WITH IMAGE FLOW ───\n');
-    return chatRes;
-
-  } catch (error) {
-    console.error("\n❌ FAILED: Fatal error in sendChatWithImage:", error);
     return { success: false };
   }
 };
 
-
-
-export const fetchChatSessions = async () => {
+export const sendChatWithImage = async ({ text, sessionId, imageUri, intent }) => {
   try {
-    const response = await api.get('/api/v1/chat/sessions');
-    return {
-      success: true,
-      sessions: response.data.sessions,
-    };
-  } catch (error) {
-    console.error("Fetch sessions error:", error.response?.data || error.message);
-    return {
-      success: false,
-      sessions: [],
-    };
-  }
-};
-
-export const fetchSessionDetail = async (sessionId) => {
-  try {
-    const response = await api.get(`/api/v1/chat/sessions/${sessionId}`);
-    return {
-      success: true,
-      session: response.data,
-    };
-  } catch (error) {
-    console.error("Fetch session detail error:", error.response?.data || error.message);
-    return {
-      success: false,
-      session: null,
-    };
-  }
-};
-
-// ==================== HEALTH CHECK ====================
-
-/**
- * Check API health
- */
-export const checkHealth = async () => {
-  try {
-    const response = await api.get('/health');
-    return {
-      success: true,
-      ...response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: 'API not available',
-    };
-  }
-};
-
-
-
-
-
-/**
- * Fetch Pending Issues Card
- */
-export const fetchPendingIssuesCard = async ({
-  cursor = null,
-  limit = 20,
-  site_id = null,
-  priority = null,
-  search = null,
-} = {}) => {
-  console.log('\n⏳ ─── FETCH PENDING ISSUES ───');
-  try {
-    const params = { limit };
-    if (cursor) params.cursor = cursor;
-    if (site_id) params.site_id = site_id;
-    if (priority) params.priority = priority;
-    if (search) params.search = search;
-
-    console.log('📤 [Request] Params:', params);
-    console.log('🌐 [Network] GET /api/v1/dashboard-cards/pending-issues');
-
-    const response = await api.get(
-      '/api/v1/dashboard-cards/pending-issues',
-      { params }
-    );
-
-    console.log('✅ [Success] Data received from backend:');
-    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
-    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
-    console.log(`🔄 Has More: ${response.data?.has_more}`);
-    console.log('────────────────────────────────\n');
-
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    console.error('\n❌ ─── FETCH PENDING FAILED ───');
-    if (error.response) {
-      console.error('🚨 Status:', error.response.status);
-      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
-    } else {
-      console.error('🚨 Network/Axios Error:', error.message);
-    }
-    console.error('────────────────────────────────\n');
-
-    return {
-      success: false,
-      data: { items: [], next_cursor: null, has_more: false },
-    };
-  }
-};
-
-/**
- * Fetch Resolved Issues Card
- */
-/**
- * Fetch Resolved Issues Card
- */
-export const fetchResolvedIssuesCard = async ({
-  cursor = null,
-  limit = 20,
-  site_id = null,
-  priority = null,
-  search = null,
-} = {}) => {
-  console.log('\n🔍 ─── FETCH RESOLVED ISSUES ───');
-  try {
-    const params = { limit };
-    if (cursor) params.cursor = cursor;
-    if (site_id) params.site_id = site_id;
-    if (priority) params.priority = priority;
-    if (search) params.search = search;
-
-    console.log('📤 [Request] Params:', params);
-    console.log('🌐 [Network] GET /api/v1/dashboard-cards/resolved');
-
-    const response = await api.get(
-      '/api/v1/dashboard-cards/resolved/',
-      { params }
-    );
-
-    console.log('✅ [Success] Data received from backend:');
-    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
-    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
-    console.log(`🔄 Has More: ${response.data?.has_more}`);
-    console.log('────────────────────────────────\n');
-
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    console.error('\n❌ ─── FETCH RESOLVED FAILED ───');
-    if (error.response) {
-      console.error('🚨 Status:', error.response.status);
-      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
-    } else {
-      console.error('🚨 Network/Axios Error:', error.message);
-    }
-;
-    console.error('────────────────────────────────\n');
-
-    return {
-      success: false,
-      data: { items: [], next_cursor: null, has_more: false },
-    };
-  }
-}
-/**
- * Fetch Escalated Issues Card
- */
-/**
- * Fetch Escalated Issues Card
- */
-export const fetchEscalatedIssuesCard = async ({
-  cursor = null,
-  limit = 20,
-  site_id = null,
-  priority = null,
-  search = null,
-} = {}) => {
-  console.log('\n🔥 ─── FETCH ESCALATED ISSUES ───');
-  try {
-    const params = { limit };
-    if (cursor) params.cursor = cursor;
-    if (site_id) params.site_id = site_id;
-    if (priority) params.priority = priority;
-    if (search) params.search = search;
-
-    console.log('📤 [Request] Params:', params);
-    console.log('🌐 [Network] GET /api/v1/dashboard-cards/escalated');
-
-    const response = await api.get(
-      '/api/v1/dashboard-cards/escalated',
-      { params }
-    );
-
-    console.log('✅ [Success] Data received from backend:');
-    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
-    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
-    console.log(`🔄 Has More: ${response.data?.has_more}`);
-    console.log('────────────────────────────────\n');
-
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    console.error('\n❌ ─── FETCH ESCALATED FAILED ───');
-    if (error.response) {
-      console.error('🚨 Status:', error.response.status);
-      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
-    } else {
-      console.error('🚨 Network/Axios Error:', error.message);
-    }
-    console.error('────────────────────────────────\n');
-
-    return {
-      success: false,
-      data: { items: [], next_cursor: null, has_more: false },
-    };
-  }
-};
-
-
-
-/**
- * Fetch Resolved Pending Review Issues Card
- */
-export const fetchResolvedPendingIssuesCard = async ({
-  cursor = null,
-  limit = 20,
-  site_id = null,
-  priority = null,
-  search = null,
-} = {}) => {
-  console.log('\n👀 ─── FETCH RESOLVED PENDING REVIEW ISSUES ───');
-  try {
-    const params = { limit };
-    if (cursor) params.cursor = cursor;
-    if (site_id) params.site_id = site_id;
-    if (priority) params.priority = priority;
-    if (search) params.search = search;
-
-    console.log('📤 [Request] Params:', params);
-    console.log('🌐 [Network] GET /api/v1/dashboard-cards/resolved-pending-review');
-
-    const response = await api.get(
-      '/api/v1/dashboard-cards/resolved-pending-review',
-      { params }
-    );
-
-    console.log('✅ [Success] Data received from backend:');
-    console.log(`📊 Items count: ${response.data?.items?.length || 0}`);
-    console.log(`👉 Next Cursor: ${response.data?.next_cursor}`);
-    console.log(`🔄 Has More: ${response.data?.has_more}`);
-    console.log('────────────────────────────────\n');
-
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    console.error('\n❌ ─── FETCH RESOLVED PENDING REVIEW FAILED ───');
-    if (error.response) {
-      console.error('🚨 Status:', error.response.status);
-      console.error('🚨 Backend Error Data:', JSON.stringify(error.response.data, null, 2));
-    } else {
-      console.error('🚨 Network/Axios Error:', error.message);
-    }
-    console.error('────────────────────────────────\n');
-
-    return {
-      success: false,
-      data: { items: [], next_cursor: null, has_more: false },
-    };
-  }
-};
-
-/**
- * Fetch specific Dashboard Card Issue Detail
- * Routes dynamically to the role-aware dashboard endpoints.
- * @param {string} cardType - 'pending-issues', 'resolved', 'escalated', or 'resolved-pending-review'
- * @param {number} issueId 
- */
-export const fetchDashboardCardIssueDetail = async (cardType, issueId) => {
-  console.log(`\n📄 ─── FETCH DASHBOARD CARD DETAIL (${cardType.toUpperCase()}) ───`);
-  try {
-    console.log(`🌐 [Network] GET /api/v1/dashboard-cards/${cardType}/${issueId}`);
+    // If imageUri is provided, we might need to upload it first if it's a local path
+    // For now, assuming it's already a URL or the backend handles it.
+    // If it's a local path (starts with file://), you should call uploadImageToImageKit first.
+    let finalImageUrl = imageUri;
     
-    const response = await api.get(`/api/v1/dashboard-cards/${cardType}/${issueId}`);
-
-    console.log('✅ [Success] Detail data received successfully');
-    
-    // Map backend fields to frontend format identically to fetchIssueById
-    const issue = {
-      ...response.data,
-      site: response.data.site ? {
-        ...response.data.site,
-        name: response.data.site.name,
-      } : null,
-      raised_by: response.data.raised_by ? {
-        ...response.data.raised_by,
-        avatar: response.data.raised_by.avatar_url,
-      } : null,
-    };
-
-    return {
-      success: true,
-      issue,
-    };
-  } catch (error) {
-    console.error('\n❌ ─── FETCH CARD DETAIL FAILED ───');
-    if (error.response) {
-      console.error('🚨 Status:', error.response.status);
-      console.error('🚨 Error Data:', JSON.stringify(error.response.data, null, 2));
-    } else {
-      console.error('🚨 Network Error:', error.message);
+    if (imageUri && (imageUri.startsWith('file://') || imageUri.startsWith('content://'))) {
+      const uploadRes = await uploadImageToImageKit(imageUri);
+      if (uploadRes.success) {
+        finalImageUrl = uploadRes.url;
+      }
     }
-    console.error('────────────────────────────────\n');
-    
-    return {
-      success: false,
-      error: error.response?.data?.detail || 'Failed to fetch issue detail',
-    };
+
+    return await sendChatMessage(text, sessionId, null, finalImageUrl, intent);
+  } catch (error) {
+    console.error("sendChatWithImage error:", error);
+    return { success: false };
   }
 };
-
 
 export default {
-  // Auth
-  loginUser,
-  getCurrentUser,
-  logoutUser,
-  isAuthenticated,
-  getStoredUser,
-  
-  // Issues
-  fetchIssues,
-  fetchIssueById,
-  
-  // Dashboard
-  fetchDashboardStats,
-  
-  // Complaints
-  fetchComplaints,
-  
-  // Sites
-  fetchSites,
-  
-  // Chatbot
-  sendChatMessage,
-  
-  // Health
-  checkHealth,
-
-
-  //pending issues, resolved issues, escalatedIssues
-
-  fetchPendingIssuesCard,
-  fetchResolvedIssuesCard,
-  fetchEscalatedIssuesCard,
-
-  
-  fetchResolvedPendingIssuesCard,
-  fetchDashboardCardIssueDetail
+  loginUser, getCurrentUser, logoutUser, isAuthenticated, getStoredUser,
+  fetchIssues, fetchIssueById, fetchIssueTimeline, fetchDashboardStats, fetchSolversPerformanceAPI,
+  fetchResolvedIssuesCard, fetchPendingIssuesCard, fetchEscalatedIssuesCard, fetchResolvedPendingIssuesCard, fetchDashboardCardIssueDetail,
+  fetchSupervisors, fetchSupervisorById, fetchSites, fetchSitesAnalytics, fetchComplaints, fetchComplaintById, sendChatMessage, sendChatWithImage
 };

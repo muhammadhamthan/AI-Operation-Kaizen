@@ -131,6 +131,35 @@ export const users = [
     created_at: '2024-06-01T09:00:00Z',
     updated_at: '2025-06-01T10:30:00Z',
   },
+  // Customer's MDs (IDs 11-12) — NEW in Kairox v3.0
+  {
+    id: 11,
+    name: 'Anita Desai',
+    phone: '+91 98765 43220',
+    email: 'anita.desai@client.com',
+    role: 'customer_md',
+    username: 'customer1',
+    password: 'cust123',
+    avatar: 'https://ui-avatars.com/api/?name=Anita+Desai&background=0891b2&color=fff&size=128',
+    company: 'Desai Holdings',
+    sites: [1, 2], // assigned sites (used by customer_md_sites junction once backend lands)
+    created_at: '2025-01-10T09:00:00Z',
+    updated_at: '2025-06-01T10:30:00Z',
+  },
+  {
+    id: 12,
+    name: 'Harish Menon',
+    phone: '+91 98765 43221',
+    email: 'harish.menon@client.com',
+    role: 'customer_md',
+    username: 'customer2',
+    password: 'cust123',
+    avatar: 'https://ui-avatars.com/api/?name=Harish+Menon&background=db2777&color=fff&size=128',
+    company: 'Menon Infra',
+    sites: [3, 4, 5],
+    created_at: '2025-02-01T09:00:00Z',
+    updated_at: '2025-06-01T10:30:00Z',
+  },
 ];
 
 export const getUserById = (id) => users.find(user => user.id === id);

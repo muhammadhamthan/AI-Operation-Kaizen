@@ -41,6 +41,8 @@ import { sendChatWithImage } from '../../../src/services/api';
 import { selectIsOnline } from '../../../src/store/slices/offlineSlice';
 import Toast from '../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../src/components/common/FullScreenSpinner';
+import QuickActionChips from '../../../src/components/chat/QuickActionChips';
+import { getChatbotGreeting } from '../../../src/config/chatbotIntents';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = 280;
@@ -287,35 +289,13 @@ export default function ChatScreen() {
               </View>
 
               <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                How can I help you today?
+                {getChatbotGreeting(user?.role, user?.name)}
               </Text>
 
-              <View style={styles.suggestionsGrid}>
-                {SUGGESTIONS.map((suggestion, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.suggestionChip,
-                      {
-                        backgroundColor: 'transparent',
-                        borderColor: isDark ? '#424242' : '#e5e5e5',
-                      },
-                    ]}
-                    onPress={() => handleSuggestionPress(suggestion.text)}
-                    activeOpacity={0.5}
-                  >
-                    <Ionicons
-                      name={suggestion.icon}
-                      size={18}
-                      color={theme.textSecondary}
-                      style={styles.suggestionIcon}
-                    />
-                    <Text style={[styles.suggestionText, { color: theme.textSecondary }]}>
-                      {suggestion.text}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <QuickActionChips
+                role={user?.role}
+                onSelect={handleSuggestionPress}
+              />
             </View>
           ) : (
             messages.map((msg) => (

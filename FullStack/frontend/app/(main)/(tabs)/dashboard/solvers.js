@@ -7,12 +7,12 @@ import {
   TextInput,
   TouchableOpacity,
   RefreshControl,
-  Platform
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
@@ -20,13 +20,11 @@ import {
   fetchSolversPerformance,
   selectAllSolvers,
   selectPerformanceLoading,
-} from "../../../../src/store/slices/performanceSlice"
+} from "../../../../src/store/slices/performanceSlice";
+import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from "../../../../src/components/common/EmptyState";
 import Avatar from '../../../../src/components/common/Avatar';
-
-// ── ADDED MISSING IMPORTS FOR STANDARD PATTERN ──
-import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
@@ -36,13 +34,13 @@ export default function SolversScreen() {
   const dispatch = useDispatch();
 
   const user = useSelector(selectCurrentUser);
-  const solvers = useSelector(selectAllSolvers);
+  const solvers = useSelector(selectAllSolvers) || [];
   const loading = useSelector(selectPerformanceLoading);
-  const isOnline = useSelector(selectIsOnline); // Added for safety
+  const isOnline = useSelector(selectIsOnline);
 
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [toastMessage, setToastMessage] = useState(''); // Added for Toast
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -60,7 +58,6 @@ export default function SolversScreen() {
     
     setRefreshing(true);
     try {
-      // 📍 FIX: Promise.allSettled guarantees the spinner spins until totally done
       await Promise.allSettled([
         dispatch(fetchSolversPerformance(user))
       ]);
@@ -69,298 +66,185 @@ export default function SolversScreen() {
     }
   }, [dispatch, user, isOnline]);
 
-  const surfaceColor = isDark ? '#171717' : '#ffffff';
-  const borderColor = isDark ? '#333333' : '#e5e5e5';
-  const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
-
+  // ── FILTER LOGIC ──
   const filteredSolvers = useMemo(() => {
+    let list = solvers || [];
+    
+    // Search Filter
     const q = searchText.trim().toLowerCase();
-    if (!q) return solvers;
-    return solvers.filter(s => {
-      const name = s.name?.toLowerCase() || '';
-      const role = s.role?.toLowerCase() || '';
-      return name.includes(q) || role.includes(q);
-    });
+    if (q) {
+      list = list.filter(s => {
+        const name = s.name?.toLowerCase() || '';
+        const role = s.role?.toLowerCase() || '';
+        const skills = (s.skills || []).join(' ').toLowerCase();
+        return name.includes(q) || role.includes(q) || skills.includes(q);
+      });
+    }
+    
+    return list;
   }, [searchText, solvers]);
 
+  // ── PREMIUM PALETTE ──
+  const bgColor = isDark ? '#111111' : '#ffffff';
+  const surfaceColor = isDark ? '#1a1a1a' : '#ffffff';
+  const borderColor = isDark ? '#2e2e2e' : '#f0f0f0';
+  const searchBg = isDark ? '#262626' : '#f8fafc';
+  const primaryBlue = '#3b82f6';
+  
   const getScoreColor = (score, backendColor) => {
     if (backendColor) return backendColor;
-    if (score >= 75) return '#10a37f';
-    if (score >= 50) return '#f59e0b';
-    return '#ef4444';
-  };
-
-  const getLabelIcon = label => {
-    if (label === 'Top Performer') return 'trophy-outline';
-    if (label === 'Good' || label === 'Average') return 'speedometer-outline';
-    return 'alert-circle-outline'; 
+    if (score >= 75) return '#10a37f'; // Premium Emerald
+    if (score >= 50) return '#f59e0b'; // Amber
+    return '#ef4444'; // Red
   };
 
   const renderItem = ({ item }) => {
     const perf = item.performance || {};
-    const scoreColor = getScoreColor(perf.score, perf.label_color);
-
+    const score = perf.score || 0;
+    const scoreColor = getScoreColor(score, perf.label_color);
+    const label = perf.label || 'NO RATING';
+    
     const activeCount =
       (perf.in_progress_count || 0) +
       (perf.assigned_not_started_count || 0) +
       (perf.reopened_count || 0) +
-      (perf.active_count || 0); 
+      (perf.active_count || 0);
 
     const displaySkills = item.skills?.length > 0 
       ? item.skills.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')
-      : 'Problem Solver';
+      : 'Professional Solver';
 
     return (
       <TouchableOpacity
         activeOpacity={0.7}
-        style={[
-          styles.card,
-          { backgroundColor: surfaceColor, borderColor },
-        ]}
-        onPress={() =>
-          router.push({
-            pathname: '/(main)/(tabs)/dashboard/solver-profile',
-            params: { id: item.id },
-          })
-        }
+        style={[styles.card, { backgroundColor: surfaceColor, borderColor }]}
+        onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/solver-profile', params: { id: item.id } })}
       >
-        <View style={styles.cardHeader}>
-          <View style={styles.identityRow}>
-            <Avatar
-              uri={item.avatar}
-              name={item.name}
-              size="medium"
-            />
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[styles.name, { color: theme.text }]}
-                numberOfLines={1}
-              >
-                {item.name}
-              </Text>
-              <Text
-                style={[
-                  styles.skill,
-                  { color: theme.textSecondary },
-                ]}
-                numberOfLines={1}
-              >
-                {displaySkills}
-              </Text>
+        {/* ── PERFORMANCE INDICATOR BAR ── */}
+        <View style={[styles.healthBar, { backgroundColor: scoreColor }]} />
+
+        {/* Top Row: Avatar, Name, Badge, ID */}
+        <View style={styles.cardTopRow}>
+          <View style={styles.nameSection}>
+            <Avatar uri={item.avatar} name={item.name} size="small" />
+            <Text style={[styles.siteName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+          </View>
+          <View style={styles.badgeIdRow}>
+            <View style={styles.healthBadge}>
+              <View style={[styles.healthDot, { backgroundColor: scoreColor }]} />
+              <Text style={[styles.healthText, { color: theme.textSecondary }]}>{label.toUpperCase()}</Text>
+            </View>
+            <View style={[styles.idPill, { backgroundColor: searchBg }]}>
+              <Text style={[styles.idPillText, { color: theme.textSecondary }]}>SOLV-{item.id.toString().padStart(3, '0')}</Text>
             </View>
           </View>
-          <View
-            style={[
-              styles.scoreBadge,
-              {
-                borderColor: scoreColor,
-                backgroundColor: scoreColor + '12',
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.scoreValue,
-                { color: scoreColor },
-              ]}
-            >
-              {perf.score || 0}%
-            </Text>
-          </View>
         </View>
 
-        <View style={styles.metricsRow}>
-          <View style={styles.metric}>
-            <Text
-              style={[styles.metricLabel, { color: theme.textSecondary }]}
-            >
-              Active
-            </Text>
-            <Text
-              style={[styles.metricValue, { color: theme.text }]}
-            >
-              {activeCount}
-            </Text>
-          </View>
-          <View style={styles.metric}>
-            <Text
-              style={[styles.metricLabel, { color: theme.textSecondary }]}
-            >
-              Completed
-            </Text>
-            <Text
-              style={[styles.metricValue, { color: theme.text }]}
-            >
-              {perf.completed_count || 0}
-            </Text>
-          </View>
-          <View style={styles.metric}>
-            <Text
-              style={[styles.metricLabel, { color: theme.textSecondary }]}
-            >
-              Complaints
-            </Text>
-            <Text
-              style={[
-                styles.metricValue,
-                {
-                  color:
-                    (perf.complaint_count || 0) > 0 ? '#ef4444' : theme.text, 
-                },
-              ]}
-            >
-              {perf.complaint_count || 0} 
-            </Text>
-          </View>
+        {/* Skills Row */}
+        <View style={styles.locationRow}>
+          <Ionicons name="briefcase-outline" size={14} color={theme.textSecondary} />
+          <Text style={[styles.siteLocation, { color: theme.textSecondary }]} numberOfLines={1}>{displaySkills}</Text>
         </View>
 
-        <View style={styles.footerRow}>
-          <View style={styles.labelChip}>
-            <Ionicons
-              name={getLabelIcon(perf.label)}
-              size={14}
-              color={theme.textSecondary}
-            />
-            <Text
-              style={[
-                styles.labelText,
-                { color: theme.textSecondary },
-              ]}
-            >
-              {perf.label || 'No Rating'}
-            </Text>
+        {/* Divider with Arrow */}
+        <View style={styles.dividerRow}>
+          <View style={[styles.dividerLine, { backgroundColor: borderColor }]} />
+          <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} style={{ opacity: 0.5, marginLeft: 8 }} />
+        </View>
+
+        {/* Bottom Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBlock}>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>SCORE</Text>
+            <View style={styles.statValueRow}>
+              <Ionicons name="speedometer-outline" size={16} color={scoreColor} />
+              <Text style={[styles.statValue, { color: theme.text }]}>{score}%</Text>
+            </View>
           </View>
-          <View style={styles.subStats}>
-            <Text
-              style={[
-                styles.subText,
-                { color: theme.textSecondary },
-              ]}
-            >
-              Completion {perf.completion_rate || 0}% 
-            </Text>
-            <View style={styles.dot} />
-            <Text
-              style={[
-                styles.subText,
-                { color: theme.textSecondary },
-              ]}
-            >
-              On-time {perf.on_time_rate || 0}% 
-            </Text>
+          <View style={styles.statBlock}>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>COMPLETED</Text>
+            <View style={styles.statValueRow}>
+              <Ionicons name="checkmark-circle-outline" size={16} color={primaryBlue} />
+              <Text style={[styles.statValue, { color: theme.text }]}>{perf.completed_count || 0}</Text>
+            </View>
+          </View>
+          <View style={styles.statBlock}>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>ACTIVE</Text>
+            <View style={styles.statValueRow}>
+              <Ionicons name="flash-outline" size={16} color={activeCount > 0 ? '#f59e0b' : theme.text} />
+              <Text style={[styles.statValue, { color: theme.text }]}>{activeCount}</Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  // 📍 FIX: Added `&& !refreshing` to prevent Loader hijacking
-  if (loading && solvers.length === 0 && !refreshing) return <Loader message="Loading team performance..." />;
+  if (loading && solvers.length === 0 && !refreshing) {
+    return <Loader message="Loading team performance..." fullScreen />;
+  }
 
   return (
-    <SafeAreaView
-      edges={['top']}
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? '#212121' : '#f9f9f9' },
-      ]}
-    >
-      {/* ── HEADER WITH BACK BUTTON ── */}
-      <View
-        style={[
-          styles.header,
-          { borderBottomColor: borderColor, backgroundColor: 'transparent' },
-        ]}
-      >
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
+      
+      {/* ── HEADER ── */}
+      <View style={[styles.header, { backgroundColor: surfaceColor, borderBottomColor: borderColor }]}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={26} color={theme.text} />
-          </TouchableOpacity>
-          <View>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>
-              Team
-            </Text>
-            <Text
-              style={[styles.headerSubtitle, { color: theme.textSecondary }]}
-            >
-              Performance overview
-            </Text>
-          </View>
-        </View>
-        
-        {/* 📍 FIX: Added Header Actions Row for Sync + Avatar */}
-        <View style={styles.headerActions}>
-          {Platform.OS === 'web' && (
-            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
-              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            onPress={() => router.push('/(main)/profile')}
-            activeOpacity={0.7}
-          >
-            <Avatar uri={user?.avatar} name={user?.name} size="medium" />
+            <Ionicons name="chevron-back" size={26} color={theme.text} />
           </TouchableOpacity>
         </View>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Team Directory</Text>
+        <View style={styles.headerActions} />
       </View>
 
-      {/* SEARCH */}
-      <View style={styles.searchContainer}>
-        <View
-          style={[
-            styles.searchInput,
-            { backgroundColor: inactiveBg, borderColor },
-          ]}
-        >
-          <Ionicons
-            name="search"
-            size={18}
-            color={theme.textSecondary}
-          />
+      {/* ── SEARCH BAR ── */}
+      <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
+        <View style={[styles.searchInputWrapper, { backgroundColor: searchBg }]}>
+          <Ionicons name="search" size={20} color={theme.textSecondary} style={{ opacity: 0.7 }} />
           <TextInput
             style={[styles.searchTextInput, { color: theme.text }]}
-            placeholder="Search solvers..."
+            placeholder="Search name, skill or role..."
             placeholderTextColor={theme.textSecondary}
             value={searchText}
             onChangeText={setSearchText}
           />
-          {searchText ? (
-            <TouchableOpacity
-              onPress={() => setSearchText('')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons
-                name="close-circle"
-                size={18}
-                color={theme.textSecondary}
-              />
-            </TouchableOpacity>
-          ) : null}
         </View>
       </View>
 
-      {filteredSolvers.length === 0 && !loading ? (
-        <EmptyState
-          icon="people-outline"
-          title="No solvers found"
-          message="Try adjusting your search or check your permissions."
-        />
+
+
+      {/* ── RESULTS HEADER ── */}
+      <View style={styles.resultsHeader}>
+        <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>TEAM PERFORMANCE</Text>
+        <Text style={[styles.resultsSub, { color: theme.textSecondary }]}>Showing {filteredSolvers.length} members</Text>
+      </View>
+
+      {/* ── LIST ── */}
+      {solvers.length === 0 && !loading ? (
+        <EmptyState icon="people-outline" title="No solvers found" message="Team data is not available yet." />
+      ) : filteredSolvers.length === 0 ? (
+        <EmptyState icon="search-outline" title="No matches" message={`No members found matching "${searchText}"`} />
       ) : (
         <FlatList
           data={filteredSolvers}
           keyExtractor={item => item.id.toString()}
           renderItem={renderItem}
-          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-          // 📍 FIX: Disables double spinner on web
+          showsVerticalScrollIndicator={false}
           refreshControl={
             Platform.OS === 'web' ? undefined : (
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={theme.textSecondary}
-              />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />
             )
+          }
+          ListFooterComponent={
+            <View style={styles.footerContainer}>
+              <View style={[styles.footerIconBox, { backgroundColor: searchBg }]}>
+                <Ionicons name="people-outline" size={24} color={theme.textSecondary} />
+              </View>
+              <Text style={[styles.footerTitle, { color: theme.textSecondary }]}>End of Directory</Text>
+              <Text style={[styles.footerSub, { color: theme.textSecondary }]}>Manage your team's performance metrics</Text>
+            </View>
           }
         />
       )}
@@ -369,149 +253,93 @@ export default function SolversScreen() {
       <FullScreenSpinner visible={refreshing} message="Updating Team..." />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 20, 
+    paddingVertical: 16, 
     borderBottomWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3 },
+      android: { elevation: 2 },
+    }),
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  backButton: { padding: 4, marginLeft: -4 },
+  headerTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
+  filterBtn: { padding: 4 },
+  
+  searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
+  searchInputWrapper: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    height: 50, 
+    borderRadius: 25, 
+    gap: 10 
   },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, // Added for spacing
-  backButton: {
-    padding: 4,
-    marginLeft: -4,
+  searchTextInput: { flex: 1, fontSize: 15 },
+ 
+  resultsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12 },
+  resultsCount: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
+  resultsSub: { fontSize: 11 },
+
+  listContent: { paddingHorizontal: 16, paddingBottom: 30 },
+  
+  card: { 
+    borderRadius: 16, 
+    borderWidth: 1, 
+    padding: 20, 
+    paddingLeft: 24, 
+    marginBottom: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 6 },
+      android: { elevation: 1 },
+    }),
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+  healthBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 6,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  webRefreshButton: { padding: 8 }, // Added for touch target
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  searchInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-  },
-  searchTextInput: {
-    flex: 1,
-    fontSize: 15,
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
-  },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  skill: {
-    fontSize: 13,
-  },
-  scoreBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  scoreValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    marginTop: 4,
-  },
-  metric: {
-    flex: 1,
-  },
-  metricLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  metricValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  labelChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  labelText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  subStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  subText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    opacity: 0.5,
-  },
+  
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  nameSection: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  siteName: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3, flex: 1 },
+  badgeIdRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  healthBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  healthDot: { width: 6, height: 6, borderRadius: 3 },
+  healthText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  idPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  idPillText: { fontSize: 10, fontWeight: '700' },
+  
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+  siteLocation: { fontSize: 13 },
+  
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  dividerLine: { height: StyleSheet.hairlineWidth, flex: 1 },
+  
+  statsRow: { flexDirection: 'row' },
+  statBlock: { flex: 1 },
+  statLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 6 },
+  statValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statValue: { fontSize: 18, fontWeight: '800' },
+
+  footerContainer: { alignItems: 'center', paddingVertical: 40 },
+  footerIconBox: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  footerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  footerSub: { fontSize: 12 },
 });

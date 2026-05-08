@@ -3,13 +3,13 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS, PRIORITY_LABELS } from '../../utils/constants';
 
-const StatusBadge = ({ status, type = 'status', size = 'medium' }) => {
+const StatusBadge = ({ status, type = 'status', size = 'medium', label: labelOverride, color: colorOverride }) => {
   const isStatus = type === 'status';
   const colors = isStatus ? STATUS_COLORS : PRIORITY_COLORS;
   const labels = isStatus ? STATUS_LABELS : PRIORITY_LABELS;
 
-  const color = colors[status] || '#6b7280';
-  const label = labels[status] || status;
+  const color = colorOverride || colors[status] || '#6b7280';
+  const label = labelOverride || labels[status] || status;
 
   const getIcon = () => {
     if (type === 'priority') {

@@ -9,7 +9,7 @@ import {
   ScrollView,
   RefreshControl,
   Platform,
-  ActivityIndicator, // 📍 Added for the infinite scroll loading spinner
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,51 +17,205 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { 
-  fetchIssues, 
-  selectAllIssues, 
+import {
+  fetchIssues,
+  selectAllIssues,
   selectIssuesLoading,
-  selectIssuesLoadingMore, // 📍 Added
-  selectHasMoreIssues      // 📍 Added
+  selectIssuesLoadingMore,
+  selectHasMoreIssues,
 } from '../../../../src/store/slices/issuesSlice';
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
-import IssueCard from '../../../../src/components/issue/IssueCard';
+import Avatar from '../../../../src/components/common/Avatar';
 import Loader from '../../../../src/components/common/Loader';
 import EmptyState from '../../../../src/components/common/EmptyState';
-import Avatar from '../../../../src/components/common/Avatar';
 import Toast from '../../../../src/components/common/Toast';
 import FilterModal from '../../../../src/components/modals/FilterModal';
 import { useDebounce } from '../../../../src/hooks/useDebounce';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
-// ── PREMIUM STATUS PALETTE FOR CHIPS ──
-const STATUS_COLORS = {
-  OPEN: '#3b82f6',
-  ASSIGNED: '#8b5cf6',
-  IN_PROGRESS: '#eab308',
-  RESOLVED_PENDING_REVIEW: '#f97316',
-  COMPLETED: '#10a37f',
-  REOPENED: '#ef4444',
-  ESCALATED: '#dc2626',
+// ── STATUS CONFIG ──
+const STATUS_CONFIG = {
+  OPEN: {
+    label: 'Open',
+    icon: 'alert-circle-outline',
+    color: '#374151',
+    bgColor: 'transparent',
+    filled: false,
+    borderColor: '#ef4444',
+  },
+  ASSIGNED: {
+    label: 'Assigned',
+    icon: 'person-outline',
+    color: '#8b5cf6',
+    bgColor: 'transparent',
+    filled: false,
+    borderColor: '#8b5cf6',
+  },
+  IN_PROGRESS: {
+    label: 'In Progress',
+    icon: 'time-outline',
+    color: '#d97706',
+    bgColor: 'transparent',
+    filled: false,
+    borderColor: '#eab308',
+  },
+  ESCALATED: {
+    label: 'Escalated',
+    icon: 'warning-outline',
+    color: '#ef4444',
+    bgColor: '#fee2e2',
+    filled: true,
+    borderColor: '#ef4444',
+  },
+  RESOLVED_PENDING_REVIEW: {
+    label: 'Awaiting Review',
+    icon: 'time-outline',
+    color: '#d97706',
+    bgColor: 'transparent',
+    filled: false,
+    borderColor: '#f97316',
+  },
+  COMPLETED: {
+    label: 'Fixed',
+    icon: 'checkmark-circle-outline',
+    color: '#374151',
+    bgColor: 'transparent',
+    filled: false,
+    borderColor: '#3b82f6',
+  },
+  REOPENED: {
+    label: 'Not Fixed',
+    icon: 'close-circle-outline',
+    color: '#ef4444',
+    bgColor: '#fee2e2',
+    filled: true,
+    borderColor: '#ef4444',
+  },
 };
 
-const formatStatusText = (status) => {
-  if (!status) return '';
-  return status.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+// ── STATUS TABS ──
+const STATUS_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'OPEN', label: 'Open' },
+  { key: 'ESCALATED', label: 'Escalated' },
+  { key: 'COMPLETED', label: 'Fixed' },
+  { key: 'REOPENED', label: 'Not Fixed' },
+  { key: 'IN_PROGRESS', label: 'In Progress' },
+  { key: 'RESOLVED_PENDING_REVIEW', label: 'Awaiting Review' },
+  { key: 'ASSIGNED', label: 'Assigned' },
+];
+
+// ── HELPERS ──
+const getTimeAgo = (dateStr) => {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 };
 
+const formatId = (id) => {
+  if (!id) return '';
+  return `TK-${String(id).padStart(4, '0')}`;
+};
+
+// ── INLINE ISSUE CARD ──
+const IssueCard = ({ issue, onPress, isDark }) => {
+  const cfg = STATUS_CONFIG[issue.status] || {
+    label: issue.status,
+    icon: 'ellipse-outline',
+    color: '#6b7280',
+    bgColor: 'transparent',
+    filled: false,
+    borderColor: '#6b7280',
+  };
+
+  const cardBg = isDark ? '#242424' : '#ffffff';
+  const subtitleColor = isDark ? '#9ca3af' : '#6b7280';
+  const titleColor = isDark ? '#f9fafb' : '#111827';
+  const dividerColor = isDark ? '#2e2e2e' : '#f3f4f6';
+  const badgeTextColor = cfg.filled ? cfg.color : cfg.color;
+  const badgeBg = cfg.filled
+    ? isDark
+      ? 'rgba(239,68,68,0.15)'
+      : cfg.bgColor
+    : 'transparent';
+
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
+      <View style={[styles.card, { backgroundColor: cardBg, borderBottomColor: dividerColor }]}>
+        {/* Left Status Border */}
+        <View style={[styles.cardBorder, { backgroundColor: cfg.borderColor }]} />
+
+        {/* Card Content */}
+        <View style={styles.cardContent}>
+          {/* Top Row: ID + Status Badge */}
+          <View style={styles.cardTopRow}>
+            <Text style={[styles.cardId, { color: subtitleColor }]}>{formatId(issue.id)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: badgeBg, borderColor: cfg.filled ? badgeBg : 'transparent' }]}>
+              <Ionicons name={cfg.icon} size={13} color={badgeTextColor} />
+              <Text style={[styles.statusBadgeText, { color: badgeTextColor }]}>{cfg.label.toUpperCase()}</Text>
+            </View>
+          </View>
+
+          {/* Title */}
+          <Text style={[styles.cardTitle, { color: titleColor }]} numberOfLines={1}>
+            {issue.title}
+          </Text>
+
+          {/* Location + Assignee Row */}
+          <View style={styles.cardMetaRow}>
+            <View style={styles.cardMetaItem}>
+              <Ionicons name="location-outline" size={13} color={subtitleColor} />
+              <Text style={[styles.cardMetaText, { color: subtitleColor }]} numberOfLines={1}>
+                {issue.site_name || issue.site?.name || 'Unknown Site'}
+              </Text>
+            </View>
+            <View style={styles.cardMetaItem}>
+              <Ionicons name="person-outline" size={13} color={subtitleColor} />
+              <Text
+                style={[styles.cardMetaText, { color: subtitleColor }]}
+                numberOfLines={1}
+              >
+                {issue.supervisor_role || 'Supervisor'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Bottom Row: Solver + Time */}
+          <View style={styles.cardBottomRow}>
+            <View style={styles.solverRow}>
+              <Avatar
+                uri={issue.solver_avatar || issue.assigned_to_avatar}
+                name={issue.solver_name || issue.assigned_to_name}
+                size="small"
+              />
+              <Text style={[styles.solverLabel, { color: subtitleColor }]}>ASSIGNED SOLVER</Text>
+            </View>
+            <View style={styles.timeRow}>
+              <Ionicons name="time-outline" size={13} color={subtitleColor} />
+              <Text style={[styles.timeText, { color: subtitleColor }]}>{getTimeAgo(issue.created_at)}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// ── MAIN SCREEN ──
 export default function IssuesTabScreen() {
-  const { theme, isDark } = useTheme(); 
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
   const allIssues = useSelector(selectAllIssues);
   const loading = useSelector(selectIssuesLoading);
-  
-  // 📍 NEW: Track cursor pagination state
   const loadingMore = useSelector(selectIssuesLoadingMore);
   const hasMore = useSelector(selectHasMoreIssues);
-  
   const isOnline = useSelector(selectIsOnline);
 
   const [searchText, setSearchText] = useState('');
@@ -69,6 +223,7 @@ export default function IssuesTabScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   const [appliedFilters, setAppliedFilters] = useState({
     statuses: [],
     priorities: [],
@@ -80,7 +235,6 @@ export default function IssuesTabScreen() {
 
   const debouncedSearch = useDebounce(searchText, 300);
 
-  // 📍 UPDATED: Initial load explicitly asks for a reset (sends null cursor)
   useEffect(() => {
     if (user) dispatch(fetchIssues({ reset: true }));
   }, [user, dispatch]);
@@ -88,252 +242,125 @@ export default function IssuesTabScreen() {
   const realSites = useMemo(() => {
     if (!allIssues) return [];
     const uniqueSites = new Map();
-
-    allIssues.forEach(issue => {
+    allIssues.forEach((issue) => {
       if (issue.site_id && issue.site_name) {
-        uniqueSites.set(issue.site_id, {
-          id: issue.site_id,
-          name: issue.site_name
-        });
+        uniqueSites.set(issue.site_id, { id: issue.site_id, name: issue.site_name });
       }
     });
-
     return Array.from(uniqueSites.values());
   }, [allIssues]);
 
   const filteredIssues = useMemo(() => {
     if (!allIssues || allIssues.length === 0) return [];
-    
-    return allIssues.filter(issue => {
-      // 2. TEXT SEARCH FILTER
+    return allIssues.filter((issue) => {
       if (debouncedSearch) {
-        const searchLower = debouncedSearch.toLowerCase();
-        const matchesSearch = 
-          issue.title?.toLowerCase().includes(searchLower) ||
-          issue.description?.toLowerCase().includes(searchLower) ||
-          issue.id?.toString().includes(searchLower) ||
-          issue.site_name?.toLowerCase().includes(searchLower); 
-        
-        if (!matchesSearch) return false;
+        const s = debouncedSearch.toLowerCase();
+        const match =
+          issue.title?.toLowerCase().includes(s) ||
+          issue.description?.toLowerCase().includes(s) ||
+          issue.id?.toString().includes(s) ||
+          issue.site_name?.toLowerCase().includes(s);
+        if (!match) return false;
       }
-
-      // 3. STATUS FILTER
-      if (appliedFilters.statuses && appliedFilters.statuses.length > 0) {
-        if (!appliedFilters.statuses.includes(issue.status)) return false;
-      }
-
-      // 4. PRIORITY FILTER
-      if (appliedFilters.priorities && appliedFilters.priorities.length > 0) {
-        if (!appliedFilters.priorities.includes(issue.priority)) return false;
-      }
-
-      // 5. SITE FILTER
-      if (appliedFilters.site) {
-        if (issue.site_id !== appliedFilters.site) return false;
-      }
-
-      // 6. CATEGORY FILTER
-      if (appliedFilters.categories && appliedFilters.categories.length > 0) {
-        const matchesCategory = appliedFilters.categories.some(category => {
-          const catLower = category.toLowerCase();
-          return issue.title?.toLowerCase().includes(catLower) || 
-                 issue.description?.toLowerCase().includes(catLower);
+      if (appliedFilters.statuses?.length > 0 && !appliedFilters.statuses.includes(issue.status)) return false;
+      if (appliedFilters.priorities?.length > 0 && !appliedFilters.priorities.includes(issue.priority)) return false;
+      if (appliedFilters.site && issue.site_id !== appliedFilters.site) return false;
+      if (appliedFilters.categories?.length > 0) {
+        const match = appliedFilters.categories.some((cat) => {
+          const c = cat.toLowerCase();
+          return issue.title?.toLowerCase().includes(c) || issue.description?.toLowerCase().includes(c);
         });
-        if (!matchesCategory) return false;
+        if (!match) return false;
       }
-
-      // 7. DATE RANGE FILTER
       if (appliedFilters.dateRange && appliedFilters.dateRange !== 'all') {
-        if (!issue.created_at) return false; 
-
+        if (!issue.created_at) return false;
         const issueDate = new Date(issue.created_at);
         const now = new Date();
-        
-        if (appliedFilters.dateRange === 'today') {
-          if (issueDate.toDateString() !== now.toDateString()) return false;
-        } else if (appliedFilters.dateRange === 'week') {
-          const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          if (issueDate < oneWeekAgo) return false;
-        } else if (appliedFilters.dateRange === 'month') {
-          const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          if (issueDate < oneMonthAgo) return false;
-        } else if (appliedFilters.dateRange === '3months') {
-          const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-          if (issueDate < threeMonthsAgo) return false;
-        }
+        if (appliedFilters.dateRange === 'today' && issueDate.toDateString() !== now.toDateString()) return false;
+        if (appliedFilters.dateRange === 'week' && issueDate < new Date(now - 7 * 864e5)) return false;
+        if (appliedFilters.dateRange === 'month' && issueDate < new Date(now - 30 * 864e5)) return false;
+        if (appliedFilters.dateRange === '3months' && issueDate < new Date(now - 90 * 864e5)) return false;
       }
-
-      // 8. OVERDUE ONLY FILTER
       if (appliedFilters.overdueOnly) {
-        if (issue.status === 'COMPLETED' || issue.status === 'RESOLVED_PENDING_REVIEW') {
-          return false;
-        }
-        
-        if (issue.deadline_at) {
-          const deadline = new Date(issue.deadline_at);
-          if (deadline >= new Date()) return false; 
-        } else {
-          return false; 
-        }
+        if (issue.status === 'COMPLETED' || issue.status === 'RESOLVED_PENDING_REVIEW') return false;
+        if (issue.deadline_at) { if (new Date(issue.deadline_at) >= new Date()) return false; }
+        else return false;
       }
-
       return true;
     });
   }, [allIssues, debouncedSearch, appliedFilters]);
 
-  // 📍 UPDATED: Pull-to-refresh forces a cursor reset
+  // Apply active tab filter on top
+  const tabFilteredIssues = useMemo(() => {
+    if (activeTab === 'all') return filteredIssues;
+    return filteredIssues.filter((issue) => issue.status === activeTab);
+  }, [filteredIssues, activeTab]);
+
   const onRefresh = useCallback(async () => {
-    if (!isOnline) {
-      setToastMessage("Can't refresh while offline");
-      setTimeout(() => setToastMessage(''), 3000);
-      return;
-    }
+    if (!isOnline) { setToastMessage("Can't refresh while offline"); setTimeout(() => setToastMessage(''), 3000); return; }
     const now = Date.now();
-    if (lastRefresh && now - lastRefresh < 5000) {
-      setToastMessage('Just refreshed. Wait a moment.');
-      setTimeout(() => setToastMessage(''), 3000);
-      return;
-    }
+    if (lastRefresh && now - lastRefresh < 5000) { setToastMessage('Just refreshed. Wait a moment.'); setTimeout(() => setToastMessage(''), 3000); return; }
     setRefreshing(true);
-    
     if (user) {
-      try {
-        await Promise.allSettled([
-          dispatch(fetchIssues({ reset: true }))
-        ]);
-      } finally {
-        setLastRefresh(Date.now());
-        setRefreshing(false);
-      }
-    } else {
-      setRefreshing(false);
-    }
+      try { await Promise.allSettled([dispatch(fetchIssues({ reset: true }))]); }
+      finally { setLastRefresh(Date.now()); setRefreshing(false); }
+    } else { setRefreshing(false); }
   }, [user, isOnline, lastRefresh, dispatch]);
 
-  // 📍 NEW: Trigger infinite scroll load
   const handleLoadMore = () => {
-    if (!loadingMore && hasMore && isOnline) {
-      dispatch(fetchIssues({ reset: false })); // Tells thunk to use stored cursor
-    }
+    if (!loadingMore && hasMore && isOnline) dispatch(fetchIssues({ reset: false }));
   };
 
-  const handleIssuePress = (issue) => router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } });
+  const handleIssuePress = (issue) =>
+    router.push({ pathname: '/(main)/(tabs)/issues/issue-detail', params: { id: issue.id } });
   const handleApplyFilters = (filters) => setAppliedFilters(filters);
   const handleClearFilters = () => {
     setSearchText('');
+    setActiveTab('all');
     setAppliedFilters({ statuses: [], priorities: [], categories: [], site: null, dateRange: 'all', overdueOnly: false });
   };
 
   const getActiveFilterCount = () => {
-    let count = 0;
-    if (appliedFilters.statuses.length > 0) count++;
-    if (appliedFilters.priorities.length > 0) count++;
-    if (appliedFilters.categories.length > 0) count++;
-    if (appliedFilters.site) count++;
-    if (appliedFilters.dateRange !== 'all') count++;
-    if (appliedFilters.overdueOnly) count++;
-    return count;
+    let c = 0;
+    if (appliedFilters.statuses.length > 0) c++;
+    if (appliedFilters.priorities.length > 0) c++;
+    if (appliedFilters.categories.length > 0) c++;
+    if (appliedFilters.site) c++;
+    if (appliedFilters.dateRange !== 'all') c++;
+    if (appliedFilters.overdueOnly) c++;
+    return c;
   };
 
-  const hasActiveFilters = getActiveFilterCount() > 0 || searchText !== '';
   const activeFilterCount = getActiveFilterCount();
-
-  const activeBg = isDark ? '#ffffff' : '#101010';
-  const inactiveBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f4';
-  const borderColor = isDark ? '#333333' : '#e5e5e5';
-
-  const renderActiveFilterChips = () => {
-    const chips = [];
-    const chipStyle = [styles.activeChip, { backgroundColor: inactiveBg, borderColor }];
-    const textStyle = [styles.activeChipText, { color: theme.text }];
-    const iconColor = theme.textSecondary;
-
-    // 📍 DYNAMIC COLOR CHIPS FOR STATUS
-    if (appliedFilters.statuses && appliedFilters.statuses.length > 0) {
-      appliedFilters.statuses.forEach(status => {
-        const color = STATUS_COLORS[status] || theme.textSecondary;
-        chips.push(
-          <View key={`status-${status}`} style={[styles.activeChip, { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
-            <Text style={[styles.activeChipText, { color }]}>{formatStatusText(status)}</Text>
-            <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, statuses: prev.statuses.filter(s => s !== status) }))}>
-              <Ionicons name="close" size={14} color={color} />
-            </TouchableOpacity>
-          </View>
-        );
-      });
-    }
-
-    if (appliedFilters.priorities.length > 0) {
-      chips.push(
-        <View key="priority" style={chipStyle}>
-          <Text style={textStyle}>Priority: {appliedFilters.priorities.length}</Text>
-          <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, priorities: [] }))}>
-            <Ionicons name="close" size={14} color={iconColor} />
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    if (appliedFilters.categories.length > 0) {
-      chips.push(
-        <View key="category" style={chipStyle}>
-          <Text style={textStyle}>Category: {appliedFilters.categories.length}</Text>
-          <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, categories: [] }))}>
-            <Ionicons name="close" size={14} color={iconColor} />
-          </TouchableOpacity>
-        </View>
-      );
-    }
-   if (appliedFilters.site) {
-      const selectedSiteObj = realSites.find(s => s.id === appliedFilters.site);
-      const siteDisplayName = selectedSiteObj ? selectedSiteObj.name : 'Site Selected';
-
-      chips.push(
-        <View key="site" style={chipStyle}>
-          <Text style={textStyle}>Site: {siteDisplayName}</Text>
-          <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, site: null }))}>
-            <Ionicons name="close" size={14} color={iconColor} />
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    if (appliedFilters.overdueOnly) {
-      chips.push(
-        <View key="overdue" style={[chipStyle, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2', borderColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }]}>
-          <Text style={[styles.activeChipText, { color: '#ef4444' }]}>Overdue Only</Text>
-          <TouchableOpacity onPress={() => setAppliedFilters(prev => ({ ...prev, overdueOnly: false }))}>
-            <Ionicons name="close" size={14} color="#ef4444" />
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    return chips;
-  };
+  const borderColor = isDark ? '#2e2e2e' : '#e5e7eb';
+  const bgColor = isDark ? '#1a1a1a' : '#f9fafb';
+  const cardAreaBg = isDark ? '#1a1a1a' : '#f9fafb';
 
   if (loading && allIssues.length === 0 && !refreshing) return <Loader message="Loading issues..." />;
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
 
       {/* ── HEADER ── */}
-      <View style={[styles.header, { borderBottomColor: borderColor }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>All Issues</Text>
-          <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-            {user?.role === 'manager' ? 'All Sites' : `${user?.role === 'supervisor' ? 'Your Sites' : 'Assigned to You'}`}
-          </Text>
-        </View>
-        
+      <View style={[styles.header, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff', borderBottomColor: borderColor }]}>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Field Issues</Text>
         <View style={styles.headerActions}>
-          {Platform.OS === 'web' && (
-            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
-              <Ionicons name="sync" size={22} color={refreshing ? theme.primary : theme.textSecondary} />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity onPress={() => router.push('/(main)/(tabs)/chat')} activeOpacity={0.7} style={{ marginRight: 4, padding: 4 }}>
-            <Ionicons name="arrow-undo-outline" size={24} color={theme.text} />
+          <TouchableOpacity
+            onPress={() => setShowFilterModal(true)}
+            style={[styles.headerFilterBtn, { backgroundColor: activeFilterCount > 0 ? theme.primary : 'transparent' }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="funnel-outline"
+              size={20}
+              color={activeFilterCount > 0 ? '#fff' : theme.text}
+            />
+            {activeFilterCount > 0 && (
+              <View style={styles.filterDot}>
+                <Text style={styles.filterDotText}>{activeFilterCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
-
           <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7}>
             <Avatar uri={user?.avatar} name={user?.name} size="medium" />
           </TouchableOpacity>
@@ -341,14 +368,14 @@ export default function IssuesTabScreen() {
       </View>
 
       <FlatList
-        data={filteredIssues}
+        data={tabFilteredIssues}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => <IssueCard issue={item} onPress={() => handleIssuePress(item)} />}
-        contentContainerStyle={styles.listContent}
-        
-        // 📍 NEW: Infinite Scroll Props Hooked Up
+        renderItem={({ item }) => (
+          <IssueCard issue={item} onPress={() => handleIssuePress(item)} isDark={isDark} />
+        )}
+        contentContainerStyle={[styles.listContent, { backgroundColor: cardAreaBg }]}
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5} 
+        onEndReachedThreshold={0.5}
         ListFooterComponent={
           loadingMore ? (
             <View style={styles.loadingFooter}>
@@ -356,89 +383,94 @@ export default function IssuesTabScreen() {
             </View>
           ) : null
         }
-
         ListHeaderComponent={
-          <View style={styles.headerComponentWrapper}>
-
-            {/* ── SEARCH & FILTER ROW ── */}
-            <View style={styles.searchContainer}>
-              <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor }]}>
-                <Ionicons name="search" size={18} color={theme.textSecondary} />
+          <View style={{ backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }}>
+            {/* ── SEARCH BAR ── */}
+            <View style={[styles.searchWrapper, { borderBottomColor: borderColor }]}>
+              <View style={[styles.searchBar, { backgroundColor: isDark ? '#242424' : '#f3f4f6', borderColor }]}>
+                <Ionicons name="search-outline" size={17} color={isDark ? '#6b7280' : '#9ca3af'} />
                 <TextInput
-                  style={[styles.searchTextInput, { color: theme.text }]}
-                  placeholder="Search issues..."
-                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.searchInput, { color: theme.text }]}
+                  placeholder="Search by ID, title, or site..."
+                  placeholderTextColor={isDark ? '#4b5563' : '#9ca3af'}
                   value={searchText}
                   onChangeText={setSearchText}
                 />
                 {searchText !== '' && (
                   <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+                    <Ionicons name="close-circle" size={16} color={isDark ? '#4b5563' : '#9ca3af'} />
                   </TouchableOpacity>
                 )}
               </View>
-
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={[
-                  styles.filterButton,
-                  {
-                    backgroundColor: activeFilterCount > 0 ? activeBg : inactiveBg,
-                    borderColor: activeFilterCount > 0 ? activeBg : borderColor,
-                  }
-                ]}
-                onPress={() => setShowFilterModal(true)}
-              >
-                <Ionicons
-                  name="options-outline"
-                  size={20}
-                  color={activeFilterCount > 0 ? (isDark ? '#000' : '#fff') : theme.text}
-                />
-                {activeFilterCount > 0 && (
-                  <View style={styles.filterBadge}>
-                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
             </View>
 
-            {/* ── ACTIVE FILTER CHIPS ── */}
-            {hasActiveFilters && (
-              <View style={styles.activeFiltersContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeChipsScroll}>
-                  {renderActiveFilterChips()}
-                  <TouchableOpacity style={styles.clearAllButton} onPress={handleClearFilters}>
-                    <Text style={[styles.clearAllText, { color: theme.textSecondary }]}>Clear All</Text>
+            {/* ── STATUS TABS ── */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabsScroll}
+              style={[styles.tabsContainer, { borderBottomColor: borderColor }]}
+            >
+              {STATUS_TABS.map((tab) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    onPress={() => setActiveTab(tab.key)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.tab,
+                      isActive
+                        ? { backgroundColor: '#2563eb' }
+                        : { backgroundColor: 'transparent' },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tabText,
+                        { color: isActive ? '#ffffff' : isDark ? '#9ca3af' : '#6b7280' },
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
                   </TouchableOpacity>
-                </ScrollView>
-              </View>
-            )}
+                );
+              })}
+              {(activeFilterCount > 0 || searchText) && (
+                <TouchableOpacity onPress={handleClearFilters} style={styles.clearTabBtn}>
+                  <Text style={[styles.clearTabText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
 
             {/* ── RESULTS COUNT ── */}
-            <View style={styles.resultsHeader}>
-              {/* 📍 UPDATED: Changed to show exactly how many issues are loaded into the app */}
-              <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
-                {filteredIssues.length} loaded issue{filteredIssues.length !== 1 ? 's' : ''}
+            <View style={[styles.resultsRow, { backgroundColor: isDark ? '#1a1a1a' : '#f9fafb' }]}>
+              <Text style={[styles.resultsText, { color: isDark ? '#6b7280' : '#9ca3af' }]}>
+                {tabFilteredIssues.length} issue{tabFilteredIssues.length !== 1 ? 's' : ''}
               </Text>
+              {Platform.OS === 'web' && (
+                <TouchableOpacity onPress={onRefresh} disabled={refreshing}>
+                  <Ionicons name="refresh-outline" size={16} color={isDark ? '#6b7280' : '#9ca3af'} />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         }
-
         ListEmptyComponent={
           <EmptyState
             icon="document-text-outline"
             title="No issues found"
-            message={hasActiveFilters ? "Try adjusting your filters." : "There are no issues to display."}
+            message={
+              activeFilterCount > 0 || searchText || activeTab !== 'all'
+                ? 'Try adjusting your filters.'
+                : 'There are no issues to display.'
+            }
           />
         }
         showsVerticalScrollIndicator={false}
         refreshControl={
           Platform.OS === 'web' ? undefined : (
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={theme.textSecondary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} />
           )
         }
       />
@@ -452,7 +484,6 @@ export default function IssuesTabScreen() {
       />
 
       <FullScreenSpinner visible={refreshing} message="Updating Issues..." color={theme.primary} />
-
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
   );
@@ -460,88 +491,145 @@ export default function IssuesTabScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
-  headerSubtitle: { fontSize: 14, fontWeight: '500', marginTop: 4 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, 
-  webRefreshButton: { padding: 4 }, 
-
-  headerComponentWrapper: {
-    paddingBottom: 8,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    gap: 12
-  },
-  searchInput: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    height: 44, // Fixed height for exact alignment
-    borderRadius: 12, // Squircle 
-    borderWidth: 1,
-    gap: 8
-  },
-  searchTextInput: { flex: 1, fontSize: 15 },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12, // Match input squircle
-    borderWidth: 1,
+  headerTitle: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerFilterBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative'
+    position: 'relative',
   },
-  filterBadge: {
+  filterDot: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#ef4444', // Kept red for high-alert visibility
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#ffffff', // Cuts into the button shape elegantly
+    borderWidth: 1.5,
+    borderColor: '#fff',
   },
-  filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  filterDotText: { color: '#fff', fontSize: 8, fontWeight: '800' },
 
-  activeFiltersContainer: { paddingHorizontal: 16, marginBottom: 8 },
-  activeChipsScroll: { flexDirection: 'row', gap: 8, paddingRight: 16, alignItems: 'center' },
-  activeChip: {
+  // Search
+  searchWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    height: 42,
+    borderRadius: 10,
     borderWidth: 1,
-    gap: 6
+    gap: 8,
   },
-  activeChipText: { fontSize: 13, fontWeight: '500' },
-  clearAllButton: { paddingHorizontal: 8, paddingVertical: 6 },
-  clearAllText: { fontSize: 13, fontWeight: '600' },
+  searchInput: { flex: 1, fontSize: 14 },
 
-  resultsHeader: { paddingHorizontal: 20, paddingVertical: 8 },
-  resultsCount: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  listContent: { paddingBottom: 24 },
-  
-  // 📍 NEW: Style for the bottom spinner
-  loadingFooter: {
-    paddingVertical: 20,
+  // Tabs
+  tabsContainer: { borderBottomWidth: StyleSheet.hairlineWidth },
+  tabsScroll: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
     alignItems: 'center',
-    justifyContent: 'center'
-  }
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  tabText: { fontSize: 13, fontWeight: '600' },
+  clearTabBtn: { paddingHorizontal: 8, paddingVertical: 7 },
+  clearTabText: { fontSize: 13, fontWeight: '500' },
+
+  // Results row
+  resultsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  resultsText: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Card
+  card: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardBorder: { width: 4, flexShrink: 0 },
+  cardContent: { flex: 1, padding: 14, gap: 6 },
+
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardId: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
+
+  cardTitle: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2, marginTop: 1 },
+
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
+  cardMetaText: { fontSize: 12, fontWeight: '500', flexShrink: 1 },
+
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  solverRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  solverLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  timeText: { fontSize: 11, fontWeight: '500' },
+
+  listContent: { paddingBottom: 30 },
+  loadingFooter: { paddingVertical: 20, alignItems: 'center' },
 });

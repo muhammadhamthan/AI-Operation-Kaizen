@@ -9,7 +9,8 @@ import {
   Image, 
   RefreshControl,
   Platform,
-  ActivityIndicator // ✅ ADDED
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -32,7 +33,8 @@ import {
   setFilters,
   selectIsFetchingNextPage,
   selectHasMoreComplaints,
-  selectComplaintsNextCursor
+  selectComplaintsNextCursor,
+  selectFilters
 } from '../../../../src/store/slices/complaintsSlice';
 
 export default function ComplaintsScreen() {
@@ -56,7 +58,6 @@ export default function ComplaintsScreen() {
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
-    // ✅ CHANGED: Wrapped user in an object to match the new thunk signature
     if (user) dispatch(fetchComplaints({ user }));
   }, [user]);
 
@@ -82,7 +83,6 @@ export default function ComplaintsScreen() {
     if (user) {
       try {
         await Promise.allSettled([
-          // ✅ CHANGED: Wrapped user in an object
           dispatch(fetchComplaints({ user }))
         ]);
       } finally {
@@ -94,99 +94,107 @@ export default function ComplaintsScreen() {
     }
   }, [user, isOnline, lastRefresh, dispatch]);
 
-  // ✅ ADDED: Function to trigger the next page fetch
   const handleLoadMore = () => {
     if (!isOnline || isFetchingNextPage || !hasMore || loading) return;
     dispatch(fetchComplaints({ user, cursor: nextCursor }));
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
+  // Helper to format time as "2h ago" (or fallback)
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return '2h ago';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHrs < 1) return 'Just now';
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    return `${Math.floor(diffHrs / 24)}d ago`;
   };
 
-  // ── PREMIUM DANGER PALETTE ──
-  const bgColor = isDark ? '#1a1a1a' : '#f4f4f5';
-  const surfaceColor = isDark ? '#242424' : '#ffffff';
-  const borderColor = isDark ? '#333333' : '#e5e5e5';
-  const inactiveBg = isDark ? '#2a2a2a' : '#eeeeef';
-  const accentColor = '#ef4444'; // Red to match the warning icon
+  const getStatusText = (status, id) => {
+    if (status) return status;
+    const mockStatuses = ['Pending', 'Investigating', 'Resolved', 'Closed'];
+    return mockStatuses[id % mockStatuses.length];
+  };
+
+  const getStatusColor = (status) => {
+    // Standardize to uniform "Active" color as requested
+    return { 
+      bg: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fce8ec', 
+      text: '#ef4444' 
+    };
+  };
+
+  // Premium Palette
+  const bgColor = isDark ? '#111111' : '#ffffff';
+  const surfaceColor = isDark ? '#1a1a1a' : '#ffffff';
+  const borderColor = isDark ? '#333333' : '#f0f0f0';
+  const primaryBlue = '#3b82f6';
   
-  // Custom Card Background for Complaints
-  const cardBgColor = isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.03)';
-  const cardBorderColor = isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)';
-  const searchBorderColor = searchText ? accentColor : 'transparent';
+  const cardBgColor = isDark ? '#1c1c1c' : '#ffffff';
+  const cardBorderColor = isDark ? '#2a2a2a' : '#f1f5f9';
 
   const renderItem = ({ item }) => {
+    // Standardize all active complaints to "ACTIVE" as requested
+    const statusLabel = "ACTIVE";
+    const statusColor = getStatusColor(statusLabel);
+    
     return (
       <TouchableOpacity
-        activeOpacity={0.7}
+        activeOpacity={0.8}
         style={[
           styles.card, 
           { 
             backgroundColor: cardBgColor, 
             borderColor: cardBorderColor,
-            borderLeftColor: accentColor 
           }
         ]}
         onPress={() => router.push({ pathname: '/(main)/(tabs)/dashboard/complaint-detail', params: { id: item.id } })}
       >
-        <View style={styles.cardHeader}>
-          <View style={styles.idContainer}>
-            <View style={[styles.iconWrapper, { backgroundColor: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)' }]}>
-              <Ionicons name="warning" size={14} color={accentColor} />
-            </View>
-            
-            <View style={styles.idTextWrapper}>
-              <Text style={[styles.cardId, { color: theme.textSecondary }]} numberOfLines={1}>
-                #{item.id} <Text style={{ color: cardBorderColor, marginHorizontal: 4 }}>|</Text> Issue #{item.issue_id}
-              </Text>
-              <Text style={[styles.cardDate, { color: theme.textSecondary }]}>
-                {formatDate(item.created_at)}
-              </Text>
-            </View>
+        <View style={[styles.healthBar, { backgroundColor: statusColor.text }]} />
 
-          </View>
-        </View>
-        
-        <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>
-          {item.issue_title}
-        </Text>
-        <Text style={[styles.cardDescription, { color: theme.textSecondary }]} numberOfLines={2}>
-          {item.complaint_details}
-        </Text>
-        
-        <View style={styles.cardInfo}>
-          <View style={styles.personBadge}>
-            <Text style={[styles.roleLabel, { color: theme.textSecondary }]}>Rzd By:</Text>
-            <Avatar name={item.supervisor_name} size="tiny" />
-            <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
-              {item.supervisor_name?.split(' ')[0]}
+        {/* Top Row: ID & Time */}
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardId, { color: theme.textSecondary }]}>CP-{item.id}</Text>
+          <View style={styles.timeWrap}>
+            <Ionicons name="time-outline" size={14} color={theme.textSecondary} />
+            <Text style={[styles.cardDate, { color: theme.textSecondary }]}>
+              {formatTimeAgo(item.created_at)}
             </Text>
           </View>
-          
-          {item.solver_name && (
-            <>
-              <View style={[styles.verticalDivider, { backgroundColor: cardBorderColor }]} />
-              <View style={styles.personBadge}>
-                <Text style={[styles.roleLabel, { color: theme.textSecondary }]}>To:</Text>
-                <Avatar name={item.solver_name} size="tiny" />
-                <Text style={[styles.personName, { color: theme.text }]} numberOfLines={1}>
-                  {item.solver_name?.split(' ')[0]}
-                </Text>
-              </View>
-            </>
-          )}
         </View>
         
-        {item.complaint_image_url && (
-          <Image 
-            source={{ uri: item.complaint_image_url }} 
-            style={[styles.thumbnail, { borderColor: cardBorderColor }]} 
-            resizeMode="cover" 
-          />
-        )}
+        {/* Title */}
+        <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>
+          {item.issue_title || 'Untitled Complaint'}
+        </Text>
+        
+        {/* User Info & Status */}
+        <View style={styles.userRow}>
+          <View style={styles.userInfo}>
+            <Avatar name={item.supervisor_name || 'Unknown User'} uri={item.supervisor_name ? `https://i.pravatar.cc/150?u=${item.id}` : null} size="small" />
+            <View style={styles.userText}>
+              <Text style={[styles.userName, { color: theme.text }]} numberOfLines={1}>
+                {item.supervisor_name || 'System User'}
+              </Text>
+              <Text style={styles.userRole}>Field Worker</Text>
+            </View>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
+            <Text style={[styles.statusText, { color: statusColor.text }]}>{statusLabel}</Text>
+          </View>
+        </View>
+        
+        <View style={[styles.cardDivider, { backgroundColor: cardBorderColor }]} />
+        
+        {/* Location & Details */}
+        <View style={styles.locationRow}>
+          <View style={styles.locationLeft}>
+            <Ionicons name="location-outline" size={16} color={primaryBlue} />
+            <Text style={styles.locationText} numberOfLines={1}>{item.site_name || 'Tech Park South'}</Text>
+          </View>
+          <Text style={styles.detailsText}>DETAILS {'>'}</Text>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -201,42 +209,38 @@ export default function ComplaintsScreen() {
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Complaints Hub</Text>
-        
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Complaints</Text>
         <View style={styles.headerRight}>
-          {Platform.OS === 'web' ? (
-            <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
-              <Ionicons name="sync" size={22} color={refreshing ? accentColor : theme.textSecondary} />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.placeholder} />
-          )}
+          <TouchableOpacity onPress={() => router.push('/(main)/profile')} activeOpacity={0.7} style={{ marginRight: 12 }}>
+            <Avatar uri={user?.avatar} name={user?.name} size="small" />
+          </TouchableOpacity>
+          {/* <TouchableOpacity style={styles.bellButton}>
+            <Ionicons name="notifications-outline" size={22} color={theme.text} />
+          </TouchableOpacity> */}
         </View>
       </View>
 
       {/* ── SEARCH BAR ── */}
       <View style={[styles.searchContainer, { backgroundColor: bgColor }]}>
-        <View style={[styles.searchInput, { backgroundColor: inactiveBg, borderColor: searchBorderColor }]}>
-          <Ionicons name="search" size={20} color={searchText ? accentColor : theme.textSecondary} style={{ opacity: searchText ? 1 : 0.7 }} />
+        <View style={[styles.searchInput, { backgroundColor: surfaceColor, borderColor }]}>
+          <Ionicons name="search" size={20} color={theme.textSecondary} style={{ opacity: 0.7 }} />
           <TextInput
             style={[styles.searchTextInput, { color: theme.text }]}
-            placeholder="Search by ID, title, or details..."
+            placeholder="Search complaints or sites..."
             placeholderTextColor={theme.textSecondary}
             value={searchText}
             onChangeText={setSearchText}
           />
-          {searchText !== '' && (
-            <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close-circle" size={18} color={accentColor} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.filterIconWrap}>
+            <Ionicons name="options-outline" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* ── RESULTS COUNT ── */}
+      {/* ── RESULTS HEADER ── */}
       <View style={styles.resultsHeader}>
-        <Text style={[styles.resultsCount, { color: searchText ? accentColor : theme.textSecondary }]}>
-          {complaints.length} Active {complaints.length === 1 ? 'Complaint' : 'Complaints'}
+        <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
+          ACTIVE RECORDS ({complaints.length})
         </Text>
       </View>
 
@@ -259,24 +263,27 @@ export default function ComplaintsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[accentColor]}
-              tintColor={accentColor}
+              colors={[primaryBlue]}
+              tintColor={primaryBlue}
             />
           )
         }
-        // ✅ ADDED: INFINITE SCROLL TRIGGERS
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
           isFetchingNextPage ? (
             <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color={accentColor} />
+              <ActivityIndicator size="small" color={primaryBlue} />
+            </View>
+          ) : complaints.length > 0 ? (
+            <View style={styles.endFooter}>
+              <Text style={styles.endFooterText}>END OF OPERATIONAL RECORDS</Text>
             </View>
           ) : null
         }
       />
 
-      <FullScreenSpinner visible={refreshing} message="Updating Complaints..." color={accentColor} />
+      <FullScreenSpinner visible={refreshing} message="Updating Complaints..." color={primaryBlue} />
 
       {toastMessage !== '' && <Toast message={toastMessage} />}
     </SafeAreaView>
@@ -298,64 +305,71 @@ const styles = StyleSheet.create({
     }),
   },
   backButton: { padding: 4, marginLeft: -4 },
-  headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  headerTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
   headerRight: { width: 32, alignItems: 'flex-end' },
-  placeholder: { width: 32 },
-  webRefreshButton: { padding: 4 },
+  bellButton: { padding: 4 },
   
-  searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
+  searchContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
   searchInput: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    paddingHorizontal: 14, 
-    height: 48, 
-    borderRadius: 14, 
+    paddingHorizontal: 16, 
+    height: 50, 
+    borderRadius: 25, 
     borderWidth: 1,
     gap: 10 
   },
-  searchTextInput: { flex: 1, fontSize: 15, fontWeight: '500' },
+  searchTextInput: { flex: 1, fontSize: 15 },
+  filterIconWrap: { padding: 4 },
   
   resultsHeader: { paddingHorizontal: 20, paddingBottom: 14 },
-  resultsCount: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, opacity: 0.8 },
+  resultsCount: { fontSize: 11, fontWeight: '700', letterSpacing: 1.0 },
   
-  listContent: { paddingHorizontal: 16, paddingBottom: 30 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 30, gap: 14 },
   
-  // ✅ ADDED: Spacer for the loading spinner
   footerLoader: { paddingVertical: 20, alignItems: 'center' },
+  endFooter: { paddingVertical: 24, alignItems: 'center' },
+  endFooterText: { fontSize: 10, fontWeight: '600', color: '#9ca3af', letterSpacing: 0.5 },
   
   card: { 
-    marginBottom: 14,
     padding: 16,
-    borderRadius: 18,
+    paddingLeft: 24,
+    borderRadius: 16,
     borderWidth: 1,
-    borderLeftWidth: 6, // Thick alert stripe
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 8 },
-      android: { elevation: 1 },
-    }),
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  
-  idContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  iconWrapper: { padding: 4, borderRadius: 6 },
-  idTextWrapper: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardId: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
-  cardDate: { fontSize: 12, fontWeight: '600', opacity: 0.7 },
-  
-  cardTitle: { fontSize: 17, fontWeight: '700', marginBottom: 6, letterSpacing: -0.2 },
-  cardDescription: { fontSize: 14, lineHeight: 22, opacity: 0.9, marginBottom: 16 },
-  
-  cardInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  personBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  roleLabel: { fontSize: 11, fontWeight: '600' },
-  personName: { fontSize: 13, fontWeight: '600', maxWidth: 90 },
-  verticalDivider: { width: 1, height: 12, opacity: 0.5 },
-  
-  thumbnail: { 
-    width: '100%', 
-    height: 140, 
-    borderRadius: 10, 
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 16,
+  healthBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 6,
   },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardId: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
+  timeWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cardDate: { fontSize: 11 },
+  
+  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 16, letterSpacing: -0.2 },
+  
+  userRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  userText: { justifyContent: 'center' },
+  userName: { fontSize: 13, fontWeight: '700' },
+  userRole: { fontSize: 11, color: '#9ca3af' },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  statusText: { fontSize: 10, fontWeight: '700' },
+  
+  cardDivider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
+  
+  locationRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  locationLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  locationText: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
+  detailsText: { fontSize: 11, fontWeight: '700', color: '#3b82f6', letterSpacing: 0.5 },
 });

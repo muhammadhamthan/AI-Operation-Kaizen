@@ -16,16 +16,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker'; 
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location'; // 📍 IMPORTED FOR NATIVE GPS
 
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { selectCurrentUser } from '../../../../src/store/slices/authSlice';
-import { 
-  fetchIssueById, 
-  fetchIssueTimeline, 
-  selectIssueById, 
-  selectCurrentIssue, 
+import {
+  fetchIssueById,
+  fetchIssueTimeline,
+  selectIssueById,
+  selectCurrentIssue,
   selectIssueTimeline,
   selectIssuesLoading,
   clearCurrentIssue
@@ -36,17 +36,17 @@ import StatusBadge from '../../../../src/components/common/StatusBadge';
 import Avatar from '../../../../src/components/common/Avatar';
 import Loader from '../../../../src/components/common/Loader';
 import IssueTimeline from '../../../../src/components/issue/IssueTimeline';
-import Button from '../../../../src/components/common/Button'; 
+import Button from '../../../../src/components/common/Button';
 
 import { selectIsOnline } from '../../../../src/store/slices/offlineSlice';
 import Toast from '../../../../src/components/common/Toast';
 import FullScreenSpinner from '../../../../src/components/common/FullScreenSpinner';
 
 export default function IssueDetailScreen() {
-  const { theme, isDark } = useTheme(); 
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const { id, highlighted } = useLocalSearchParams();
-  
+
   const dispatch = useDispatch();
 
   const user = useSelector(selectCurrentUser);
@@ -73,7 +73,7 @@ export default function IssueDetailScreen() {
     }
     return () => { dispatch(clearCurrentIssue()); };
   }, [id, dispatch]);
-  
+
   const [highlightAnim] = useState(new Animated.Value(highlighted === 'true' ? 1 : 0));
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function IssueDetailScreen() {
       return;
     }
     if (!id) return;
-    
+
     setRefreshing(true);
     try {
       await Promise.allSettled([
@@ -109,7 +109,7 @@ export default function IssueDetailScreen() {
   // 📍 CAMERA LOGIC
   const handleTakePhoto = async () => {
     console.log("\n[DEBUG] --- STARTING PHOTO CAPTURE FLOW ---");
-    setIsCapturingLocation(true); 
+    setIsCapturingLocation(true);
 
     try {
       let loc = null;
@@ -123,7 +123,7 @@ export default function IssueDetailScreen() {
             const position = await Promise.race([locationPromise, timeoutPromise]);
             loc = { latitude: position.coords.latitude, longitude: position.coords.longitude };
           }
-        } catch(e) {
+        } catch (e) {
           console.log("[DEBUG] Native location fetch failed:", e.message);
         }
       }
@@ -133,7 +133,7 @@ export default function IssueDetailScreen() {
       } else if (Platform.OS !== 'web') {
         Alert.alert("Location Required", "We need your location to verify the fix.");
         setIsCapturingLocation(false);
-        return; 
+        return;
       }
 
       let result;
@@ -164,12 +164,12 @@ export default function IssueDetailScreen() {
         setSelectedImage(result.assets[0].uri);
         setCapturedLocation(loc);
       } else {
-        setCapturedLocation(null); 
+        setCapturedLocation(null);
       }
     } catch (error) {
       if (Platform.OS === 'web') alert("Error opening file picker.");
     } finally {
-      setIsCapturingLocation(false); 
+      setIsCapturingLocation(false);
     }
   };
 
@@ -183,7 +183,7 @@ export default function IssueDetailScreen() {
 
     setSelectedImage(null);
     setCapturedLocation(null);
-    
+
     if (Platform.OS === 'web') {
       alert("Sent Successfully! Fix photo uploaded for review.");
     } else {
@@ -231,8 +231,8 @@ export default function IssueDetailScreen() {
   const category = issue.issue_type || 'General Maintenance';
   const raisedByName = issue.supervisor_name || issue.raised_by?.name || 'N/A';
 
-  const currentAssignment = issue.assignments && issue.assignments.length > 0 
-    ? issue.assignments[0] 
+  const currentAssignment = issue.assignments && issue.assignments.length > 0
+    ? issue.assignments[0]
     : issue.assignment || null;
 
   const solverName = currentAssignment?.solver_name || currentAssignment?.assigned_to?.name || null;
@@ -244,11 +244,11 @@ export default function IssueDetailScreen() {
 
   // ── ROLE + STATUS DERIVED FLAGS ──
   const isProblemSolver = user?.role === 'problemsolver' || user?.role === 'problem_solver';
-  const isSupervisor    = user?.role === 'supervisor';
-  const isManager       = user?.role === 'manager';
+  const isSupervisor = user?.role === 'supervisor';
+  const isManager = user?.role === 'manager';
 
   const showMarkDoneBtn = isProblemSolver && issue.status === 'IN_PROGRESS';
-  const showApproveBtn  = (isSupervisor || isManager) && issue.status === 'RESOLVED_PENDING_REVIEW';
+  const showApproveBtn = (isSupervisor || isManager) && issue.status === 'RESOLVED_PENDING_REVIEW';
 
   const getInitials = (name) => {
     if (!name || name === 'N/A') return 'NA';
@@ -278,13 +278,13 @@ export default function IssueDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]}>
-      
+
       <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: borderColor }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Issue #{issue.id}</Text>
-        
+
         <View style={styles.headerRight}>
           {Platform.OS === 'web' ? (
             <TouchableOpacity onPress={onRefresh} disabled={refreshing} style={styles.webRefreshButton}>
@@ -296,8 +296,8 @@ export default function IssueDetailScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
           Platform.OS === 'web' ? undefined : (
@@ -305,7 +305,7 @@ export default function IssueDetailScreen() {
           )
         }
       >
-        
+
         <Animated.View style={[styles.card, styles.flatCard, { backgroundColor: highlightColor, borderColor }]}>
           <Text style={[styles.issueTitle, { color: theme.text }]}>{issue.title}</Text>
           <View style={styles.badgeRow}>
@@ -322,7 +322,7 @@ export default function IssueDetailScreen() {
 
         <View style={[styles.card, styles.flatCard, { backgroundColor: surfaceColor, borderColor }]}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Details</Text>
-          
+
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="location-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -330,7 +330,7 @@ export default function IssueDetailScreen() {
               <Text style={[styles.infoValue, { color: theme.text }]}>{siteName}</Text>
             </View>
           </View>
-          
+
           {siteLocation && (
             <View style={styles.infoRow}>
               <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="map-outline" size={18} color={theme.textSecondary} /></View>
@@ -350,7 +350,7 @@ export default function IssueDetailScreen() {
               </View>
             </View>
           )}
-          
+
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="construct-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -370,7 +370,7 @@ export default function IssueDetailScreen() {
                 <Text style={[styles.personRole, { color: theme.textSecondary }]}>Raised By</Text>
               </View>
             </View>
-            
+
             {solverName && (
               <View style={[styles.personRow, { paddingTop: 12, paddingBottom: 0 }]}>
                 <View style={[styles.avatarCircle, { backgroundColor: '#10a37f' }]}><Text style={styles.avatarText}>{getInitials(solverName)}</Text></View>
@@ -379,10 +379,10 @@ export default function IssueDetailScreen() {
                   <Text style={[styles.personRole, { color: theme.textSecondary }]}>Assigned To</Text>
                 </View>
                 {solverPhone && (
-                   <View style={styles.phoneBadge}>
-                     <Ionicons name="call" size={12} color="#fff" />
-                     <Text style={styles.phoneBadgeText}>{solverPhone}</Text>
-                   </View>
+                  <View style={styles.phoneBadge}>
+                    <Ionicons name="call" size={12} color="#fff" />
+                    <Text style={styles.phoneBadgeText}>{solverPhone}</Text>
+                  </View>
                 )}
               </View>
             )}
@@ -411,7 +411,7 @@ export default function IssueDetailScreen() {
               </View>
             </View>
           )}
-          
+
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: isOverdue ? 'rgba(239,68,68,0.1)' : iconBg }]}><Ionicons name="flag-outline" size={18} color={isOverdue ? '#ef4444' : theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -419,7 +419,7 @@ export default function IssueDetailScreen() {
               <Text style={[styles.infoValue, { color: isOverdue ? '#ef4444' : theme.text }]}>{formatDate(issue.deadline_at)}{isOverdue && ` (${overdueDays} days overdue)`}</Text>
             </View>
           </View>
-          
+
           <View style={styles.infoRow}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="add-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -427,7 +427,7 @@ export default function IssueDetailScreen() {
               <Text style={[styles.infoValue, { color: theme.text }]}>{formatDateTime(issue.created_at)}</Text>
             </View>
           </View>
-          
+
           <View style={[styles.infoRow, { marginBottom: 0 }]}>
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}><Ionicons name="refresh-outline" size={18} color={theme.textSecondary} /></View>
             <View style={styles.infoContent}>
@@ -523,29 +523,29 @@ export default function IssueDetailScreen() {
           {/* 📍 SUPERVISOR / MANAGER: Approve/Reject (RESOLVED_PENDING_REVIEW) */}
           {showApproveBtn && (
             <View style={{ gap: 12, marginTop: showMarkDoneBtn ? 12 : 0 }}>
-              <Button 
-                title="Approve & Close" 
-                variant="success" 
-                icon="checkmark-done-circle-outline" 
-                onPress={() => handleReviewAction('APPROVE')} 
-                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }} 
+              <Button
+                title="Approve & Close"
+                variant="success"
+                icon="checkmark-done-circle-outline"
+                onPress={() => handleReviewAction('APPROVE')}
+                style={{ backgroundColor: '#10a37f', borderColor: '#10a37f', borderRadius: 10 }}
               />
-              <Button 
-                title="Reject Fix" 
-                variant="danger" 
-                icon="close-circle-outline" 
-                onPress={() => handleReviewAction('REJECT')} 
-                style={{ borderRadius: 10 }} 
+              <Button
+                title="Reject Fix"
+                variant="danger"
+                icon="close-circle-outline"
+                onPress={() => handleReviewAction('REJECT')}
+                style={{ borderRadius: 10 }}
               />
             </View>
           )}
 
           {/* SUPERVISOR: Raise Complaint */}
           {(isSupervisor || isManager) && issue.status === 'COMPLETED' && (
-            <Button 
-              title="Raise Complaint" 
-              variant="danger" 
-              icon="alert-circle-outline" 
+            <Button
+              title="Raise Complaint"
+              variant="danger"
+              icon="alert-circle-outline"
               onPress={() => Alert.alert('Coming Soon', 'Phase 2-3')}
               style={styles.buttonMargin}
             />

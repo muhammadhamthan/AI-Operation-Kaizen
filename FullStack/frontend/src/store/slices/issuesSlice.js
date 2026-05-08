@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import { 
   fetchIssues as fetchIssuesApi, 
   fetchIssueById as fetchIssueByIdApi, 
@@ -497,51 +497,65 @@ export const selectIssueById = (state, issueId) =>
   state.issues.issues.find(issue => issue.id === issueId) || state.issues.currentIssue;
 
 // Filtered selectors
-export const selectFilteredIssues = (state) => {
-  const { issues, filters } = state.issues;
-  let filtered = [...issues];
+export const selectFilteredIssues = createSelector(
+  [(state) => state.issues.issues, (state) => state.issues.filters],
+  (issues, filters) => {
+    let filtered = [...issues];
 
-  // Search filter
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    filtered = filtered.filter(issue =>
-      issue.title?.toLowerCase().includes(searchLower) ||
-      issue.description?.toLowerCase().includes(searchLower) ||
-      issue.id?.toString().includes(searchLower) ||
-      issue.site?.name?.toLowerCase().includes(searchLower)
-    );
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(issue =>
+        issue.title?.toLowerCase().includes(searchLower) ||
+        issue.description?.toLowerCase().includes(searchLower) ||
+        issue.id?.toString().includes(searchLower) ||
+        issue.site?.name?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Status filter
+    if (filters.status) {
+      filtered = filtered.filter(issue => issue.status === filters.status);
+    }
+
+    // Priority filter
+    if (filters.priority) {
+      filtered = filtered.filter(issue => issue.priority === filters.priority);
+    }
+
+    return filtered;
   }
-
-  // Status filter
-  if (filters.status) {
-    filtered = filtered.filter(issue => issue.status === filters.status);
-  }
-
-  // Priority filter
-  if (filters.priority) {
-    filtered = filtered.filter(issue => issue.priority === filters.priority);
-  }
-
-  return filtered;
-};
+);
 
 // Status-based selectors
-export const selectNotFixedIssues = (state) => {
-  const notFixedStatuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'ESCALATED'];
-  return state.issues.issues.filter(issue => notFixedStatuses.includes(issue.status));
-};
+export const selectNotFixedIssues = createSelector(
+  [(state) => state.issues.issues],
+  (issues) => {
+    const notFixedStatuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'ESCALATED'];
+    return issues.filter(issue => notFixedStatuses.includes(issue.status));
+  }
+);
 
-export const selectFixedIssues = (state) => {
-  return state.issues.issues.filter(issue => issue.status === 'COMPLETED');
-};
+export const selectFixedIssues = createSelector(
+  [(state) => state.issues.issues],
+  (issues) => {
+    return issues.filter(issue => issue.status === 'COMPLETED');
+  }
+);
 
-export const selectAwaitingReviewIssues = (state) => {
-  return state.issues.issues.filter(issue => issue.status === 'RESOLVED_PENDING_REVIEW');
-};
+export const selectAwaitingReviewIssues = createSelector(
+  [(state) => state.issues.issues],
+  (issues) => {
+    return issues.filter(issue => issue.status === 'RESOLVED_PENDING_REVIEW');
+  }
+);
 
-export const selectEscalatedIssues = (state) => {
-  return state.issues.issues.filter(issue => issue.status === 'ESCALATED');
-};
+export const selectEscalatedIssues = createSelector(
+  [(state) => state.issues.issues],
+  (issues) => {
+    return issues.filter(issue => issue.status === 'ESCALATED');
+  }
+);
 export const selectIssueTimeline = (state) => state.issues.timeline;
 
 export const selectIsFetchingNextPage = (state) => state.issues.loadingMore;
